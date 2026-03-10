@@ -14,6 +14,7 @@
 
 - `src/core/kernel/openmp_utils.h` -> `include/cvh/core/detail/openmp_utils.h`（已迁移）
 - `src/core/kernel/xsimd_kernel_utils.h` -> `include/cvh/core/detail/xsimd_kernel_utils.h`（已迁移）
+- `src/core/mat.cpp` 的 `MatSize` 基础方法与 `total(MatShape,...)` -> `include/cvh/core/mat.inl.h`（已迁移）
 
 ## 文件级台账
 
@@ -21,7 +22,7 @@
 |---|---|---|---|
 | `src/core/basic_op.cpp` | 待重写 | `include/cvh/core/basic_op*.h` + `detail/` | 完成 API/行为清理（当前含历史算子与模板问题）后迁移 |
 | `src/core/define.impl.h` | 待迁移 | `include/cvh/core/detail/define_impl.h` | `memory_utils.h` 完成迁移后可移除 `src` 版本 |
-| `src/core/mat.cpp` | 待迁移 | `include/cvh/core/mat.inl.h` 或 `detail/mat_impl.h` | `Mat` 合同冻结后分批迁移 |
+| `src/core/mat.cpp` | 迁移中 | `include/cvh/core/mat.inl.h` 或 `detail/mat_impl.h` | 已迁移 `MatSize` + `total(MatShape,...)`；下一步迁移 `Mat` 低耦合方法 |
 | `src/core/mat_convert.cpp` | 待迁移 | `include/cvh/core/detail/mat_convert.h` | `convertTo` 行为与类型表稳定后迁移 |
 | `src/core/mat_expr.cpp` | 待重写 | `include/cvh/core/detail/mat_expr.h` | 先修复表达式分派问题，再迁移 |
 | `src/core/mat_gemm.cpp` | 待重写 | `include/cvh/core/detail/mat_gemm.h` | 先收敛依赖与行为，再做 header-only 化 |
@@ -42,7 +43,7 @@
 ## 阶段性验收记录（2026-03-10）
 
 - 已完成“每文件状态可追踪”台账。
-- 已完成 2 个低风险头文件迁移闭环。
+- 已完成 3 个低风险迁移闭环（含 `Mat` 首批 API 内联迁移）。
 - 迁移后验证：
   - `./scripts/ci_smoke.sh` 通过
-  - `CVH_BUILD_LEGACY_TESTS=ON` 的 `cvh_core_basic_tests` 通过
+  - `CVH_BUILD_TESTS=ON` 的 `cvh_test_core` 通过

@@ -22,6 +22,17 @@
 
 - 增加通道语义和边界行为测试。
 - 建立与 OpenCV 行为对照的关键 case（选取高频路径）。
+- 已接线 core 聚合测试二进制：`cvh_test_core`（包含 core basic + Mat 合同测试）。
+- 运行示例：
+  - `cmake -S . -B build-core -DCVH_BUILD_TESTS=ON`
+  - `cmake --build build-core -j --target cvh_test_core`
+  - `./build-core/cvh_test_core '--gtest_filter=MatContract_TEST.*'`
+
+## 文件职责划分（当前）
+
+- `core_ops_test.cpp`：常用功能路径与结果正确性（例如 `convertTo/copyTo` 正常路径）。
+- `mat_contract_test.cpp`：`Mat` 合同与安全基线（错误路径、所有权、边界与历史回归）。
+- 规则：同一行为只在一个文件中维护，避免重复 case 导致维护分叉。
 
 ### P2：算子回归
 

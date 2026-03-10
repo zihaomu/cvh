@@ -64,13 +64,12 @@ CVH_WARNING_BUDGET=0 ./scripts/ci_core_basic.sh
 
 - `CVH_BUILD_LEGACY_CORE=ON/OFF`：是否启用 legacy core 预留开关（当前未接线，默认 `OFF`）
 - `CVH_BUILD_BACKEND_KERNEL_SOURCES=ON/OFF`：是否编译依赖旧 backend 的源文件（默认 `OFF`）
-- `CVH_BUILD_SMOKE_TESTS=ON/OFF`：是否构建 smoke 程序（默认 `ON`）
-- `CVH_BUILD_LEGACY_TESTS=ON/OFF`：是否构建迁移中的 core 基础测试子集（默认 `OFF`）
+- `CVH_BUILD_TESTS=ON/OFF`：是否编译全部测试目标（smoke + `cvh_test_core`，默认 `ON`）
 
 构建 core 基础测试子集：
 
 ```bash
-cmake -S . -B build-core -DCVH_BUILD_LEGACY_TESTS=ON -DCVH_BUILD_SMOKE_TESTS=OFF
-cmake --build build-core -j
-cmake --build build-core --target test
+cmake -S . -B build-core -DCVH_BUILD_TESTS=ON
+cmake --build build-core -j --target cvh_test_core
+./build-core/cvh_test_core '--gtest_filter=MatContract_TEST.*'
 ```

@@ -16,6 +16,16 @@
 
 namespace cvh
 {
+
+namespace {
+
+inline bool is_supported_convert_type(int type)
+{
+    return type >= CV_8U && type <= CV_16F;
+}
+
+}  // namespace
+
 // TODO：目前的convert是没考虑对齐状态的，只有内存对齐速度才最快，未来为了能够在访存上最优，需要考虑对齐。
 template<typename _Ts, typename _Td> static inline void
 convert(const _Ts* src, _Td* dst, size_t length)
@@ -140,6 +150,11 @@ static void convert_32u(const uchar* src_, uchar* dst_, size_t length)
 typedef void (*BinaryFunc)(const uchar* src1, uchar* dst, size_t length);
 BinaryFunc getConvertFunc(int stype, int dtype)
 {
+    if (!is_supported_convert_type(stype) || !is_supported_convert_type(dtype))
+    {
+        return nullptr;
+    }
+
     // The order of Data type can not be changed it is strictly correspond.
     static BinaryFunc funcTab[CV_MAX][CV_MAX] =
     {
@@ -247,6 +262,13 @@ void Mat::convertTo(Mat &m, int type_) const
     int stype = type();
     int dtype = type_;
 
+    if (!is_supported_convert_type(stype) || !is_supported_convert_type(dtype))
+    {
+        M_Error_(Error::StsNotImplemented,
+                 ("Mat::convertTo supports only scalar depths in [CV_8U..CV_16F], stype=%d dtype=%d",
+                  stype, dtype));
+    }
+
     if (stype == dtype)
     {
         copyTo(m);
@@ -256,9 +278,12 @@ void Mat::convertTo(Mat &m, int type_) const
     // allocate new memory
     m.create(dims, size.p, dtype);
 
-    auto a = m.total();
-
     BinaryFunc func = getConvertFunc(stype, dtype);
+    if (!func)
+    {
+        M_Error_(Error::StsNotImplemented,
+                 ("Mat::convertTo function table miss, stype=%d dtype=%d", stype, dtype));
+    }
     func(this->data, m.data, m.total());
 }
 

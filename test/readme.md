@@ -18,7 +18,8 @@
 
 - `ctest` 默认运行 smoke + core 基础集。
 - 清理旧工程路径依赖，确保测试仅依赖当前仓库。
-- 当前已接线最小 core 子集目标：`cvh_core_basic_tests`（通过 `CVH_BUILD_LEGACY_TESTS=ON` 启用）。
+- 当前已接线 core 测试二进制：`cvh_test_core`
+  （通过 `CVH_BUILD_TESTS=ON` 启用，支持 `--gtest_filter` 过滤）。
 
 ### P1：模块化覆盖
 

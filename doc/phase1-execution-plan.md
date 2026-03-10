@@ -77,9 +77,9 @@
 |---|---|---|---|
 | P1-01 | 已完成 | 2026-03-10 | 已建立 Phase 1 执行文档，固化任务与门禁 |
 | P1-02 | 已完成 | 2026-03-10 | 已新增 `doc/mat-contract-v1.md`，并完成索引与 core 文档联动 |
-| P1-03 | 待开始 | 2026-03-10 | 下一步对齐 `Mat` 实现与合同差异 |
-| P1-04 | 待开始 | 2026-03-10 | 依赖 P1-03 的差异清理结果 |
-| P1-05 | 待开始 | 2026-03-10 | 依赖 P1-03 的行为稳定后补齐 |
+| P1-03 | 已完成 | 2026-03-10 | 已对齐 `create/reshape/copyTo/convertTo/setTo` 前置条件与错误语义，并通过 `ci_smoke + ci_core_basic` |
+| P1-04 | 已完成 | 2026-03-10 | 已完成首批 header-only 迁移闭环（`MatSize` 与 `total(MatShape,...)` 迁移至 `mat.inl.h`，include-only smoke 直接调用通过） |
+| P1-05 | 已完成 | 2026-03-10 | 已新增 `cvh_test_core` 聚合测试二进制（支持 `gtest_filter`）并完成 Mat 合同测试闭环，且修复 `setTo` 在 16bit odd shape 的尾元素漏写问题 |
 
 ## 4. 风险与应对
 

@@ -5,27 +5,7 @@
 
 using namespace cvh;
 
-TEST(CoreBasic_TEST, mat_clone_preserves_data)
-{
-    Mat src({2, 3}, CV_32F);
-    float* src_data = reinterpret_cast<float*>(src.data);
-    for (int i = 0; i < 6; ++i)
-    {
-        src_data[i] = static_cast<float>(i) * 1.5f - 2.0f;
-    }
-
-    Mat cloned = src.clone();
-    const float* cloned_data = reinterpret_cast<const float*>(cloned.data);
-
-    ASSERT_EQ(cloned.total(), src.total());
-    ASSERT_EQ(cloned.type(), src.type());
-    for (int i = 0; i < 6; ++i)
-    {
-        EXPECT_FLOAT_EQ(cloned_data[i], src_data[i]);
-    }
-}
-
-TEST(CoreBasic_TEST, convert_to_int32_roundtrip)
+TEST(CoreOps_TEST, convert_to_int32_roundtrip)
 {
     Mat src({1, 5}, CV_32F);
     float* src_data = reinterpret_cast<float*>(src.data);
@@ -49,4 +29,25 @@ TEST(CoreBasic_TEST, convert_to_int32_roundtrip)
     EXPECT_NEAR(out[2], 0.0f, 1e-6f);
     EXPECT_NEAR(out[3], 2.0f, 1e-6f);
     EXPECT_NEAR(out[4], 10.0f, 1e-6f);
+}
+
+TEST(CoreOps_TEST, copy_to_empty_dst_keeps_source_type_and_shape)
+{
+    Mat src({2, 2}, CV_32S);
+    int* src_data = reinterpret_cast<int*>(src.data);
+    src_data[0] = 1;
+    src_data[1] = -2;
+    src_data[2] = 3;
+    src_data[3] = -4;
+
+    Mat dst;
+    src.copyTo(dst);
+
+    ASSERT_EQ(dst.type(), CV_32S);
+    ASSERT_EQ(dst.shape(), src.shape());
+    const int* dst_data = reinterpret_cast<const int*>(dst.data);
+    EXPECT_EQ(dst_data[0], 1);
+    EXPECT_EQ(dst_data[1], -2);
+    EXPECT_EQ(dst_data[2], 3);
+    EXPECT_EQ(dst_data[3], -4);
 }

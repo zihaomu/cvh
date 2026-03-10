@@ -11,8 +11,7 @@ BUILD_LOG="${BUILD_DIR}/build.log"
 cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
   -DCVH_BUILD_LEGACY_CORE=OFF \
   -DCVH_BUILD_BACKEND_KERNEL_SOURCES=OFF \
-  -DCVH_BUILD_LEGACY_TESTS=ON \
-  -DCVH_BUILD_SMOKE_TESTS=OFF
+  -DCVH_BUILD_TESTS=ON
 
 cmake --build "${BUILD_DIR}" -j 2>&1 | tee "${BUILD_LOG}"
 
@@ -29,4 +28,8 @@ if command -v ctest >/dev/null 2>&1; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure
 else
   cmake --build "${BUILD_DIR}" --target test
+fi
+
+if [[ -x "${BUILD_DIR}/cvh_test_core" ]]; then
+  "${BUILD_DIR}/cvh_test_core" '--gtest_filter=MatContract_TEST.*'
 fi

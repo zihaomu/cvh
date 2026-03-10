@@ -81,7 +81,7 @@
 | P0-01 | 已完成 | 2026-03-10 | 已新增统一脚本 `scripts/ci_smoke.sh`，接入 `.github/workflows/ci.yml`，并验证 `configure -> build -> test` |
 | P0-02 | 已完成 | 2026-03-10 | 已新增 `cvh_include_only_smoke` 与 `scripts/check_public_headers.sh`，并在 CI 脚本中执行 |
 | P0-03 | 已完成 | 2026-03-10 | 已清理 `system.h/system.cpp/mat_convert.cpp` 与相关测试脚本中的历史命名残留，并通过 smoke 验证 |
-| P0-04 | 已完成 | 2026-03-10 | 已清理 `test/core` 对旧 backend 的直接依赖，并接线 `cvh_core_basic_tests` 可运行子集 |
+| P0-04 | 已完成 | 2026-03-10 | 已清理 `test/core` 对旧 backend 的直接依赖，并接线 `cvh_test_core` 可运行子集 |
 | P0-05 | 已完成 | 2026-03-10 | 已新增 `doc/src-core-migration-tracker.md`，并完成 2 个低风险头文件迁移闭环 |
 
 ## 4. 每日执行节奏（建议）

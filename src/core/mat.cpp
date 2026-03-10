@@ -9,6 +9,7 @@
 #include "cvh/core/define.h"
 #include <stdatomic.h>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 // If is not Mac or IOS, then include the following code.
@@ -22,6 +23,15 @@ void memset_pattern4(void *data, const void *pattern4, size_t len)
 
 namespace cvh
 {
+
+namespace {
+
+inline bool is_supported_scalar_type(int type)
+{
+    return type >= CV_8U && type <= CV_16F;
+}
+
+} // namespace
 
 template<typename _Tp> static inline _Tp* alignPtr(_Tp* ptr, int n=(int)sizeof(_Tp))
 {
@@ -132,52 +142,6 @@ void MatAllocator::unmap(MatData* u) const
     {
         deallocate(u);
     }
-}
-
-// <<<<<<<<<<<<<<<<<<<<<   MatSize   >>>>>>>>>>>>
-MatSize::MatSize(int *_p):p0(_p)
-{
-    if (_p)
-        p = _p + 1;
-    else
-        p = nullptr;
-}
-
-int MatSize::dims() const
-{
-    return p0[0];
-}
-
-const int& MatSize::operator[](int i) const
-{
-    return p[i];
-}
-
-int& MatSize::operator[](int i)
-{
-    return p[i];
-}
-
-bool MatSize::operator!=(const MatSize &sz) const
-{
-    return !(*this == sz);
-}
-
-bool MatSize::operator==(const MatSize &sz) const
-{
-    int d = dims();
-    int dsz = sz.dims();
-
-    if (d != dsz)
-        return false;
-
-    for (int i = 0; i < d; i++)
-    {
-        if (p[i] != sz[i])
-            return false;
-    }
-
-    return true;
 }
 
 // <<<<<<<<<<<<<<<<<<<<<   Mat   >>>>>>>>>>>>
@@ -307,6 +271,12 @@ Mat::Mat(const Mat& m)
 Mat::Mat(int _dims, const int* _sizes, int _type, void* _data)
 :dims(0), data(0), allocator(0), u(0), size(nullptr), matType(_type)
 {
+    if (!is_supported_scalar_type(_type))
+    {
+        M_Error_(Error::StsNotImplemented,
+                 ("Unsupported Mat type=%d in external-memory constructor", _type));
+    }
+    M_Assert(_data != nullptr);
     data = (uchar*)_data;
     _setSize(*this, _dims, _sizes);
 }
@@ -314,6 +284,12 @@ Mat::Mat(int _dims, const int* _sizes, int _type, void* _data)
 Mat::Mat(const std::vector<int> _sizes, int _type, void* _data)
 :dims(0), data(0), allocator(0), u(0), size(nullptr), matType(_type)
 {
+    if (!is_supported_scalar_type(_type))
+    {
+        M_Error_(Error::StsNotImplemented,
+                 ("Unsupported Mat type=%d in external-memory constructor", _type));
+    }
+    M_Assert(_data != nullptr);
     data = (uchar*)_data;
     _setSize(*this, _sizes.size(), _sizes.data());
 }
@@ -433,10 +409,22 @@ Mat Mat::reshape(const std::vector<int> newSizes) const
 
 Mat Mat::reshape(int newDims, const int* newSizes) const
 {
+    M_Assert(newDims > 0 && newDims <= MAT_MAX_DIM);
+    M_Assert(newSizes != nullptr);
+
     size_t new_total = 1;
 
     for (int i = 0; i < newDims; i++)
     {
+        if (newSizes[i] <= 0)
+        {
+            M_Error_(Error::Code::StsBadSize,
+                     ("Invalid reshape size at dim=%d, value=%d", i, newSizes[i]));
+        }
+        if (new_total > std::numeric_limits<size_t>::max() / static_cast<size_t>(newSizes[i]))
+        {
+            M_Error(Error::Code::StsOutOfMem, "reshape size overflow");
+        }
         new_total *= newSizes[i];
     }
 
@@ -455,19 +443,16 @@ Mat Mat::reshape(int newDims, const int* newSizes) const
 // copy a full Mat, it will re-allocate memory.
 void Mat::copyTo(Mat &dst) const
 {
-    int t = dst.type();
-
-    // TODO 增加常用数据转换下的copyTo函数
-    if (t != matType)
-    {
-        M_Error(Error::Code::StsBadType, "Unsupported data transform right now!");
-        return;
-    }
-
     if (empty())
     {
         dst.release();
         return;
+    }
+
+    if (!dst.empty() && dst.type() != matType)
+    {
+        M_Error_(Error::Code::StsBadType,
+                 ("Mat::copyTo type mismatch, src=%d dst=%d", matType, dst.type()));
     }
 
     dst.create(dims, size.p, type());
@@ -496,6 +481,10 @@ void Mat::create(int _dims, const int* _sizes, int _type)
 {
     int i;
     M_Assert(0 < _dims && _dims <= MAT_MAX_DIM && _sizes);
+    if (!is_supported_scalar_type(_type))
+    {
+        M_Error_(Error::StsNotImplemented, ("Unsupported Mat type=%d in Mat::create", _type));
+    }
 
     // same Mat
     if (data && (_dims == dims) && type() == _type)
@@ -606,6 +595,9 @@ void Mat::setSize(Mat &m)
 
 void Mat::setTo(float v)
 {
+    if (empty())
+        return;
+
     int vi;
     switch (matType)
     {
@@ -635,23 +627,15 @@ void Mat::setTo(float v)
         case CV_16U:
         {
             ushort u = saturate_cast<ushort>(v);
-            ushort * p = (ushort *)&vi;
-            p[0] = u; p[1] = u;
-//            memset_pattern4(data, &vi, total() * sizeof(ushort));
-            int* data_f = (int*)data;
-            size_t t = + total()/(sizeof(int)/sizeof(ushort));
-            std::fill(data_f, data_f + t, vi);
+            ushort* data_u = reinterpret_cast<ushort*>(data);
+            std::fill(data_u, data_u + total(), u);
             break;
         }
         case CV_16S:
         {
-            short u = saturate_cast<short>(v);
-            short * p = (short *)&vi;
-            p[0] = u; p[1] = u;
-            int* data_f = (int*)data;
-            size_t t = + total()/(sizeof(int)/sizeof(short));
-            std::fill(data_f, data_f + t, vi);
-//            memset_pattern4(data, &vi, total() * sizeof(ushort));
+            short s = saturate_cast<short>(v);
+            short* data_s = reinterpret_cast<short*>(data);
+            std::fill(data_s, data_s + total(), s);
             break;
         }
         case CV_32F:
@@ -685,13 +669,9 @@ void Mat::setTo(float v)
         case CV_16F:
         {
             // TODO check if the half-float is correct?
-            ushort u = *(ushort *)hfloat(v).get_ptr();
-            ushort * p = (ushort *)&vi;
-            p[0] = u; p[1] = u;
-            size_t t = + total()/(sizeof(int)/sizeof(ushort));
-            int* data_f = (int*)data;
-            std::fill(data_f, data_f + t, vi);
-//            memset_pattern4(data, &vi, total() * sizeof(ushort));
+            hfloat hf(v);
+            hfloat* data_hf = reinterpret_cast<hfloat*>(data);
+            std::fill(data_hf, data_hf + total(), hf);
             break;
         }
         default:
@@ -714,7 +694,7 @@ size_t Mat::total() const
 
 size_t Mat::total(int startDim, int endDim) const
 {
-    assert(startDim >= 0 && startDim <= endDim);
+    M_Assert(startDim >= 0 && startDim <= endDim);
     size_t p = 1;
 
     int endDim_ = endDim <= dims ? endDim : dims;
@@ -859,51 +839,13 @@ uchar *Mat::ptr()
 template<typename _Tp>
 _Tp &Mat::at(int i0)
 {
-    return (_Tp*)data[i0];
+    return reinterpret_cast<_Tp*>(data)[i0];
 }
 
 void Mat::addref()
 {
     if (u)
         CV_XADD(&u->refcount, 1);
-}
-
-size_t total(const Mat& m)
-{
-    return m.total();
-}
-
-size_t total(const Mat& m, int startDim, int endDim)
-{
-    if (endDim == -1)
-    {
-        endDim = m.dims;
-    }
-    return m.total(startDim, endDim);
-}
-
-size_t total(const MatShape shape)
-{
-    return total(shape, 0, shape.size());
-}
-
-size_t total(const MatShape shape, int startDim, int endDim)
-{
-    if (endDim == -1)
-    {
-        endDim = shape.size();
-    }
-
-    assert(startDim >= 0 && startDim <= endDim);
-    size_t p = 1;
-    int dims = shape.size();
-
-    int endDim_ = endDim <= dims ? endDim : dims;
-    for (int i = startDim; i < endDim_; i++)
-    {
-        p *= shape[i];
-    }
-    return p;
 }
 
 }
