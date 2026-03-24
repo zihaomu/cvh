@@ -77,7 +77,7 @@ void addWeighted(const Mat& a, double alpha, const Mat& b, double beta, Mat& c)
         }
     }
     else
-        M_Error_(Error::Code::StsBadType, ("Unsupported format at function \" addWeighted \" type = %d!", type));
+        CV_Error_(Error::Code::StsBadType, ("Unsupported format at function \" addWeighted \" type = %d!", type));
 }
 
 void subtract(const Mat& a, const Mat& b, Mat& c)
@@ -117,7 +117,7 @@ void subtract(const Mat& a, Mat& c)
         }
     }
     else
-        M_Error_(Error::Code::StsBadType, ("Unsupported format at function \" subtract \" type = %d!", type));
+        CV_Error_(Error::Code::StsBadType, ("Unsupported format at function \" subtract \" type = %d!", type));
 }
 
 void multiply(const Mat& a, const Mat& b, Mat& c)
@@ -132,9 +132,9 @@ void divide(const Mat& a, const Mat& b, Mat& c)
 
 void softmax(const Mat& input, Mat& output)
 {
-    M_Assert(!input.empty() && "Softmax input mat can not be empty!");
-    M_Assert(input.type() == CV_32F && "Currently only FP32 softmax is supported!");
-    M_Assert(input.dims >= 1 && "Softmax expects at least 1 dimension!");
+    CV_Assert(!input.empty() && "Softmax input mat can not be empty!");
+    CV_Assert(input.type() == CV_32F && "Currently only FP32 softmax is supported!");
+    CV_Assert(input.dims >= 1 && "Softmax expects at least 1 dimension!");
 
     if (output.empty())
     {
@@ -142,8 +142,8 @@ void softmax(const Mat& input, Mat& output)
     }
     else
     {
-        M_Assert(output.type() == input.type());
-        M_Assert(output.shape() == input.shape());
+        CV_Assert(output.type() == input.type());
+        CV_Assert(output.shape() == input.shape());
     }
 
     const size_t inner = input.size[input.dims - 1];
@@ -163,8 +163,8 @@ Mat softmax(const Mat& input)
 
 void silu(const Mat& input, Mat& output)
 {
-    M_Assert(!input.empty() && "SiLU input mat can not be empty!");
-    M_Assert(input.type() == CV_32F && "Currently only FP32 SiLU is supported!");
+    CV_Assert(!input.empty() && "SiLU input mat can not be empty!");
+    CV_Assert(input.type() == CV_32F && "Currently only FP32 SiLU is supported!");
 
     if (output.empty())
     {
@@ -172,8 +172,8 @@ void silu(const Mat& input, Mat& output)
     }
     else
     {
-        M_Assert(output.type() == input.type());
-        M_Assert(output.shape() == input.shape());
+        CV_Assert(output.type() == input.type());
+        CV_Assert(output.shape() == input.shape());
     }
 
     cpu::silu_kernel_xsimd(reinterpret_cast<const float*>(input.data),
@@ -190,11 +190,11 @@ Mat silu(const Mat& input)
 
 void rmsnorm(const Mat& input, const Mat& weight, Mat& output, float eps)
 {
-    M_Assert(!input.empty() && !weight.empty() && "RMSNorm input/weight can not be empty!");
-    M_Assert(input.type() == CV_32F && "Currently only FP32 RMSNorm input is supported!");
-    M_Assert((weight.type() == CV_32F || weight.type() == CV_16F) && "RMSNorm weight supports FP32/FP16!");
-    M_Assert(weight.dims == 1 && "RMSNorm weight must be 1D!");
-    M_Assert(weight.size[0] == input.size[input.dims - 1] && "RMSNorm weight size must match input last dimension!");
+    CV_Assert(!input.empty() && !weight.empty() && "RMSNorm input/weight can not be empty!");
+    CV_Assert(input.type() == CV_32F && "Currently only FP32 RMSNorm input is supported!");
+    CV_Assert((weight.type() == CV_32F || weight.type() == CV_16F) && "RMSNorm weight supports FP32/FP16!");
+    CV_Assert(weight.dims == 1 && "RMSNorm weight must be 1D!");
+    CV_Assert(weight.size[0] == input.size[input.dims - 1] && "RMSNorm weight size must match input last dimension!");
 
     if (output.empty())
     {
@@ -202,8 +202,8 @@ void rmsnorm(const Mat& input, const Mat& weight, Mat& output, float eps)
     }
     else
     {
-        M_Assert(output.type() == input.type());
-        M_Assert(output.shape() == input.shape());
+        CV_Assert(output.type() == input.type());
+        CV_Assert(output.shape() == input.shape());
     }
 
     const size_t channels = input.size[input.dims - 1];
@@ -237,12 +237,12 @@ Mat rmsnorm(const Mat& input, const Mat& weight, float eps)
 
 void rmsnorm(const Mat& input, const Mat& weight, const Mat& weight_scales, Mat& output, float eps)
 {
-    M_Assert(!input.empty() && !weight.empty() && !weight_scales.empty() && "RMSNorm quantized input/weight can not be empty!");
-    M_Assert(input.type() == CV_32F && "Currently only FP32 RMSNorm input is supported!");
-    M_Assert(weight.type() == CV_8S && "Quantized RMSNorm expects INT8 weight!");
-    M_Assert(weight_scales.type() == CV_32F && weight_scales.total() == 1 && "Quantized RMSNorm expects a single FP32 scale!");
-    M_Assert(weight.dims == 1 && "RMSNorm weight must be 1D!");
-    M_Assert(weight.size[0] == input.size[input.dims - 1] && "RMSNorm weight size must match input last dimension!");
+    CV_Assert(!input.empty() && !weight.empty() && !weight_scales.empty() && "RMSNorm quantized input/weight can not be empty!");
+    CV_Assert(input.type() == CV_32F && "Currently only FP32 RMSNorm input is supported!");
+    CV_Assert(weight.type() == CV_8S && "Quantized RMSNorm expects INT8 weight!");
+    CV_Assert(weight_scales.type() == CV_32F && weight_scales.total() == 1 && "Quantized RMSNorm expects a single FP32 scale!");
+    CV_Assert(weight.dims == 1 && "RMSNorm weight must be 1D!");
+    CV_Assert(weight.size[0] == input.size[input.dims - 1] && "RMSNorm weight size must match input last dimension!");
 
     if (output.empty())
     {
@@ -250,8 +250,8 @@ void rmsnorm(const Mat& input, const Mat& weight, const Mat& weight_scales, Mat&
     }
     else
     {
-        M_Assert(output.type() == input.type());
-        M_Assert(output.shape() == input.shape());
+        CV_Assert(output.type() == input.type());
+        CV_Assert(output.shape() == input.shape());
     }
 
     const size_t channels = input.size[input.dims - 1];
@@ -274,13 +274,13 @@ Mat rmsnorm(const Mat& input, const Mat& weight, const Mat& weight_scales, float
 
 void rope(Mat& q, Mat& k, int start_pos, float freq_base)
 {
-    M_Assert(!q.empty() && !k.empty() && "RoPE input mat can not be empty!");
-    M_Assert(q.type() == CV_32F && k.type() == CV_32F && "Currently only FP32 RoPE is supported!");
-    M_Assert(q.dims == 3 && k.dims == 3 && "RoPE expects [seq_len, head_count, head_dim] tensors!");
-    M_Assert(q.size[0] == k.size[0] && "Q/K seq_len must match on RoPE!");
-    M_Assert(q.size[2] == k.size[2] && "Q/K head_dim must match on RoPE!");
-    M_Assert(q.size[2] % 2 == 0 && "RoPE head_dim must be even!");
-    M_Assert(start_pos >= 0 && "RoPE start_pos must be non-negative!");
+    CV_Assert(!q.empty() && !k.empty() && "RoPE input mat can not be empty!");
+    CV_Assert(q.type() == CV_32F && k.type() == CV_32F && "Currently only FP32 RoPE is supported!");
+    CV_Assert(q.dims == 3 && k.dims == 3 && "RoPE expects [seq_len, head_count, head_dim] tensors!");
+    CV_Assert(q.size[0] == k.size[0] && "Q/K seq_len must match on RoPE!");
+    CV_Assert(q.size[2] == k.size[2] && "Q/K head_dim must match on RoPE!");
+    CV_Assert(q.size[2] % 2 == 0 && "RoPE head_dim must be even!");
+    CV_Assert(start_pos >= 0 && "RoPE start_pos must be non-negative!");
 
     cpu::rope_kernel_inplace(reinterpret_cast<float*>(q.data),
                              reinterpret_cast<float*>(k.data),
@@ -295,12 +295,12 @@ void rope(Mat& q, Mat& k, int start_pos, float freq_base)
 void compare(const Mat& a, const Mat& b, Mat& c, int op)
 {
     // TODO add implementation!
-    M_Error(NULL, "Un-implemented function at compare!");
+    CV_Error(NULL, "Un-implemented function at compare!");
 }
 
 Mat transpose(const Mat& input)
 {
-    M_Assert(!input.empty() && "The transpose function get empty input!");
+    CV_Assert(!input.empty() && "The transpose function get empty input!");
     MatShape inpShape = input.shape();
     Mat out;
     if (inpShape.size() == 1)
@@ -329,7 +329,7 @@ Mat transposeND(const Mat& input, const std::vector<int> order)
 {
     if (input.dims != order.size())
     {
-        M_Error_(Error::StsBadSize, ("In transposeND, the input dimension is not equal to the order size! input dim = %d, order size = %d!", input.dims, static_cast<int>(order.size())));
+        CV_Error_(Error::StsBadSize, ("In transposeND, the input dimension is not equal to the order size! input dim = %d, order size = %d!", input.dims, static_cast<int>(order.size())));
     }
 
     auto order_ = order;
@@ -339,7 +339,7 @@ Mat transposeND(const Mat& input, const std::vector<int> order)
     {
         if (order_[i] != i)
         {
-            M_Error(Error::StsBadSize, "New order shold be a valid permutation of the old one.");
+            CV_Error(Error::StsBadSize, "New order shold be a valid permutation of the old one.");
         }
     }
 
@@ -498,7 +498,7 @@ norm_(const _Tp* src1, const _Tp* src2, size_t total, int normType, double start
     }
     else
     {
-        M_Error(Error::StsBadArg, "Unknown/unsupported norm type");
+        CV_Error(Error::StsBadArg, "Unknown/unsupported norm type");
     }
 
     return result;
@@ -506,11 +506,11 @@ norm_(const _Tp* src1, const _Tp* src2, size_t total, int normType, double start
 
 double norm(const Mat& a, const Mat& b, int normType)
 {
-    M_Assert(!a.empty() && !b.empty() && "The input mat can not be empty!");
+    CV_Assert(!a.empty() && !b.empty() && "The input mat can not be empty!");
 
-    M_Assert(a.type() == b.type() && "Input data type is different!");
+    CV_Assert(a.type() == b.type() && "Input data type is different!");
 
-    M_Assert(a.total() == b.total() && "Input data total is different!");
+    CV_Assert(a.total() == b.total() && "Input data total is different!");
 
     size_t total_size = a.total();
 
@@ -539,7 +539,7 @@ double norm(const Mat& a, const Mat& b, int normType)
             result = norm_((const double*)a.data, (const double*)b.data, total_size, normType, 0);
             break;
         default:
-            M_Error(Error::StsBadArg, "Unknown/unsupported data type");
+            CV_Error(Error::StsBadArg, "Unknown/unsupported data type");
     };
 
     return result;
@@ -574,7 +574,7 @@ norm_(const _Tp* src1, size_t total, int normType, double startval)
     }
     else
     {
-        M_Error(Error::StsBadArg, "Unknown/unsupported norm type");
+        CV_Error(Error::StsBadArg, "Unknown/unsupported norm type");
     }
 
     return result;
@@ -582,7 +582,7 @@ norm_(const _Tp* src1, size_t total, int normType, double startval)
 
 double norm(const Mat& a, int normType)
 {
-    M_Assert(!a.empty() && "The input mat can not be empty!");
+    CV_Assert(!a.empty() && "The input mat can not be empty!");
 
     size_t total_size = a.total();
 
@@ -612,7 +612,7 @@ double norm(const Mat& a, int normType)
             result = norm_((const double*)a.data, total_size, normType, 0);
             break;
         default:
-            M_Error(Error::StsBadArg, "Unknown/unsupported data type");
+            CV_Error(Error::StsBadArg, "Unknown/unsupported data type");
 
     };
 
@@ -625,12 +625,12 @@ double norm(const Mat& a, int normType)
 
 void reshape(const Mat& input, const std::vector<int>& shape, Mat& out)
 {
-    M_Assert(!input.empty() && "The input mat can not be empty!");
+    CV_Assert(!input.empty() && "The input mat can not be empty!");
 
     size_t total_size = input.total();
     size_t new_total = total(shape);
 
-    M_Assert(total_size == new_total && "The total size of input mat is not equal to the new shape!");
+    CV_Assert(total_size == new_total && "The total size of input mat is not equal to the new shape!");
 
     out = input;
     out.setSize(shape);
@@ -663,7 +663,7 @@ public:
 
     void init(const Mat& a, const Mat& b)
     {
-        M_Assert(a.type() == b.type() && "Input data type is different!");
+        CV_Assert(a.type() == b.type() && "Input data type is different!");
 
         MatShape shape0 = a.shape();
         MatShape shape1 = b.shape();
@@ -710,7 +710,7 @@ public:
                 std::string str_0 = shape_to_str(a);
                 std::string str_1 = shape_to_str(b);
                 std::string log_info = "Broadcasting error! The two input shape are" + str_0 + " and " + str_1;
-                M_Error(Error::StsBadSize, log_info.c_str());
+                CV_Error(Error::StsBadSize, log_info.c_str());
             }
 
             idx_0--;
@@ -843,14 +843,14 @@ inline bool try_fast_binary_float(BinaryOp op, const BinaryOpHelper& helper, con
 template<typename T, typename Func>
 void binary_forward(const Func& op, const BinaryOpHelper& helper,  const uchar* inp0, const uchar* inp1, uchar* out)
 {
-    M_Assert(helper.isInit && "BinaryOp has not been inited!");
+    CV_Assert(helper.isInit && "BinaryOp has not been inited!");
 
     int max_dims = helper.max_dims;
     int block_size = helper.out_shape[helper.max_dims - 1];
     size_t total_num = total(helper.out_shape);
     int block_num = total_num / block_size;
 
-    M_Assert(total_num % block_size == 0);
+    CV_Assert(total_num % block_size == 0);
     const int esz = sizeof(T); // element size
 
     const int inner_0 = helper.inp0_shape_align[max_dims - 1] == 1 ? 0 : 1;
@@ -889,7 +889,7 @@ inline void opDispatch(const BinaryOp op, Args&&... args)
 {
     if (std::is_same<T, float>::value)
     {
-        M_Assert(op != BinaryOp::MOD && op != BinaryOp::AND && op != BinaryOp::OR && op != BinaryOp::XOR);
+        CV_Assert(op != BinaryOp::MOD && op != BinaryOp::AND && op != BinaryOp::OR && op != BinaryOp::XOR);
     }
 
     switch (op)
@@ -985,7 +985,7 @@ inline void opDispatch(const BinaryOp op, Args&&... args)
             break;
         }
         default:
-            M_Error_(Error::StsBadType, ("Unsupported op on Mat binary function! Op = %d!", (int)op));
+            CV_Error_(Error::StsBadType, ("Unsupported op on Mat binary function! Op = %d!", (int)op));
     }
 }
 
@@ -1013,13 +1013,13 @@ inline void typeDispatch(const int type, Args&&... args)
             opDispatch<float>(std::forward<Args>(args)...);
             break;
         default:
-            M_Error_(Error::StsBadType, ("Unsupported type on Mat binary function! Type = %d!", type));
+            CV_Error_(Error::StsBadType, ("Unsupported type on Mat binary function! Type = %d!", type));
     }
 }
 
 void binaryFunc(BinaryOp op, const Mat& a, const Mat& b, Mat& c)
 {
-    M_Assert(a.type() == b.type());
+    CV_Assert(a.type() == b.type());
     BinaryOpHelper helper = BinaryOpHelper();
     helper.init(a, b);
 
@@ -1029,8 +1029,8 @@ void binaryFunc(BinaryOp op, const Mat& a, const Mat& b, Mat& c)
     }
     else
     {
-        M_Assert(c.shape() == helper.out_shape);
-        M_Assert(c.type() == a.type());
+        CV_Assert(c.shape() == helper.out_shape);
+        CV_Assert(c.type() == a.type());
     }
 
     if (try_fast_binary_float(op, helper, a, b, c))

@@ -12,7 +12,7 @@ TEST(System, log_test)
     // EXPECT_THROW({
     //     try
     //     {
-    //         M_Error(Error::StsNotImplemented, "Not implementation!");
+    //         CV_Error(Error::StsNotImplemented, "Not implementation!");
     //     }
     //     catch(const cvh::Exception& e)
     //     {

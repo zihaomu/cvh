@@ -41,7 +41,7 @@ size_t broadcast_linear_index(const MatShape& src_shape, const MatShape& src_str
         return 0;
 
     const int offset = out_batch_dims - src_batch_dims;
-    M_Assert(offset >= 0 && "Invalid broadcast mapping for GEMM batch dims!");
+    CV_Assert(offset >= 0 && "Invalid broadcast mapping for GEMM batch dims!");
 
     size_t linear = 0;
     for (int d = 0; d < src_batch_dims; ++d)
@@ -60,15 +60,15 @@ void gemm_impl_naive(const Mat& a, const Mat& b, Mat& c)
     MatShape shape_b = b.shape();
 
     // 目前不处理 K x KxN 这种情况。
-    M_Assert(shape_a.size() >= 2 && shape_b.size() >= 2 && "Mat shapes on gemm function are miss matching!");
+    CV_Assert(shape_a.size() >= 2 && shape_b.size() >= 2 && "Mat shapes on gemm function are miss matching!");
 
     // generate output shape with brodcast rule
     // need to handle When a and b shape is 1xK x KxN, or MxK x 1xN, or MxK x Kx1
     MatShape shape_c = get_gemm_shape(shape_a, shape_b);
 
-    // M_Assert(shape_a.size() == shape_b.size() && "Two Mat dimension on gemm function are different!");
+    // CV_Assert(shape_a.size() == shape_b.size() && "Two Mat dimension on gemm function are different!");
     int len_s = shape_a.size();
-    M_Assert(len_s >= 2 && "Only multi-dimension Mat is supported for gemm function!");
+    CV_Assert(len_s >= 2 && "Only multi-dimension Mat is supported for gemm function!");
 
     int M = shape_a.size() == 1 ? 1 : shape_a[shape_a.size() - 2];
     int K = shape_a[shape_a.size() - 1];
@@ -88,11 +88,11 @@ void gemm_impl_naive(const Mat& a, const Mat& b, Mat& c)
         errorInfo += ", but got ";
         errorInfo += std::to_string(K);
         errorInfo += "\n";
-        M_Error(NULL, errorInfo.c_str());
+        CV_Error(NULL, errorInfo.c_str());
     }
 
-    M_Assert(a.type() == CV_32F && "Currently only FP32 activation mat is supported!");
-    M_Assert((b.type() == CV_32F || b.type() == CV_16F) && "NN gemm currently supports FP32/FP16 weights only!");
+    CV_Assert(a.type() == CV_32F && "Currently only FP32 activation mat is supported!");
+    CV_Assert((b.type() == CV_32F || b.type() == CV_16F) && "NN gemm currently supports FP32/FP16 weights only!");
 
     // For dimension > 2, use numpy broadcasting rule for previous dimension.
     c = Mat(shape_c, CV_32F);
@@ -159,7 +159,7 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
 #endif
 
     // 目前不处理 K x KxN 这种情况。
-    M_Assert(shape_a.size() >= 2 && shape_b.size() >= 2 && "Mat shapes on gemm function are miss matching!");
+    CV_Assert(shape_a.size() >= 2 && shape_b.size() >= 2 && "Mat shapes on gemm function are miss matching!");
 
     // generate output shape with brodcast rule
     // need to handle When a and b shape is 1xK x KxN, or MxK x 1xN, or MxK x Kx1
@@ -186,7 +186,7 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
             }
             else
             {
-                M_Error(NULL, "Mat shapes on gemm function are miss matching!");
+                CV_Error(NULL, "Mat shapes on gemm function are miss matching!");
             }
             index_a--;
             index_b--;
@@ -202,7 +202,7 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
             index_b--;
         }
         else
-            M_Error(NULL, "Mat shapes on gemm function are miss matching!");
+            CV_Error(NULL, "Mat shapes on gemm function are miss matching!");
     }
 
     // 如果有一个维度为1维度，说明 出现 MxK x K = M的情况
@@ -219,9 +219,9 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
         shape_c.push_back(shape_b[shape_b.size() - 2]);
     }
 
-    // M_Assert(shape_a.size() == shape_b.size() && "Two Mat dimension on gemm function are different!");
+    // CV_Assert(shape_a.size() == shape_b.size() && "Two Mat dimension on gemm function are different!");
     int len_s = shape_a.size();
-    M_Assert(len_s >= 2 && "Only multi-dimension Mat is supported for gemm function!");
+    CV_Assert(len_s >= 2 && "Only multi-dimension Mat is supported for gemm function!");
 
     int M = shape_a.size() == 1 ? 1 : shape_a[shape_a.size() - 2];
     int K = shape_a[shape_a.size() - 1];
@@ -238,17 +238,17 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
         errorInfo += shape_to_str(shape_b);
         errorInfo += "\n";
         errorInfo += "Expact gemm K = " + std::to_string(K) + ", but got " + std::to_string(shape_b[shape_b.size() - 1]) + "\n";
-        M_Error(NULL, errorInfo.c_str());
+        CV_Error(NULL, errorInfo.c_str());
     }
 
-    M_Assert(a.type() == CV_32F && "Currently only FP32 activation mat is supported!");
-    M_Assert((b.type() == CV_32F || b.type() == CV_16F || b.type() == CV_8S) &&
+    CV_Assert(a.type() == CV_32F && "Currently only FP32 activation mat is supported!");
+    CV_Assert((b.type() == CV_32F || b.type() == CV_16F || b.type() == CV_8S) &&
              "NT gemm currently supports FP32/FP16/INT8 weights!");
     if (b.type() == CV_8S)
     {
-        M_Assert(b_scales && !b_scales->empty() && "INT8 gemm requires non-empty weight scales!");
-        M_Assert(b_scales->type() == CV_32F);
-        M_Assert(b_scales->total() == static_cast<size_t>(N));
+        CV_Assert(b_scales && !b_scales->empty() && "INT8 gemm requires non-empty weight scales!");
+        CV_Assert(b_scales->type() == CV_32F);
+        CV_Assert(b_scales->total() == static_cast<size_t>(N));
     }
 
     // For dimension > 2, use numpy broadcasting rule for previous dimension.
@@ -340,7 +340,7 @@ Mat gemm(const Mat& a, const Mat& b, bool transA, bool transB)
 
 Mat gemm(const Mat& a, const Mat& b, const Mat& b_scales, bool transA, bool transB)
 {
-    M_Assert(!b_scales.empty() && "Quantized gemm requires non-empty scales!");
+    CV_Assert(!b_scales.empty() && "Quantized gemm requires non-empty scales!");
     if (b.type() != CV_8S)
     {
         return gemm(a, b, transA, transB);
@@ -353,7 +353,7 @@ Mat gemm(const Mat& a, const Mat& b, const Mat& b_scales, bool transA, bool tran
         return out;
     }
 
-    M_Error_(Error::StsNotImplemented, ("INT8 gemm only supports transA=false, transB=true right now"));
+    CV_Error_(Error::StsNotImplemented, ("INT8 gemm only supports transA=false, transB=true right now"));
     return {};
 }
 

@@ -13,7 +13,13 @@ A lightweight header-only wrapper for OpenCV, enabling easy integration without 
 - imgcodecs
     - 仅实现部分图像格式的读写操作
 
+
 实现计划在doc中，主要api对齐opencv，一步步实现中，详细实施计划见：doc/header-only-opencv-plan.md
+
+## Compatibility
+
+- 对外承诺：`API/行为兼容`（优先覆盖高频 OpenCV 用法）。
+- 不承诺：`ABI/内存布局兼容`（例如 `cvh::Mat` 与 `cv::Mat` 的对象内部布局、引用计数实现可不同）。
 
 ## Build (current temporary layout)
 

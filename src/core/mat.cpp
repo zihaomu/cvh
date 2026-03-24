@@ -9,6 +9,7 @@
 #include "cvh/core/define.h"
 #include <stdatomic.h>
 #include <cstring>
+#include <climits>
 #include <limits>
 #include <vector>
 
@@ -26,9 +27,47 @@ namespace cvh
 
 namespace {
 
-inline bool is_supported_scalar_type(int type)
+inline bool is_supported_depth(int depth)
 {
-    return type >= CV_8U && type <= CV_16F;
+    return depth >= CV_8U && depth <= CV_16F;
+}
+
+inline bool is_supported_type(int type)
+{
+    const int depth = CV_MAT_DEPTH(type);
+    const int channels = CV_MAT_CN(type);
+    return is_supported_depth(depth) && channels > 0 && channels <= CV_CN_MAX;
+}
+
+inline void clear_steps(Mat& m)
+{
+    for (int i = 0; i < MAT_MAX_DIM; ++i)
+    {
+        m.stepBuf[i] = 0;
+    }
+}
+
+inline void copy_steps(Mat& dst, const Mat& src)
+{
+    for (int i = 0; i < MAT_MAX_DIM; ++i)
+    {
+        dst.stepBuf[i] = src.stepBuf[i];
+    }
+}
+
+inline void update_continuous_steps(Mat& m)
+{
+    clear_steps(m);
+
+    if (m.dims <= 0 || !m.size.p)
+        return;
+
+    size_t stride = m.elemSize();
+    for (int i = m.dims - 1; i >= 0; --i)
+    {
+        m.stepBuf[i] = stride;
+        stride *= static_cast<size_t>(m.size.p[i]);
+    }
 }
 
 } // namespace
@@ -144,11 +183,24 @@ void MatAllocator::unmap(MatData* u) const
     }
 }
 
+Range::Range() : start(0), end(0)
+{
+}
+
+Range::Range(int _start, int _end) : start(_start), end(_end)
+{
+}
+
+Range Range::all()
+{
+    return Range(0, INT_MAX);
+}
+
 // <<<<<<<<<<<<<<<<<<<<<   Mat   >>>>>>>>>>>>
 // Setting the dim for mat.
 void _setSize(Mat& m, int _dim, const int* _sz)
 {
-    M_Assert(_dim <= MAT_MAX_DIM && _dim >= 0);
+    CV_Assert(_dim <= MAT_MAX_DIM && _dim >= 0);
 
     if (_dim != m.dims)
     {
@@ -171,7 +223,7 @@ void _setSize(Mat& m, int _dim, const int* _sz)
             m.release();
             break;
         }
-        M_Assert(s > 0);
+        CV_Assert(s > 0);
         m.size.p[i] = s;
     }
 }
@@ -226,32 +278,34 @@ Mat::Mat(const std::vector<int> _sizes, int _type)
 Mat::Mat(int _dims, const int* _sizes, int _type, int v)
 :dims(0), data(0), allocator(0), u(0), size(0), matType(_type)
 {
-    M_Assert(_type == CV_32S || _type == CV_32U || _type == CV_32F);
+    const int depth_code = CV_MAT_DEPTH(_type);
+    CV_Assert(depth_code == CV_32S || depth_code == CV_32U || depth_code == CV_32F);
     int type = _type;
     create(_dims, _sizes, type);
 
     // set all value to v
-    size_t allSize = this->total();
-    int* d = (int *)this->data;
+    size_t allSize = this->total() * static_cast<size_t>(channels());
+    int* data_i = (int *)this->data;
     for (size_t i = 0; i < allSize; i++)
     {
-        d[i] = v;
+        data_i[i] = v;
     }
 }
 
 Mat::Mat(const std::vector<int> _sizes, int _type, int v)
 :dims(0), data(0), allocator(0), u(0), size(0), matType(_type)
 {
-    M_Assert(_type == CV_32S || _type == CV_32U || _type == CV_32F);
+    const int depth_code = CV_MAT_DEPTH(_type);
+    CV_Assert(depth_code == CV_32S || depth_code == CV_32U || depth_code == CV_32F);
     int type = _type;
     create(_sizes, type);
 
     // set all value to v
-    size_t allSize = this->total();
-    int* d = (int *)this->data;
+    size_t allSize = this->total() * static_cast<size_t>(channels());
+    int* data_i = (int *)this->data;
     for (size_t i = 0; i < allSize; i++)
     {
-        d[i] = v;
+        data_i[i] = v;
     }
 }
 
@@ -266,32 +320,35 @@ Mat::Mat(const Mat& m)
 
     dims = 0; // reset dims
     copySize(m);
+    copy_steps(*this, m);
 }
 
 Mat::Mat(int _dims, const int* _sizes, int _type, void* _data)
 :dims(0), data(0), allocator(0), u(0), size(nullptr), matType(_type)
 {
-    if (!is_supported_scalar_type(_type))
+    if (!is_supported_type(_type))
     {
-        M_Error_(Error::StsNotImplemented,
+        CV_Error_(Error::StsNotImplemented,
                  ("Unsupported Mat type=%d in external-memory constructor", _type));
     }
-    M_Assert(_data != nullptr);
+    CV_Assert(_data != nullptr);
     data = (uchar*)_data;
     _setSize(*this, _dims, _sizes);
+    update_continuous_steps(*this);
 }
 
 Mat::Mat(const std::vector<int> _sizes, int _type, void* _data)
 :dims(0), data(0), allocator(0), u(0), size(nullptr), matType(_type)
 {
-    if (!is_supported_scalar_type(_type))
+    if (!is_supported_type(_type))
     {
-        M_Error_(Error::StsNotImplemented,
+        CV_Error_(Error::StsNotImplemented,
                  ("Unsupported Mat type=%d in external-memory constructor", _type));
     }
-    M_Assert(_data != nullptr);
+    CV_Assert(_data != nullptr);
     data = (uchar*)_data;
     _setSize(*this, _sizes.size(), _sizes.data());
+    update_continuous_steps(*this);
 }
 
 Mat::~Mat()
@@ -315,6 +372,7 @@ Mat& Mat::operator=(const Mat& m)
         allocator = m.allocator;
         u = m.u;
         matType = m.matType;
+        copy_steps(*this, m);
     }
 
     return *this;
@@ -322,59 +380,13 @@ Mat& Mat::operator=(const Mat& m)
 
 Mat& Mat::operator=(const float v)
 {
-    if (this->empty())
-        return *this;
-
-    size_t total_v = total();
-
-    if (type() == CV_32F)
-    {
-        float* p = (float*)data;
-        for (int i = 0; i < total_v; i++)
-        {
-            p[i] = (float)v;
-        }
-    }
-    else if (type() == CV_32S)
-    {
-        int* p = (int*)data;
-        for (int i = 0; i < total_v; i++)
-        {
-            p[i] = (int)v;
-        }
-    }
-    else
-        M_Error_(Error::Code::StsBadType, ("Unsupported format at function \"Mat::operator= \" type = %d!", type()));
-
+    setTo(v);
     return *this;
 }
 
 Mat& Mat::operator=(const int v)
 {
-    if (this->empty())
-        return *this;
-
-    size_t total_v = total();
-
-    if (type() == CV_32F)
-    {
-        float* p = (float*)data;
-        for (int i = 0; i < total_v; i++)
-        {
-            p[i] = (float)v;
-        }
-    }
-    else if (type() == CV_32S)
-    {
-        int* p = (int*)data;
-        for (int i = 0; i < total_v; i++)
-        {
-            p[i] = (int)v;
-        }
-    }
-    else
-        M_Error_(Error::Code::StsBadType, ("Unsupported format at function \"Mat::operator= \" type = %d!", type()));
-
+    setTo(static_cast<float>(v));
     return *this;
 }
 
@@ -407,10 +419,74 @@ Mat Mat::reshape(const std::vector<int> newSizes) const
     return this->reshape(newSizes.size(), newSizes.data());
 }
 
+Mat Mat::rowRange(int startrow, int endrow) const
+{
+    if (dims < 1)
+    {
+        CV_Error(Error::Code::StsBadArg, "rowRange expects dims >= 1");
+    }
+    if (startrow < 0 || endrow < startrow || endrow > size.p[0])
+    {
+        CV_Error_(Error::Code::StsBadArg,
+                 ("rowRange out of range, start=%d end=%d rows=%d", startrow, endrow, size.p[0]));
+    }
+
+    if (startrow == 0 && endrow == size.p[0])
+        return *this;
+
+    Mat out = *this;
+    MatShape new_shape = shape();
+    new_shape[0] = endrow - startrow;
+    out.setSize(new_shape);
+    copy_steps(out, *this);
+    out.data = data + static_cast<size_t>(startrow) * step(0);
+    return out;
+}
+
+Mat Mat::colRange(int startcol, int endcol) const
+{
+    if (dims < 2)
+    {
+        CV_Error(Error::Code::StsBadArg, "colRange expects dims >= 2");
+    }
+    if (startcol < 0 || endcol < startcol || endcol > size.p[1])
+    {
+        CV_Error_(Error::Code::StsBadArg,
+                 ("colRange out of range, start=%d end=%d cols=%d", startcol, endcol, size.p[1]));
+    }
+
+    if (startcol == 0 && endcol == size.p[1])
+        return *this;
+
+    Mat out = *this;
+    MatShape new_shape = shape();
+    new_shape[1] = endcol - startcol;
+    out.setSize(new_shape);
+    copy_steps(out, *this);
+    out.data = data + static_cast<size_t>(startcol) * step(1);
+    return out;
+}
+
+Mat Mat::operator()(const Range& row_range, const Range& col_range) const
+{
+    CV_Assert(dims >= 2);
+
+    const int row_start = row_range.start;
+    const int row_end = row_range.end == INT_MAX ? size.p[0] : row_range.end;
+    const int col_start = col_range.start;
+    const int col_end = col_range.end == INT_MAX ? size.p[1] : col_range.end;
+
+    return rowRange(row_start, row_end).colRange(col_start, col_end);
+}
+
 Mat Mat::reshape(int newDims, const int* newSizes) const
 {
-    M_Assert(newDims > 0 && newDims <= MAT_MAX_DIM);
-    M_Assert(newSizes != nullptr);
+    CV_Assert(newDims > 0 && newDims <= MAT_MAX_DIM);
+    CV_Assert(newSizes != nullptr);
+    if (!isContinuous())
+    {
+        CV_Error(Error::Code::StsNotImplemented, "reshape on non-contiguous Mat is not supported in v1");
+    }
 
     size_t new_total = 1;
 
@@ -418,19 +494,19 @@ Mat Mat::reshape(int newDims, const int* newSizes) const
     {
         if (newSizes[i] <= 0)
         {
-            M_Error_(Error::Code::StsBadSize,
+            CV_Error_(Error::Code::StsBadSize,
                      ("Invalid reshape size at dim=%d, value=%d", i, newSizes[i]));
         }
         if (new_total > std::numeric_limits<size_t>::max() / static_cast<size_t>(newSizes[i]))
         {
-            M_Error(Error::Code::StsOutOfMem, "reshape size overflow");
+            CV_Error(Error::Code::StsOutOfMem, "reshape size overflow");
         }
         new_total *= newSizes[i];
     }
 
     if (new_total != total())
     {
-        M_Error(Error::Code::StsBadSize, "The total size of the new Mat is not equal to the original Mat!");
+        CV_Error(Error::Code::StsBadSize, "The total size of the new Mat is not equal to the original Mat!");
         return Mat();
     }
 
@@ -451,7 +527,7 @@ void Mat::copyTo(Mat &dst) const
 
     if (!dst.empty() && dst.type() != matType)
     {
-        M_Error_(Error::Code::StsBadType,
+        CV_Error_(Error::Code::StsBadType,
                  ("Mat::copyTo type mismatch, src=%d dst=%d", matType, dst.type()));
     }
 
@@ -459,13 +535,27 @@ void Mat::copyTo(Mat &dst) const
     if (data == dst.data) // the two mat are the same.
         return;
 
-    // if the data ptr is not the same,
-    if (total() != 0)
+    if (total() == 0)
+        return;
+
+    if (isContinuous() && dst.isContinuous())
     {
-        // TODO handle the sub mat.
-        int esz = CV_ELEM_SIZE(type());
-        size_t total_size = total() * esz;
+        const size_t total_size = total() * elemSize();
         memcpy(dst.data, data, total_size);
+        return;
+    }
+
+    const int outer = dims > 1 ? size.p[0] : 1;
+    const size_t inner_bytes =
+            (dims > 1 ? total(1, dims) : total()) * elemSize();
+    const size_t src_step0 = dims > 1 ? step(0) : inner_bytes;
+    const size_t dst_step0 = dims > 1 ? dst.step(0) : inner_bytes;
+
+    for (int i = 0; i < outer; ++i)
+    {
+        const uchar* src_row = data + static_cast<size_t>(i) * src_step0;
+        uchar* dst_row = dst.data + static_cast<size_t>(i) * dst_step0;
+        memcpy(dst_row, src_row, inner_bytes);
     }
 }
 
@@ -480,10 +570,10 @@ Mat Mat::clone() const
 void Mat::create(int _dims, const int* _sizes, int _type)
 {
     int i;
-    M_Assert(0 < _dims && _dims <= MAT_MAX_DIM && _sizes);
-    if (!is_supported_scalar_type(_type))
+    CV_Assert(0 < _dims && _dims <= MAT_MAX_DIM && _sizes);
+    if (!is_supported_type(_type))
     {
-        M_Error_(Error::StsNotImplemented, ("Unsupported Mat type=%d in Mat::create", _type));
+        CV_Error_(Error::StsNotImplemented, ("Unsupported Mat type=%d in Mat::create", _type));
     }
 
     // same Mat
@@ -515,6 +605,7 @@ void Mat::create(int _dims, const int* _sizes, int _type)
 
     matType = _type;
     _setSize(*this, _dims, _sizes);
+    update_continuous_steps(*this);
 
     // check if need to allocate memory
     if (total() > 0)
@@ -559,6 +650,7 @@ void Mat::release()
     for (int i = 0; i < dims; ++i)
     {
         size.p[i] = 0;
+        stepBuf[i] = 0;
     }
 }
 
@@ -577,20 +669,83 @@ int Mat::type() const
     return (int)matType;
 }
 
+int Mat::depth() const
+{
+    return CV_MAT_DEPTH(matType);
+}
+
+int Mat::channels() const
+{
+    return CV_MAT_CN(matType);
+}
+
+size_t Mat::elemSize1() const
+{
+    int d = depth();
+    if (!is_supported_depth(d))
+    {
+        CV_Error_(Error::StsNotImplemented,
+                 ("Mat::elemSize1 supports scalar depth in [CV_8U..CV_16F], depth=%d", d));
+    }
+
+    return static_cast<size_t>(CV_ELEM_SIZE1(d));
+}
+
+size_t Mat::elemSize() const
+{
+    return elemSize1() * static_cast<size_t>(channels());
+}
+
+size_t Mat::step(int dim) const
+{
+    if (empty())
+        return 0;
+
+    CV_Assert(dim >= 0 && dim < dims);
+    return stepBuf[dim];
+}
+
+size_t Mat::step1(int dim) const
+{
+    if (empty())
+        return 0;
+
+    CV_Assert(dim >= 0 && dim < dims);
+    return stepBuf[dim] / elemSize1();
+}
+
+bool Mat::isContinuous() const
+{
+    if (empty())
+        return false;
+
+    size_t expected = elemSize();
+    for (int i = dims - 1; i >= 0; --i)
+    {
+        if (stepBuf[i] != expected)
+            return false;
+        expected *= static_cast<size_t>(size.p[i]);
+    }
+    return true;
+}
+
 void Mat::setSize(std::vector<int> size)
 {
     _setSize(*this, size.size(), size.data());
+    update_continuous_steps(*this);
 }
 
 void Mat::setSize(int dim, const int *size)
 {
-    M_Assert(dim > 0);
+    CV_Assert(dim > 0);
     _setSize(*this, dim, size);
+    update_continuous_steps(*this);
 }
 
 void Mat::setSize(Mat &m)
 {
     _setSize(*this, m.size.dims(), m.size.p);
+    update_continuous_steps(*this);
 }
 
 void Mat::setTo(float v)
@@ -598,84 +753,79 @@ void Mat::setTo(float v)
     if (empty())
         return;
 
-    int vi;
-    switch (matType)
-    {
-        case CV_8U:
-        {
-            uint8_t u = saturate_cast<uint8_t>(v);
-            uchar* p = (uchar *)&vi;
-            p[0] = u; p[1] = u; p[2] = u; p[3] = u;
-            memset(data, vi, total() * sizeof(uint8_t));
-//#ifdef __APPLE__
-//            memset_pattern4(data, &vi, total() * sizeof(uint8_t));
-//#else
-//            int* data_f = (int*)data;
-//            std::fill(data_f, data_f + total(), vi);
-//#endif
-            break;
-        }
-        case CV_8S:
-        {
-            int8_t u = saturate_cast<int8_t>(v);
-            char* p = (char *)&vi;
-            p[0] = u; p[1] = u; p[2] = u; p[3] = u;
-            memset(data, vi, total() * sizeof(int8_t));
-//            memset_pattern4(data, &vi, total() * sizeof(uint8_t));
-            break;
-        }
-        case CV_16U:
-        {
-            ushort u = saturate_cast<ushort>(v);
-            ushort* data_u = reinterpret_cast<ushort*>(data);
-            std::fill(data_u, data_u + total(), u);
-            break;
-        }
-        case CV_16S:
-        {
-            short s = saturate_cast<short>(v);
-            short* data_s = reinterpret_cast<short*>(data);
-            std::fill(data_s, data_s + total(), s);
-            break;
-        }
-        case CV_32F:
-        {
-            memcpy(&vi, &v, sizeof(float ));
-#ifdef __APPLE__
-            memset_pattern4(data, &vi, total() * sizeof(int ));
-#else
-            int* data_f = (int*)data;
-            std::fill(data_f, data_f + total(), vi);
-#endif
-            break;
-        }
-        case CV_32S:
-        {
-            int* data_f = (int*)data;
-            std::fill(data_f, data_f + total(), v);
-//            memset_pattern4(data, &v, total() * sizeof(int ));
-            break;
-        }
-        case CV_32U:
-        {
-            uint uv = saturate_cast<uint>(v);
-            memcpy(&vi, &uv, sizeof(int ));
+    const int d = depth();
+    const size_t outer = dims > 1 ? static_cast<size_t>(size.p[0]) : 1;
+    const size_t scalar_per_outer =
+            (dims > 1 ? total(1, dims) : total()) * static_cast<size_t>(channels());
+    const size_t outer_step = dims > 1 ? step(0) : scalar_per_outer * elemSize1();
 
-            int* data_f = (int*)data;
-            std::fill(data_f, data_f + total(), vi);
-//            memset_pattern4(data, &vi, total() * sizeof(int ));
-            break;
-        }
-        case CV_16F:
+    auto fill_block = [d, v](uchar* ptr, size_t scalar_count) {
+        switch (d)
         {
-            // TODO check if the half-float is correct?
-            hfloat hf(v);
-            hfloat* data_hf = reinterpret_cast<hfloat*>(data);
-            std::fill(data_hf, data_hf + total(), hf);
-            break;
+            case CV_8U:
+            {
+                const uchar u = saturate_cast<uchar>(v);
+                uchar* out = reinterpret_cast<uchar*>(ptr);
+                std::fill(out, out + scalar_count, u);
+                break;
+            }
+            case CV_8S:
+            {
+                const schar s = saturate_cast<schar>(v);
+                schar* out = reinterpret_cast<schar*>(ptr);
+                std::fill(out, out + scalar_count, s);
+                break;
+            }
+            case CV_16U:
+            {
+                const ushort u = saturate_cast<ushort>(v);
+                ushort* out = reinterpret_cast<ushort*>(ptr);
+                std::fill(out, out + scalar_count, u);
+                break;
+            }
+            case CV_16S:
+            {
+                const short s = saturate_cast<short>(v);
+                short* out = reinterpret_cast<short*>(ptr);
+                std::fill(out, out + scalar_count, s);
+                break;
+            }
+            case CV_32F:
+            {
+                float* out = reinterpret_cast<float*>(ptr);
+                std::fill(out, out + scalar_count, v);
+                break;
+            }
+            case CV_32S:
+            {
+                const int iv = saturate_cast<int>(v);
+                int* out = reinterpret_cast<int*>(ptr);
+                std::fill(out, out + scalar_count, iv);
+                break;
+            }
+            case CV_32U:
+            {
+                const uint uv = saturate_cast<uint>(v);
+                uint* out = reinterpret_cast<uint*>(ptr);
+                std::fill(out, out + scalar_count, uv);
+                break;
+            }
+            case CV_16F:
+            {
+                const hfloat hf(v);
+                hfloat* out = reinterpret_cast<hfloat*>(ptr);
+                std::fill(out, out + scalar_count, hf);
+                break;
+            }
+            default:
+                CV_Error_(Error::StsNotImplemented, ("Unsupported type:%d in setTo function!", d));
         }
-        default:
-            M_Error_(Error::StsNotImplemented, ("Unsupported type:%d in setTo function!", matType));
+    };
+
+    for (size_t i = 0; i < outer; ++i)
+    {
+        uchar* row_ptr = data + i * outer_step;
+        fill_block(row_ptr, scalar_per_outer);
     }
 }
 
@@ -694,7 +844,7 @@ size_t Mat::total() const
 
 size_t Mat::total(int startDim, int endDim) const
 {
-    M_Assert(startDim >= 0 && startDim <= endDim);
+    CV_Assert(startDim >= 0 && startDim <= endDim);
     size_t p = 1;
 
     int endDim_ = endDim <= dims ? endDim : dims;
@@ -744,75 +894,76 @@ void Mat::print(int len) const
     std::cout<<"]"<<std::endl;
 
     // print value
-    size_t printLen = len == -1 ? total() :
-            len > total() ? total() : len;
+    const size_t scalar_total = total() * static_cast<size_t>(channels());
+    size_t printLen = len == -1 ? scalar_total :
+            len > static_cast<int>(scalar_total) ? scalar_total : static_cast<size_t>(len);
 
     std::cout<<"value = ";
-    if (type() == CV_32F)
+    if (depth() == CV_32F)
     {
         const float* p = (const float*)data;
-        for (int i = 0; i < printLen; i++)
+        for (size_t i = 0; i < printLen; i++)
         {
             std::cout<<p[i]<<",";
         }
         std::cout<<std::endl;
     }
-    else if (type() == CV_32S)
+    else if (depth() == CV_32S)
     {
         const int* p = (const int*)data;
-        for (int i = 0; i < printLen; i++)
+        for (size_t i = 0; i < printLen; i++)
         {
             std::cout<<p[i]<<",";
         }
         std::cout<<std::endl;
     }
-    else if (type() == CV_32U)
+    else if (depth() == CV_32U)
     {
         const uint* p = (const uint*)data;
-        for (int i = 0; i < printLen; i++)
+        for (size_t i = 0; i < printLen; i++)
         {
             std::cout<<p[i]<<",";
         }
         std::cout<<std::endl;
     }
-    else if (type() == CV_8S)
+    else if (depth() == CV_8S)
     {
         const char* p = (const char*)data;
-        for (int i = 0; i < printLen; i++)
+        for (size_t i = 0; i < printLen; i++)
         {
             std::cout<<(int)p[i]<<",";
         }
         std::cout<<std::endl;
     }
-    else if (type() == CV_8U)
+    else if (depth() == CV_8U)
     {
         const uchar* p = (const uchar*)data;
-        for (int i = 0; i < printLen; i++)
+        for (size_t i = 0; i < printLen; i++)
         {
             std::cout<<(int)p[i]<<",";
         }
         std::cout<<std::endl;
     }
-    else if (type() == CV_16U)
+    else if (depth() == CV_16U)
     {
         const ushort* p = (const ushort *)data;
-        for (int i = 0; i < printLen; i++)
+        for (size_t i = 0; i < printLen; i++)
         {
             std::cout<<(int)p[i]<<",";
         }
         std::cout<<std::endl;
     }
-    else if (type() == CV_16S)
+    else if (depth() == CV_16S)
     {
         const short* p = (const short *)data;
-        for (int i = 0; i < printLen; i++)
+        for (size_t i = 0; i < printLen; i++)
         {
             std::cout<<(int)p[i]<<",";
         }
         std::cout<<std::endl;
     }
     else
-        M_Error_(Error::Code::StsBadType, ("Unsupported format at function \" Mat::print \" type = %d!", type()));
+        CV_Error_(Error::Code::StsBadType, ("Unsupported format at function \" Mat::print \" type = %d!", type()));
 }
 
 MatShape Mat::shape() const

@@ -6,13 +6,13 @@ static inline void **alignPointer(void **ptr, size_t alignment) {
 }
 
 extern "C" void *MMemoryAllocAlign(size_t size, size_t alignment) {
-    M_Assert(size > 0);
+    CV_Assert(size > 0);
 
 #ifdef MU_DEBUG_MEMORY
     return malloc(size);
 #else
     void **origin = (void **)malloc(size + sizeof(void *) + alignment); // 这个size是以byte为单位。
-    M_Assert(origin != NULL);
+    CV_Assert(origin != NULL);
     if (!origin) {
         return NULL;
     }
@@ -24,13 +24,13 @@ extern "C" void *MMemoryAllocAlign(size_t size, size_t alignment) {
 }
 
 extern "C" void *MMemoryCallocAlign(size_t size, size_t alignment) {
-    M_Assert(size > 0);
+    CV_Assert(size > 0);
 
 #ifdef MU_DEBUG_MEMORY
     return calloc(size, 1);
 #else
     void **origin = (void **)calloc(size + sizeof(void *) + alignment, 1);
-    M_Assert(origin != NULL);
+    CV_Assert(origin != NULL);
     if (!origin) {
         return NULL;
     }

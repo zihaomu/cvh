@@ -129,7 +129,7 @@ MatShape get_gemm_shape(const Mat& A, const Mat& B)
 MatShape get_gemm_shape(const MatShape& shape_a, const MatShape& shape_b)
 {
     // 目前不处理 K x KxN 这种情况。
-    M_Assert(shape_a.size() >= 2 && shape_b.size() >= 2 && "Mat shapes on gemm function are miss matching!");
+    CV_Assert(shape_a.size() >= 2 && shape_b.size() >= 2 && "Mat shapes on gemm function are miss matching!");
 
     // generate output shape with brodcast rule
     // need to handle When a and b shape is 1xK x KxN, or MxK x 1xN, or MxK x Kx1
@@ -156,7 +156,7 @@ MatShape get_gemm_shape(const MatShape& shape_a, const MatShape& shape_b)
             }
             else
             {
-                M_Error(Error::Code::StsBadArg, "Mat shapes on gemm function are miss matching!");
+                CV_Error(Error::Code::StsBadArg, "Mat shapes on gemm function are miss matching!");
             }
             index_a--;
             index_b--;
@@ -172,7 +172,7 @@ MatShape get_gemm_shape(const MatShape& shape_a, const MatShape& shape_b)
             index_b--;
         }
         else
-            M_Error(Error::Code::StsBadArg, "Mat shapes on gemm function are miss matching!");
+            CV_Error(Error::Code::StsBadArg, "Mat shapes on gemm function are miss matching!");
     }
 
     // 如果有一个维度为1维度，说明 出现 MxK x K = M的情况
@@ -264,8 +264,8 @@ RuntimePrecision parse_runtime_precision(const std::string& text)
 
 void align_precision_sensitive_input(const Mat& input, RuntimePrecision precision, Mat& output)
 {
-    M_Assert(!input.empty() && "Precision alignment input can not be empty!");
-    M_Assert((input.type() == CV_32F || input.type() == CV_16F) &&
+    CV_Assert(!input.empty() && "Precision alignment input can not be empty!");
+    CV_Assert((input.type() == CV_32F || input.type() == CV_16F) &&
              "Precision alignment expects FP32/FP16 input!");
 
     output.create(input.dims, input.size.p, CV_32F);

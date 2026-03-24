@@ -15,7 +15,7 @@ static std::string getType(const std::string& header)
 {
     std::string field = "'descr':";
     int idx = header.find(field);
-    M_Assert(idx != -1);
+    CV_Assert(idx != -1);
 
     int from = header.find('\'', idx + field.size()) + 1;
     int to = header.find('\'', from);
@@ -26,7 +26,7 @@ static std::string getFortranOrder(const std::string& header)
 {
     std::string field = "'fortran_order':";
     int idx = header.find(field);
-    M_Assert(idx != -1);
+    CV_Assert(idx != -1);
 
     int from = header.find_last_of(' ', idx + field.size()) + 1;
     int to = header.find(',', from);
@@ -62,14 +62,14 @@ Mat readMatFromNpy(const std::string& path) {
     std::ifstream ifs(path.c_str(), std::ios::binary);
     if (!ifs.is_open())
     {
-        M_Error_(NULL, ("\n Can't open file: %s", path.c_str()));
-        M_Assert(ifs.is_open());
+        CV_Error_(NULL, ("\n Can't open file: %s", path.c_str()));
+        CV_Assert(ifs.is_open());
         return Mat();
     }
 
     std::string magic(6, '*');
     ifs.read(&magic[0], magic.size());
-    M_Assert(magic == "\x93NUMPY");
+    CV_Assert(magic == "\x93NUMPY");
 
     ifs.ignore(1);  // Skip major version byte.
     ifs.ignore(1);  // Skip minor version byte.
@@ -81,15 +81,15 @@ Mat readMatFromNpy(const std::string& path) {
     ifs.read(&header[0], header.size());
 
     // Extract data type.
-    M_Assert(getType(header) == "<f4" || getType(header) == "<i4");
+    CV_Assert(getType(header) == "<f4" || getType(header) == "<i4");
     auto data_type = getType(header) == "<f4" ? CV_32F : CV_32S;
-    M_Assert(getFortranOrder(header) == "False");
+    CV_Assert(getFortranOrder(header) == "False");
     std::vector<int> shape = getShape(header);
 
     size_t typeSize = CV_ELEM_SIZE(data_type);
     Mat blob(shape, data_type);
     ifs.read((char *) blob.data, blob.total() * typeSize);
-    M_Assert((size_t) ifs.gcount() == blob.total() * typeSize);
+    CV_Assert((size_t) ifs.gcount() == blob.total() * typeSize);
 
     return blob;
 }

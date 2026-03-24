@@ -9,7 +9,7 @@
 
 - 已有 `Mat`、`define`、`system`、`basic_op` 等基础头文件。
 - 仍存在历史命名与实现迁移债务（例如旧命名残留、部分能力在 `src/core`）。
-- API 语义与 OpenCV 还未完全对齐（特别是通道、步长、错误模型）。
+- API 语义与 OpenCV 仍未完全对齐；已完成 type/channel 宏、连续多通道以及首批 2D submat+非连续步长语义，未完成项主要在通用 ND ROI 与高阶算子行为。
 
 ## 阶段计划
 

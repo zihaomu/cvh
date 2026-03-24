@@ -10,8 +10,6 @@
 #include <cstdint>
 #include <memory>
 
-#define M_PAD(x, n) (((x) + (n) - 1) & ~((n) - 1))
-
 #if defined(_MSC_VER)
 #if defined(BUILDING_M_DLL)
 #define CV_EXPORTS __declspec(dllexport)
@@ -31,10 +29,10 @@
 #define CV_VERSION_STATUS   "-dev"
 #define CV_VERSION STR(CV_VERSION_MAJOR) "." STR(CV_VERSION_MINOR) "." STR(CV_VERSION_PATCH) CV_VERSION_STATUS
 
-#ifdef M_ROOT_PATH
-#define M_ROOT STR(M_ROOT_PATH)
+#ifdef CV_ROOT_PATH
+#define CV_ROOT STR(CV_ROOT_PATH)
 #endif
-// ERROR CODE
+
 #ifndef CV_PI
 #define CV_PI   3.1415926535897932384626433832795
 #endif
@@ -77,9 +75,70 @@ using int64 = long int;
 #define CV_64U  11  // - 8 byte
 #define CV_64S  12  // - 8 byte
 
-#define CV_MAX  12 // Equal to MAX Data Type
+#define CV_CN_MAX     128
+#define CV_CN_SHIFT   5
+#define CV_DEPTH_MAX  (1 << CV_CN_SHIFT)
 
-#define CV_ELEM_SIZE(type) ((int)((0x8812824442211ULL >> (type * 4)) & 15))
+#define CV_MAT_DEPTH_MASK (CV_DEPTH_MAX - 1)
+#define CV_MAT_CN_MASK ((CV_CN_MAX - 1) << CV_CN_SHIFT)
+
+#define CV_MAT_DEPTH(flags) ((flags) & CV_MAT_DEPTH_MASK)
+#define CV_MAT_CN(flags) ((((flags) & CV_MAT_CN_MASK) >> CV_CN_SHIFT) + 1)
+#define CV_MAKETYPE(depth, cn) (CV_MAT_DEPTH(depth) + (((cn) - 1) << CV_CN_SHIFT))
+
+#define CV_8UC(n) CV_MAKETYPE(CV_8U, (n))
+#define CV_8SC(n) CV_MAKETYPE(CV_8S, (n))
+#define CV_16UC(n) CV_MAKETYPE(CV_16U, (n))
+#define CV_16SC(n) CV_MAKETYPE(CV_16S, (n))
+#define CV_32FC(n) CV_MAKETYPE(CV_32F, (n))
+#define CV_32SC(n) CV_MAKETYPE(CV_32S, (n))
+#define CV_32UC(n) CV_MAKETYPE(CV_32U, (n))
+#define CV_16FC(n) CV_MAKETYPE(CV_16F, (n))
+
+#define CV_8UC1 CV_8UC(1)
+#define CV_8UC2 CV_8UC(2)
+#define CV_8UC3 CV_8UC(3)
+#define CV_8UC4 CV_8UC(4)
+
+#define CV_8SC1 CV_8SC(1)
+#define CV_8SC2 CV_8SC(2)
+#define CV_8SC3 CV_8SC(3)
+#define CV_8SC4 CV_8SC(4)
+
+#define CV_16UC1 CV_16UC(1)
+#define CV_16UC2 CV_16UC(2)
+#define CV_16UC3 CV_16UC(3)
+#define CV_16UC4 CV_16UC(4)
+
+#define CV_16SC1 CV_16SC(1)
+#define CV_16SC2 CV_16SC(2)
+#define CV_16SC3 CV_16SC(3)
+#define CV_16SC4 CV_16SC(4)
+
+#define CV_32FC1 CV_32FC(1)
+#define CV_32FC2 CV_32FC(2)
+#define CV_32FC3 CV_32FC(3)
+#define CV_32FC4 CV_32FC(4)
+
+#define CV_32SC1 CV_32SC(1)
+#define CV_32SC2 CV_32SC(2)
+#define CV_32SC3 CV_32SC(3)
+#define CV_32SC4 CV_32SC(4)
+
+#define CV_32UC1 CV_32UC(1)
+#define CV_32UC2 CV_32UC(2)
+#define CV_32UC3 CV_32UC(3)
+#define CV_32UC4 CV_32UC(4)
+
+#define CV_16FC1 CV_16FC(1)
+#define CV_16FC2 CV_16FC(2)
+#define CV_16FC3 CV_16FC(3)
+#define CV_16FC4 CV_16FC(4)
+
+#define CV_MAX CV_DEPTH_MAX
+
+#define CV_ELEM_SIZE1(type) ((int)((0x8812824442211ULL >> (CV_MAT_DEPTH(type) * 4)) & 15))
+#define CV_ELEM_SIZE(type) (CV_MAT_CN(type) * CV_ELEM_SIZE1(type))
 
 // Comparing flag
 #define CV_CMP_EQ   0
@@ -178,6 +237,7 @@ protected:
 
     operator float() const
     {
+    // TODO convert to float with intrinsics, and use xsimd to convert a batch of hfloat to float, and use xsimd to convert a batch of float to hfloat, and make sure the conversion is correct with unit test.
 #if CV_FP16 && CV_AVX2
         float f;
         _mm_store_ss(&f, _mm_cvtph_ps(_mm_cvtsi32_si128(w)));
@@ -205,6 +265,19 @@ protected:
 #error "Fp16 must compile with c++"
 #endif
 
+#ifndef MIN
+#  define MIN(a,b)  ((a) > (b) ? (b) : (a))
+#endif
 
+#ifndef MAX
+#  define MAX(a,b)  ((a) < (b) ? (b) : (a))
+#endif
+
+/** min & max without jumps */
+#define CV_IMIN(a, b)  ((a) ^ (((a)^(b)) & (((a) < (b)) - 1)))
+#define CV_IMAX(a, b)  ((a) ^ (((a)^(b)) & (((a) > (b)) - 1)))
+#define CV_SWAP(a,b,t) ((t) = (a), (a) = (b), (b) = (t))
+#define CV_CMP(a,b)    (((a) > (b)) - ((a) < (b)))
+#define CV_SIGN(a)     CV_CMP((a),0)
 
 #endif //CVH_DEFINE_H

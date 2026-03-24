@@ -5,17 +5,6 @@
 
 using namespace cvh;
 
-namespace {
-
-constexpr int kTypeChannelShift = 3;
-
-constexpr int make_fake_multichannel_type(int depth, int channels)
-{
-    return depth + ((channels - 1) << kTypeChannelShift);
-}
-
-} // namespace
-
 TEST(MatContract_TEST, clone_is_deep_copy)
 {
     Mat src({2, 3}, CV_32F);
@@ -175,10 +164,9 @@ TEST(MatContract_TEST, external_memory_is_not_owned_by_mat)
     std::free(raw);
 }
 
-TEST(MatContract_TEST, channels_not_equal_one_is_rejected)
+TEST(MatContract_TEST, unsupported_depth_is_rejected_in_create)
 {
     Mat m;
     const int sizes[2] = {2, 2};
-    const int fake_3ch_type = make_fake_multichannel_type(CV_8U, 3);
-    EXPECT_THROW(m.create(2, sizes, fake_3ch_type), Exception);
+    EXPECT_THROW(m.create(2, sizes, CV_64F), Exception);
 }

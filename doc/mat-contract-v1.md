@@ -1,6 +1,6 @@
 # Mat Contract v1（冻结稿）
 
-- 文档版本：v1.0
+- 文档版本：v1.2
 - 冻结日期：2026-03-10
 - 适用范围：`cvh::Mat` 及其直接相关 API（`clone/copyTo/convertTo/reshape` 等）
 - 生效目标：作为 Phase 1 的实现与测试基线；后续行为变更必须先更新本合同
@@ -25,9 +25,10 @@
 ### 3.1 类型与通道
 
 - `Mat::type()` 返回当前元素类型标识。
-- v1 的强制支持范围：`channels == 1`。
-- 对 `channels != 1` 的输入或行为，v1 必须返回可预测错误（`StsNotImplemented` 或 `StsBadArg`），不得静默降级。
-- `convertTo` 只做类型变换，不改变形状。
+- `Mat` 采用 OpenCV 风格 `type = depth + channels` 编码（`CV_MAKETYPE/CV_MAT_DEPTH/CV_MAT_CN`）。
+- v1.1 的强制支持范围：连续内存语义下 `channels >= 1` 的 `create/clone/copyTo/convertTo/setTo`。
+- `convertTo` 在 `rtype` 仅给 depth 时，必须保持源通道数不变；形状不变。
+- `convertTo` 若显式给出目标 type 且通道数与源不一致，必须返回明确错误（`StsBadArg`）。
 
 ### 3.2 维度与形状
 
@@ -35,6 +36,7 @@
 - `total()` 等于所有维度乘积。
 - `reshape` 不复制数据，仅改变视图形状。
 - `reshape` 前后 `total()` 必须相等，否则报错。
+- `reshape` 当前仅支持连续内存输入；对非连续 `Mat` 必须返回明确错误。
 
 ### 3.3 内存与所有权
 
@@ -44,22 +46,27 @@
 - `copyTo(dst)` 必须把数据复制到 `dst`，并在类型不匹配时返回明确错误。
 - 由外部指针构造的 `Mat` 视为用户内存，不由 `Mat` 释放。
 
-### 3.4 连续性与步长
+### 3.4 连续性与步长（v1.1）
 
 - v1 默认只承诺连续内存语义。
-- 不提供对非连续 ROI/view 的稳定语义承诺。
-- 任何依赖 stride/step 的高级行为，需在 v1.1 单独扩展并补充合同。
+- 对连续内存 `Mat`，`isContinuous()` 返回 `true`；空 `Mat` 返回 `false`。
+- `step(dim)` 返回对应维度的字节步长，`step1(dim)` 返回按标量元素计的步长。
+- 已支持首批 2D view：`rowRange/colRange/operator()(Range, Range)`，返回共享存储的浅视图。
+- 对非连续 view，`clone/copyTo/convertTo/setTo` 提供稳定语义保证（按步长处理，不允许 silent wrong result）。
+- 任何依赖更通用 ND submat/高级 stride 变换的行为，需在后续版本扩展并补充合同。
 
 ### 3.5 错误语义
 
-- 所有前置条件失败必须走统一错误模型（`cvh::error` / `M_Error`）。
+- 所有前置条件失败必须走统一错误模型（`cvh::error` / `CV_Error`）。
 - 不允许返回未定义状态（例如对象半初始化、silent wrong result）。
 
 ## 4. v1 非目标（明确不支持）
 
-- 多通道完整语义（`channels > 1` 的全量 API 行为）。
-- ROI/view 的完整步长模型与子矩阵引用语义。
+- 多通道下高阶算子（表达式系统、广播算子等）的完整语义对齐。
+- 通用 ND ROI/view 的完整步长模型与子矩阵引用语义。
+- 非连续 `Mat` 的 `reshape` 语义。
 - 与 OpenCV 完全二进制兼容。
+- 与 `cv::Mat` 完全一致的对象内存布局兼容（字段布局、引用计数对象、allocator 内部组织）。
 
 ## 5. API 行为约束表
 
@@ -85,7 +92,8 @@
 - `reshape` 成功/失败路径验证。
 - `convertTo` 常见类型转换正确性验证（含边界值）。
 - 空 `Mat` 与非法输入的错误路径验证。
-- `channels != 1` 的明确失败行为验证。
+- 连续多通道（例如 `CV_8UC3`）的 `create/setTo/copyTo/convertTo` 成功路径验证。
+- 2D submat（`rowRange/colRange`）共享视图与非连续步长路径验证。
 
 ## 8. 变更流程
 

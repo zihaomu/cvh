@@ -21,12 +21,14 @@ MVP 暂不进入以下范围：
 
 - `dnn`、`videoio`、`calib3d`、`features2d` 等大模块。
 - 完整 OpenCV ABI/二进制兼容承诺。
+- `cvh::Mat` 与 `cv::Mat` 的对象内存布局兼容承诺。
 - 与推理框架强绑定的算子族（如 `softmax/rmsnorm/rope/silu`）进入主线 API。
 
 处理方式：
 
 - 非 MVP 算子留在“过渡层/实验层”，不阻塞主线里程碑。
 - 等 `core`/`imgproc` 稳定后再评估是否保留为扩展模块。
+- 对外兼容目标固定为“API/行为兼容”，不扩展到 ABI/布局兼容。
 
 ## 3. 当前基线判断（2026-03-10）
 

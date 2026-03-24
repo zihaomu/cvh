@@ -15,7 +15,7 @@
 ### 退出条件（全部满足）
 
 - `doc/mat-contract-v1.md` 冻结并纳入主规划索引。
-- `Mat` 关键 API 的实现行为与合同一致（至少覆盖单通道连续内存语义）。
+- `Mat` 关键 API 的实现行为与合同一致（至少覆盖连续多通道语义）。
 - `test/core` 覆盖合同清单中的成功路径与失败路径。
 - `./scripts/ci_smoke.sh` 与 `./scripts/ci_core_basic.sh` 稳定通过。
 
@@ -65,11 +65,49 @@
 
 - 任务：
   - 按合同第 7 节补齐测试：`clone/copyTo/reshape/convertTo` 成功与失败路径。
-  - 增加 `channels != 1` 的明确失败行为测试。
+  - 增加边界输入与错误路径的明确行为测试。
 - 交付物：
   - `test/core` 新增或更新的合同测试用例。
 - 验收：
   - 合同测试可稳定复现，CI 可运行且结果一致。
+
+### P1-06（D11）：OpenCV 高频元信息接口对齐（连续内存语义）
+
+- 任务：
+  - 增加 `Mat` 的高频元信息接口：`depth/channels/elemSize/elemSize1/isContinuous/step/step1`。
+  - 增加连续内存语义下的接口对齐测试与生命周期安全回归。
+- 交付物：
+  - `Mat` 元信息接口实现补丁。
+  - `test/core/mat_opencv_compat_test.cpp`（并接入 `cvh_test_core`）。
+- 验收：
+  - `./build-*/cvh_test_core '--gtest_filter=MatOpenCVCompat_TEST.*'` 通过。
+  - `cvh_test_core` 全量通过，不回归现有 `Mat` 合同测试。
+
+### P1-07（D12）：Type 宏对齐与连续多通道首批支持
+
+- 任务：
+  - 对齐必要的 OpenCV 风格 type 宏（`CV_MAKETYPE/CV_MAT_DEPTH/CV_MAT_CN` 与 `CV_*C(n)`）。
+  - 让 `Mat` 在连续内存语义下支持多通道：`create/setTo/copyTo/convertTo`。
+  - 增加首批多通道合同测试，验证 RED->GREEN 闭环。
+- 交付物：
+  - `include/cvh/core/define.h` 宏补丁与 `src/core/mat*.cpp` 多通道实现补丁。
+  - `test/core/mat_channel_contract_test.cpp`（并接入 `cvh_test_core`）。
+- 验收：
+  - `./build-*/cvh_test_core '--gtest_filter=MatChannelContract_TEST.*'` 通过。
+  - `cvh_test_core` 全量与 smoke/test 目标通过。
+
+### P1-08（D13）：2D submat 与非连续步长首批闭环
+
+- 任务：
+  - 增加 `Mat` 的 2D view API：`rowRange/colRange/operator()(Range, Range)`。
+  - 在非连续步长场景打通 `clone/copyTo/convertTo/setTo` 的正确性路径。
+  - 为非连续 `Mat` 的 `reshape` 增加明确失败语义，避免 silent wrong result。
+- 交付物：
+  - `include/cvh/core/mat.h` 与 `src/core/mat.cpp`/`src/core/mat_convert.cpp` 的 stride-aware 补丁。
+  - `test/core/mat_submat_test.cpp`（并接入 `cvh_test_core`）。
+- 验收：
+  - `./build-*/cvh_test_core '--gtest_filter=MatSubmat_TEST.*'` 通过。
+  - `cvh_test_core` 全量与 smoke/test 目标通过。
 
 ## 3. 执行状态
 
@@ -80,6 +118,9 @@
 | P1-03 | 已完成 | 2026-03-10 | 已对齐 `create/reshape/copyTo/convertTo/setTo` 前置条件与错误语义，并通过 `ci_smoke + ci_core_basic` |
 | P1-04 | 已完成 | 2026-03-10 | 已完成首批 header-only 迁移闭环（`MatSize` 与 `total(MatShape,...)` 迁移至 `mat.inl.h`，include-only smoke 直接调用通过） |
 | P1-05 | 已完成 | 2026-03-10 | 已新增 `cvh_test_core` 聚合测试二进制（支持 `gtest_filter`）并完成 Mat 合同测试闭环，且修复 `setTo` 在 16bit odd shape 的尾元素漏写问题 |
+| P1-06 | 已完成 | 2026-03-10 | 已补齐 `depth/channels/elemSize/elemSize1/isContinuous/step/step1` 连续语义，并新增 `MatOpenCVCompat_TEST` 对齐回归 |
+| P1-07 | 已完成 | 2026-03-10 | 已对齐必要 OpenCV type 宏并落地连续多通道首批支持（`create/setTo/copyTo/convertTo`），新增 `MatChannelContract_TEST` 回归 |
+| P1-08 | 已完成 | 2026-03-10 | 已落地 2D submat（`rowRange/colRange`）与非连续步长首批语义，新增 `MatSubmat_TEST` 并通过全量回归 |
 
 ## 4. 风险与应对
 

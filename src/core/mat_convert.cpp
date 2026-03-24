@@ -19,9 +19,9 @@ namespace cvh
 
 namespace {
 
-inline bool is_supported_convert_type(int type)
+inline bool is_supported_convert_depth(int depth)
 {
-    return type >= CV_8U && type <= CV_16F;
+    return depth >= CV_8U && depth <= CV_16F;
 }
 
 }  // namespace
@@ -150,7 +150,7 @@ static void convert_32u(const uchar* src_, uchar* dst_, size_t length)
 typedef void (*BinaryFunc)(const uchar* src1, uchar* dst, size_t length);
 BinaryFunc getConvertFunc(int stype, int dtype)
 {
-    if (!is_supported_convert_type(stype) || !is_supported_convert_type(dtype))
+    if (!is_supported_convert_depth(stype) || !is_supported_convert_depth(dtype))
     {
         return nullptr;
     }
@@ -259,17 +259,40 @@ void Mat::convertTo(Mat &m, int type_) const
         return;
     }
 
-    int stype = type();
-    int dtype = type_;
+    const int sdepth = depth();
+    const int src_channels = channels();
 
-    if (!is_supported_convert_type(stype) || !is_supported_convert_type(dtype))
+    int ddepth = -1;
+    int dchannels = src_channels;
+    if (type_ < 0)
     {
-        M_Error_(Error::StsNotImplemented,
-                 ("Mat::convertTo supports only scalar depths in [CV_8U..CV_16F], stype=%d dtype=%d",
-                  stype, dtype));
+        ddepth = sdepth;
+    }
+    else if (type_ < CV_DEPTH_MAX)
+    {
+        ddepth = type_;
+    }
+    else
+    {
+        ddepth = CV_MAT_DEPTH(type_);
+        dchannels = CV_MAT_CN(type_);
     }
 
-    if (stype == dtype)
+    if (!is_supported_convert_depth(sdepth) || !is_supported_convert_depth(ddepth))
+    {
+        CV_Error_(Error::StsNotImplemented,
+                 ("Mat::convertTo supports only depths in [CV_8U..CV_16F], sdepth=%d ddepth=%d",
+                  sdepth, ddepth));
+    }
+
+    if (dchannels != src_channels)
+    {
+        CV_Error_(Error::StsBadArg,
+                 ("Mat::convertTo channel mismatch, src=%d dst=%d", src_channels, dchannels));
+    }
+
+    const int dtype = CV_MAKETYPE(ddepth, dchannels);
+    if (type() == dtype)
     {
         copyTo(m);
         return;
@@ -278,13 +301,32 @@ void Mat::convertTo(Mat &m, int type_) const
     // allocate new memory
     m.create(dims, size.p, dtype);
 
-    BinaryFunc func = getConvertFunc(stype, dtype);
+    BinaryFunc func = getConvertFunc(sdepth, ddepth);
     if (!func)
     {
-        M_Error_(Error::StsNotImplemented,
-                 ("Mat::convertTo function table miss, stype=%d dtype=%d", stype, dtype));
+        CV_Error_(Error::StsNotImplemented,
+                 ("Mat::convertTo function table miss, sdepth=%d ddepth=%d", sdepth, ddepth));
     }
-    func(this->data, m.data, m.total());
+
+    const size_t scalar_count = m.total() * static_cast<size_t>(m.channels());
+    if (isContinuous() && m.isContinuous())
+    {
+        func(this->data, m.data, scalar_count);
+        return;
+    }
+
+    const int outer = dims > 1 ? size.p[0] : 1;
+    const size_t scalar_per_outer =
+            (dims > 1 ? total(1, dims) : total()) * static_cast<size_t>(channels());
+    const size_t src_step0 = dims > 1 ? step(0) : scalar_per_outer * elemSize1();
+    const size_t dst_step0 = m.dims > 1 ? m.step(0) : scalar_per_outer * m.elemSize1();
+
+    for (int i = 0; i < outer; ++i)
+    {
+        const uchar* src_row = data + static_cast<size_t>(i) * src_step0;
+        uchar* dst_row = m.data + static_cast<size_t>(i) * dst_step0;
+        func(src_row, dst_row, scalar_per_outer);
+    }
 }
 
 }

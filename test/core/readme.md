@@ -31,6 +31,9 @@
 ## 文件职责划分（当前）
 
 - `core_ops_test.cpp`：常用功能路径与结果正确性（例如 `convertTo/copyTo` 正常路径）。
+- `mat_channel_contract_test.cpp`：多通道合同首批覆盖（OpenCV type 宏、`CV_*C(n)`、连续多通道 `create/setTo/copyTo/convertTo`）。
+- `mat_opencv_compat_test.cpp`：高频 OpenCV 风格接口对齐（`depth/channels/elemSize/isContinuous/step/step1`）与生命周期安全回归。
+- `mat_submat_test.cpp`：2D submat/view 与非连续步长路径（`rowRange/colRange`、非连续 `setTo/copyTo/convertTo/clone`）回归。
 - `mat_contract_test.cpp`：`Mat` 合同与安全基线（错误路径、所有权、边界与历史回归）。
 - 规则：同一行为只在一个文件中维护，避免重复 case 导致维护分叉。
 

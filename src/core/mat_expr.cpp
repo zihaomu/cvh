@@ -14,7 +14,7 @@ static void checkOperandsExist(const Mat& a)
 {
     if (a.empty())
     {
-        M_Assert(0 && "Matrix operand is an empty matrix!");
+        CV_Assert(0 && "Matrix operand is an empty matrix!");
     }
 }
 
@@ -22,7 +22,7 @@ static void checkOperandsExist(const Mat& a, const Mat& b)
 {
     if (a.empty() || b.empty())
     {
-        M_Assert(0 && "One or more matrix operands are empty!");
+        CV_Assert(0 && "One or more matrix operands are empty!");
     }
 }
 
@@ -92,7 +92,7 @@ void MatOp_Identity::assign(const MatExpr &e, Mat &m, int _type) const
     if (_type == -1 || _type == e.a.type())
         m = e.a;
     else
-        M_Assert(0 && "Unsupported data type convert!");
+        CV_Assert(0 && "Unsupported data type convert!");
 }
 
 inline void MatOp_Identity::makeExpr(MatExpr &res, const Mat &a)
@@ -126,7 +126,7 @@ void MatOp_AddEx::assign(const MatExpr &e, Mat &m, int _type) const
         subtract(e.a, dst);
     }
     else
-        M_Assert(0 && "Unsupported type in MatOp_AddEx::assign!");
+        CV_Assert(0 && "Unsupported type in MatOp_AddEx::assign!");
 }
 
 inline void MatOp_AddEx::makeExpr(MatExpr &res, const Mat &a, const Mat &b, double alpha, double beta)
@@ -147,7 +147,7 @@ void MatOp_Bin::assign(const MatExpr &e, Mat &m, int _type) const
         divide(e.a, e.b, dst);
     }
     else
-        M_Error(Error::StsNotImplemented, "Unsupported value!");
+        CV_Error(Error::StsNotImplemented, "Unsupported value!");
 }
 
 void MatOp_Bin::makeExpr(MatExpr& res, char op, const Mat& a, const Mat& b)

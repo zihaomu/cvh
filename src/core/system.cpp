@@ -62,7 +62,7 @@ int m_snprintf(char* buf, int len, const char* fmt, ...)
     return res;
 }
 
-void mprintf(const char* fmt, ...)
+void cvprintf(const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -82,7 +82,7 @@ std::string format( const char* fmt, ... )
         int len = m_vsnprintf(buf.data(), bsize, fmt, va);
         va_end(va);
 
-        M_Assert(len >= 0 && "Check format string for errors");
+        CV_Assert(len >= 0 && "Check format string for errors");
         if (len >= bsize)
         {
             buf.resize(len + 1);
@@ -226,7 +226,7 @@ void debug(int code,
                   const std::string& file,
                   int line)
 {
-#if M_DEBUG
+#if CV_DEBUG
     std::cout << "[DEBUG][" << file << ":" << line
               << "][" << func << "] Code=" << code
               << ": " << msg << std::endl;

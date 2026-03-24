@@ -66,6 +66,9 @@ if(CVH_BUILD_TESTS)
 
     add_executable(cvh_test_core
         test/core/core_ops_test.cpp
+        test/core/mat_channel_contract_test.cpp
+        test/core/mat_opencv_compat_test.cpp
+        test/core/mat_submat_test.cpp
         test/core/mat_contract_test.cpp
     )
     target_link_libraries(cvh_test_core PRIVATE cvh::legacy_core gtest_main)

@@ -18,6 +18,16 @@ namespace cvh
 typedef std::vector<int> MatShape;
 #define MAT_MAX_DIM 8 // Max mat dimension
 
+struct Range
+{
+    Range();
+    Range(int _start, int _end);
+    static Range all();
+
+    int start;
+    int end;
+};
+
 class MatAllocator;
 struct MatData;
 class Mat;
@@ -131,6 +141,10 @@ public:
 
     Mat reshape(const std::vector<int> newSizes) const;
 
+    Mat rowRange(int startrow, int endrow) const;
+    Mat colRange(int startcol, int endcol) const;
+    Mat operator()(const Range& rowRange, const Range& colRange) const;
+
     void copyTo(Mat& m) const;
 
     // convert mat to other mat with specific data type.
@@ -145,6 +159,13 @@ public:
     void deallocate();
 
     int type() const;
+    int depth() const;
+    int channels() const;
+    size_t elemSize() const;
+    size_t elemSize1() const;
+    size_t step(int dim = 0) const;
+    size_t step1(int dim = 0) const;
+    bool isContinuous() const;
 
     // 只设置 Mat的shape而不分配内存
     // ⚠️ 这个有可能打破Mat的安全性，double check
@@ -190,6 +211,7 @@ public:
 
     MatData* u;
     MatSize size;
+    size_t stepBuf[MAT_MAX_DIM] = {0};
     int matType;
 
     struct MatExtrInfo;
@@ -281,6 +303,57 @@ MatExpr operator / (const Mat& a, const float e);
 MatExpr operator / (const float e, const Mat& b);
 
 MatExpr operator == (const Mat& a, const Mat& b);
+
+// TODO support more operator, like >, <, >=, <=, != ...
+/*
+CV_EXPORTS MatExpr operator < (const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr operator < (const Mat& a, const float s);
+CV_EXPORTS MatExpr operator < (const float s, const Mat& a);
+
+CV_EXPORTS MatExpr operator <= (const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr operator <= (const Mat& a, const float s);
+CV_EXPORTS MatExpr operator <= (const float s, const Mat& a);
+
+CV_EXPORTS MatExpr operator == (const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr operator == (const Mat& a, const float s);
+CV_EXPORTS MatExpr operator == (const float s, const Mat& a);
+
+CV_EXPORTS MatExpr operator != (const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr operator != (const Mat& a, const float s);
+CV_EXPORTS MatExpr operator != (const float s, const Mat& a);
+
+CV_EXPORTS MatExpr operator >= (const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr operator >= (const Mat& a, const float s);
+CV_EXPORTS MatExpr operator >= (const float s, const Mat& a);
+
+CV_EXPORTS MatExpr operator > (const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr operator > (const Mat& a, const float s);
+CV_EXPORTS MatExpr operator > (const float s, const Mat& a);
+
+CV_EXPORTS MatExpr operator & (const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr operator & (const Mat& a, const Scalar& s);
+CV_EXPORTS MatExpr operator & (const Scalar& s, const Mat& a);
+
+CV_EXPORTS MatExpr operator | (const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr operator | (const Mat& a, const Scalar& s);
+CV_EXPORTS MatExpr operator | (const Scalar& s, const Mat& a);
+
+CV_EXPORTS MatExpr operator ^ (const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr operator ^ (const Mat& a, const Scalar& s);
+CV_EXPORTS MatExpr operator ^ (const Scalar& s, const Mat& a);
+
+CV_EXPORTS MatExpr min(const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr min(const Mat& a, const float s);
+CV_EXPORTS MatExpr min(const float s, const Mat& a);
+
+CV_EXPORTS MatExpr max(const Mat& a, const Mat& b);
+CV_EXPORTS MatExpr max(const Mat& a, const float s);
+CV_EXPORTS MatExpr max(const float s, const Mat& a);
+
+CV_EXPORTS MatExpr abs(const Mat& m);
+CV_EXPORTS MatExpr abs(const MatExpr& e);
+*/
+
 
 // compute shape.
 size_t total(const Mat& m);

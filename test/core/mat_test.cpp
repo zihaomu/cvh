@@ -81,9 +81,9 @@ TEST(Mat_TEST, loadNpy)
     float a1 = 0.71518934;
     float a2 = 0.56804454;
 
-    M_Assert(data[0] == a0);
-    M_Assert(data[1] == a1);
-    M_Assert(data[12] == a2);
+    CV_Assert(data[0] == a0);
+    CV_Assert(data[1] == a1);
+    CV_Assert(data[12] == a2);
 }
 
 TEST(Mat_TEST, Op_Test)
@@ -113,7 +113,7 @@ TEST(Mat_TEST, Op_Test)
     m22.print();
 
 //    double v = norm(m, m2, NORM_L1);
-//    M_Assert(v < 1e-4);
+//    CV_Assert(v < 1e-4);
 }
 
 
@@ -129,14 +129,14 @@ TEST(Mat_TEST, Op_Test2)
     m2.setTo(2.0f);
 
     double v = norm(m4, m2, NORM_L1);
-    M_Assert(v < 1e-4);
+    CV_Assert(v < 1e-4);
 
     Mat m5 = (1 - m3) * 3;
     Mat m6 = Mat(test_shape, CV_32F);
     m6.setTo(-2.0f * 3);
 
     double v2 = norm(m5, m6, NORM_L1);
-    M_Assert(v2 < 1e-4);
+    CV_Assert(v2 < 1e-4);
 
 }
 
@@ -169,10 +169,10 @@ TEST(Mat_TEST, transposeND)
     double v2 = norm(out2, m_cheker_3, NORM_L1);
     double v3 = norm(out3, m_cheker_4, NORM_L1);
 
-    M_Assert(v0 < 1e-4);
-    M_Assert(v1 < 1e-4);
-    M_Assert(v2 < 1e-4);
-    M_Assert(v3 < 1e-4);
+    CV_Assert(v0 < 1e-4);
+    CV_Assert(v1 < 1e-4);
+    CV_Assert(v2 < 1e-4);
+    CV_Assert(v3 < 1e-4);
 }
 
 
@@ -204,10 +204,10 @@ TEST(Mat_TEST, mat_mul)
     std::cout<<"norm 2= "<<v2<<std::endl;
     std::cout<<"norm 3= "<<v3<<std::endl;
 
-    M_Assert(v0 < 1e-3); // m_cheker_1 is empty, TODO, check why this happen.
-    M_Assert(v1 < 1e-3);
-    M_Assert(v2 < 1e-3);
-    M_Assert(v3 < 1e-3);
+    CV_Assert(v0 < 1e-3); // m_cheker_1 is empty, TODO, check why this happen.
+    CV_Assert(v1 < 1e-3);
+    CV_Assert(v2 < 1e-3);
+    CV_Assert(v3 < 1e-3);
 }
 
 TEST(Mat_TEST, mat_mul_broad_cast)
@@ -238,10 +238,10 @@ TEST(Mat_TEST, mat_mul_broad_cast)
     std::cout<<"norm 2= "<<v2<<std::endl;
     std::cout<<"norm 3= "<<v3<<std::endl;
 
-    M_Assert(v0 < 1e-3); // m_cheker_1 is empty, TODO, check why this happen.
-    M_Assert(v1 < 1e-3);
-    M_Assert(v2 < 1e-3);
-    M_Assert(v3 < 1e-3);
+    CV_Assert(v0 < 1e-3); // m_cheker_1 is empty, TODO, check why this happen.
+    CV_Assert(v1 < 1e-3);
+    CV_Assert(v2 < 1e-3);
+    CV_Assert(v3 < 1e-3);
 }
 
 TEST(Mat_TEST, gemm_generated_cases)
@@ -296,7 +296,7 @@ TEST(Mat_TEST, data_convert_fp16_to_fp32)
     m16.convertTo(m32, CV_32F);
 
     double v0 = norm(m32, m0, NORM_L1);
-    M_Assert(v0 < 1e-3);
+    CV_Assert(v0 < 1e-3);
 }
 
 TEST(Mat_TEST, gemm_supports_fp16_weight_matrix)
