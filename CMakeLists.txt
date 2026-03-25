@@ -69,6 +69,7 @@ if(CVH_BUILD_TESTS)
         test/core/mat_channel_contract_test.cpp
         test/core/mat_opencv_compat_test.cpp
         test/core/mat_submat_test.cpp
+        test/core/mat_upstream_channel_port_test.cpp
         test/core/mat_contract_test.cpp
     )
     target_link_libraries(cvh_test_core PRIVATE cvh::legacy_core gtest_main)

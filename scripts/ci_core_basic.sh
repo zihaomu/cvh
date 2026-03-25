@@ -7,6 +7,7 @@ BUILD_DIR="${ROOT_DIR}/build-core-basic"
 BUILD_LOG="${BUILD_DIR}/build.log"
 
 "${ROOT_DIR}/scripts/check_public_headers.sh"
+python3 "${ROOT_DIR}/scripts/verify_opencv_core_channel_cases.py" --repo-root "${ROOT_DIR}"
 
 cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
   -DCVH_BUILD_LEGACY_CORE=OFF \
