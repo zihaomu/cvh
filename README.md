@@ -1,32 +1,27 @@
 # opencv-header-only
-A lightweight header-only wrapper for OpenCV, enabling easy integration without building or linking against OpenCV binaries.
 
+A lightweight OpenCV-like subset library with dual mode:
 
-本库旨在提供一个最轻量的opencv库，能够通过头文件引入，解决用户80%的需求。
-主要目标：用户不需要修改原始opencv代码，而只需要将命名空间从cv改成cvh就能兼容目前80%的opencv代码需求，并且能够达到80%的性能。
+- `CVH_LITE`: header-first fallback mode (default)
+- `CVH_FULL`: linked backend enhancement mode (`src/`)
 
-包含模块：
-- core
-    - 实现基本的Mat内存和计算。
-- imgproc
-    - 实现主要的图像处理库
-- imgcodecs
-    - 仅实现部分图像格式的读写操作
+本库旨在提供高频 OpenCV 风格能力的轻量子集。项目目标是：
 
-
-实现计划在doc中，主要api对齐opencv，一步步实现中，详细实施计划见：doc/header-only-opencv-plan.md
+- 默认 Lite 模式可运行，满足基础图像处理链路
+- 用户尽量仅将命名空间从 `cv` 改为 `cvh` 即可迁移常见用法
+- 需要更高性能/更广覆盖时，链接 Full backend 获取增强实现
 
 ## Compatibility
 
-- 对外承诺：`API/行为兼容`（优先覆盖高频 OpenCV 用法）。
-- 不承诺：`ABI/内存布局兼容`（例如 `cvh::Mat` 与 `cv::Mat` 的对象内部布局、引用计数实现可不同）。
+- 对外承诺：`API/行为兼容`（优先覆盖高频 OpenCV 用法）
+- 不承诺：`ABI/内存布局兼容`（例如 `cvh::Mat` 与 `cv::Mat` 对象内部实现可不同）
 
 ## Build (current temporary layout)
 
-当前仓库使用 `include/` + `src/core/` 的临时过渡布局：
+当前仓库是过渡布局：
 
-- `include/`：对外头文件与兼容头。
-- `src/core/`：从旧工程迁移过来的 `.cpp` 临时实现。
+- `include/`：公开 API 与 fallback 入口
+- `src/`：Full backend 过渡实现
 
 构建命令：
 
@@ -36,15 +31,10 @@ cmake --build build -j
 cmake --build build --target test
 ```
 
-推荐使用统一脚本（本地与 CI 一致）：
+推荐脚本：
 
 ```bash
 ./scripts/ci_smoke.sh
-```
-
-可选 core 基础测试脚本（含 warning 计数）：
-
-```bash
 ./scripts/ci_core_basic.sh
 ```
 
@@ -54,28 +44,24 @@ cmake --build build --target test
 CVH_WARNING_BUDGET=0 ./scripts/ci_core_basic.sh
 ```
 
-默认会构建：
+## Build Options
 
-- `cvh_headers`（接口头目标）
-- `cvh_header_compile_smoke`（最小 smoke 程序）
-- `cvh_include_only_smoke`（仅 `-Iinclude` 的 smoke 程序）
+- `CVH_BUILD_FULL_BACKEND=ON/OFF`：是否构建 Full backend（默认 `ON`）
+- `CVH_BUILD_LEGACY_CORE=ON/OFF`：`CVH_BUILD_FULL_BACKEND` 的兼容别名（默认 `ON`）
+- `CVH_BUILD_BACKEND_KERNEL_SOURCES=ON/OFF`：兼容保留开关（默认 `ON`）
+- `CVH_BUILD_TESTS=ON/OFF`：是否构建测试目标（默认 `ON`）
 
-公共头依赖检查：
+## Mode Semantics
 
-```bash
-./scripts/check_public_headers.sh
-```
+- 未显式定义模式宏时，头文件默认进入 `CVH_LITE`
+- 链接 Full backend 目标时，会通过编译定义启用 `CVH_FULL`
+- `CVH_LITE` 与 `CVH_FULL` 互斥
 
-可选开关：
+## Current Test Targets
 
-- `CVH_BUILD_LEGACY_CORE=ON/OFF`：是否启用 legacy core 预留开关（当前未接线，默认 `OFF`）
-- `CVH_BUILD_BACKEND_KERNEL_SOURCES=ON/OFF`：是否编译依赖旧 backend 的源文件（默认 `OFF`）
-- `CVH_BUILD_TESTS=ON/OFF`：是否编译全部测试目标（smoke + `cvh_test_core`，默认 `ON`）
-
-构建 core 基础测试子集：
-
-```bash
-cmake -S . -B build-core -DCVH_BUILD_TESTS=ON
-cmake --build build-core -j --target cvh_test_core
-./build-core/cvh_test_core '--gtest_filter=MatContract_TEST.*'
-```
+- `cvh_header_compile_smoke`
+- `cvh_include_only_smoke`
+- `cvh_mode_lite_smoke`
+- `cvh_mode_full_smoke`（仅 Full backend 构建时）
+- `cvh_legacy_core_smoke`（仅 Full backend 构建时）
+- `cvh_test_core`（仅 Full backend 构建时）

@@ -4,9 +4,15 @@ project(opencv_header_only VERSION 0.1.0 LANGUAGES CXX)
 
 include(CTest)
 
-option(CVH_BUILD_LEGACY_CORE "Build temporary src/core implementation library" ON)
+option(CVH_BUILD_FULL_BACKEND "Build src/ backend library (CVH_FULL mode)" ON)
+option(CVH_BUILD_LEGACY_CORE "Deprecated alias of CVH_BUILD_FULL_BACKEND" ON)
 option(CVH_BUILD_BACKEND_KERNEL_SOURCES "Build sources requiring legacy backend kernels" ON)
 option(CVH_BUILD_TESTS "Build all test targets (smoke + core)" ON)
+
+set(CVH_ENABLE_FULL_BACKEND OFF)
+if(CVH_BUILD_FULL_BACKEND OR CVH_BUILD_LEGACY_CORE)
+    set(CVH_ENABLE_FULL_BACKEND ON)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,13 +33,14 @@ set(CVH_LEGACY_CORE_SOURCES
     src/core/utils.cpp
 )
 
-if(CVH_BUILD_LEGACY_CORE OR CVH_BUILD_TESTS)
+if(CVH_ENABLE_FULL_BACKEND)
     add_library(cvh_legacy_core STATIC ${CVH_LEGACY_CORE_SOURCES})
     add_library(cvh::legacy_core ALIAS cvh_legacy_core)
+    add_library(cvh::full ALIAS cvh_legacy_core)
     target_compile_features(cvh_legacy_core PUBLIC cxx_std_17)
+    target_compile_definitions(cvh_legacy_core PUBLIC CVH_FULL=1)
+    target_link_libraries(cvh_legacy_core PUBLIC cvh::headers)
     target_include_directories(cvh_legacy_core
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src/core
             ${CMAKE_CURRENT_SOURCE_DIR}/src/core/kernel
@@ -51,38 +58,49 @@ if(CVH_BUILD_TESTS)
     target_include_directories(cvh_include_only_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_compile_features(cvh_include_only_smoke PRIVATE cxx_std_17)
 
+    add_executable(cvh_mode_lite_smoke test/smoke/cvh_mode_smoke.cpp)
+    target_link_libraries(cvh_mode_lite_smoke PRIVATE cvh::headers)
+
     if(TARGET cvh_legacy_core)
         add_executable(cvh_legacy_core_smoke test/smoke/cvh_legacy_core_smoke.cpp)
         target_link_libraries(cvh_legacy_core_smoke PRIVATE cvh::legacy_core)
+
+        add_executable(cvh_mode_full_smoke test/smoke/cvh_mode_smoke.cpp)
+        target_compile_definitions(cvh_mode_full_smoke PRIVATE CVH_EXPECT_FULL=1)
+        target_link_libraries(cvh_mode_full_smoke PRIVATE cvh::full)
     endif()
 
     if(BUILD_TESTING)
         add_test(NAME cvh_header_compile_smoke COMMAND cvh_header_compile_smoke)
         add_test(NAME cvh_include_only_smoke COMMAND cvh_include_only_smoke)
+        add_test(NAME cvh_mode_lite_smoke COMMAND cvh_mode_lite_smoke)
         if(TARGET cvh_legacy_core)
             add_test(NAME cvh_legacy_core_smoke COMMAND cvh_legacy_core_smoke)
+            add_test(NAME cvh_mode_full_smoke COMMAND cvh_mode_full_smoke)
         endif()
     endif()
 
-    add_executable(cvh_test_core
-        test/core/core_ops_test.cpp
-        test/core/mat_channel_contract_test.cpp
-        test/core/mat_opencv_compat_test.cpp
-        test/core/mat_submat_test.cpp
-        test/core/mat_upstream_channel_port_test.cpp
-        test/core/mat_contract_test.cpp
-    )
-    target_link_libraries(cvh_test_core PRIVATE cvh::legacy_core gtest_main)
-    target_compile_features(cvh_test_core PRIVATE cxx_std_17)
-    target_compile_definitions(cvh_test_core PRIVATE M_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
-    target_include_directories(cvh_test_core PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/test
-    )
+    if(TARGET cvh_legacy_core)
+        add_executable(cvh_test_core
+            test/core/core_ops_test.cpp
+            test/core/mat_channel_contract_test.cpp
+            test/core/mat_opencv_compat_test.cpp
+            test/core/mat_submat_test.cpp
+            test/core/mat_upstream_channel_port_test.cpp
+            test/core/mat_contract_test.cpp
+        )
+        target_link_libraries(cvh_test_core PRIVATE cvh::legacy_core gtest_main)
+        target_compile_features(cvh_test_core PRIVATE cxx_std_17)
+        target_compile_definitions(cvh_test_core PRIVATE M_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
+        target_include_directories(cvh_test_core PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/test
+        )
 
-    if(BUILD_TESTING)
-        add_test(NAME cvh_test_core COMMAND cvh_test_core)
+        if(BUILD_TESTING)
+            add_test(NAME cvh_test_core COMMAND cvh_test_core)
+        endif()
     endif()
 endif()
 

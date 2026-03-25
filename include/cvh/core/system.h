@@ -91,6 +91,7 @@ namespace Error {
         StsError=                   -2,  //!< unknown /unspecified error
         StsInternal=                -3,  //!< internal error (bad state)
         StsNoMem=                   -4,  //!< insufficient memory
+        StsOutOfMem=      StsNoMem,      //!< compatibility alias (OpenCV-style name)
         StsBadArg=                  -5,  //!< function arg/param is bad
         StsBadFunc=                 -6,  //!< unsupported function
         StsNoConv=                  -7,  //!< iteration didn't converge
@@ -128,6 +129,7 @@ namespace Error {
         StsBadMask=                -208, //!< bad format of mask (neither 8uC1 nor 8sC1)
         StsUnmatchedSizes=         -209, //!< sizes of input/output structures do not match
         StsUnsupportedFormat=      -210, //!< the data format/type is not supported by the function
+        StsBadType= StsUnsupportedFormat, //!< compatibility alias (OpenCV-style name)
         StsOutOfRange=             -211, //!< some of parameters are out of range
         StsParseError=             -212, //!< invalid syntax/structure of the parsed file
         StsNotImplemented=         -213, //!< the requested function/feature is not implemented

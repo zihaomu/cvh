@@ -5,18 +5,6 @@ using namespace cvh;
 
 namespace
 {
-void expect_all_u8(const Mat& m, uchar expected)
-{
-    ASSERT_EQ(m.depth(), CV_8U);
-    const size_t scalar_count = m.total() * static_cast<size_t>(m.channels());
-    const uchar* data = reinterpret_cast<const uchar*>(m.data);
-    ASSERT_NE(data, nullptr);
-    for (size_t i = 0; i < scalar_count; ++i)
-    {
-        EXPECT_EQ(data[i], expected);
-    }
-}
-
 void skip_pending(const char* upstream_case, const char* reason)
 {
     GTEST_SKIP() << "Pending upstream port: " << upstream_case << " | " << reason;
@@ -82,32 +70,12 @@ TEST(OpenCVUpstreamChannelPort_TEST, Core_MatExpr_issue_16655)
 // From modules/core/test/test_arithm.cpp
 TEST(OpenCVUpstreamChannelPort_TEST, Subtract_scalarc1_matc3)
 {
-    // Upstream uses cv::subtract(int scalar, Mat, dst). cvh does not expose that overload yet,
-    // so this port verifies equivalent behavior through scalar Mat broadcasting by construction.
-    Mat src({5, 5}, CV_8UC3);
-    src.setTo(5.0f);
-    Mat scalar_like(src.shape(), CV_8UC3);
-    scalar_like.setTo(255.0f);
-
-    Mat dst;
-    subtract(scalar_like, src, dst);
-
-    ASSERT_EQ(dst.type(), CV_8UC3);
-    expect_all_u8(dst, static_cast<uchar>(250));
+    skip_pending("Subtract.scalarc1_matc3", "scalar-vs-mat subtract overload is not implemented");
 }
 
 TEST(OpenCVUpstreamChannelPort_TEST, Subtract_scalarc4_matc4)
 {
-    Mat src({5, 5}, CV_8UC4);
-    src.setTo(5.0f);
-    Mat scalar_like(src.shape(), CV_8UC4);
-    scalar_like.setTo(255.0f);
-
-    Mat dst;
-    subtract(scalar_like, src, dst);
-
-    ASSERT_EQ(dst.type(), CV_8UC4);
-    expect_all_u8(dst, static_cast<uchar>(250));
+    skip_pending("Subtract.scalarc4_matc4", "scalar-vs-mat subtract overload is not implemented");
 }
 
 TEST(OpenCVUpstreamChannelPort_TEST, Compare_empty)

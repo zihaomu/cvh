@@ -4,6 +4,7 @@
 #ifndef CVH_OPENCV_HEADER_H
 #define CVH_OPENCV_HEADER_H
 
+#include "detail/config.h"
 #include "core/define.h"
 #include "core/mat.h"
 #include "core/basic_op.h"

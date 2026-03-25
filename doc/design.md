@@ -299,28 +299,8 @@ isContinuous()
 深拷贝 clone()
 ROI / submatrix view
 基本外部内存包装能力（若接口开放）
-9.3 推荐内部结构
 
-推荐采用“视图 + 存储”设计：
-
-struct Storage {
-    unsigned char* data = nullptr;
-    size_t bytes = 0;
-    std::function<void(void*)> deleter;
-};
-
-class Mat {
-public:
-    int rows_ = 0;
-    int cols_ = 0;
-    int type_ = 0;
-    size_t step_ = 0;
-    unsigned char* data_ = nullptr;
-
-private:
-    std::shared_ptr<Storage> storage_;
-};
-9.4 语义约定
+9.3 语义约定
 浅拷贝
 
 拷贝构造与赋值默认为浅拷贝，只复制 header / view，底层数据共享。

@@ -3,15 +3,12 @@
 - 更新时间：2026-03-25
 - 作用：记录当前 `test/` 下未通过、未运行或显式挂起（skip/pending）的测试及原因。
 
-## 1. 构建阻塞（导致 `cvh_test_core` 未能完整执行）
+## 1. 构建状态（2026-03-25）
 
-当前 `cvh_test_core` 在编译阶段失败，导致新增/已有单测无法完整跑完。
+已解锁此前阻塞 `cvh_test_core` 的编译问题：
 
-| 类型 | 位置 | 现象 | 原因 | 解锁条件 |
-|---|---|---|---|---|
-| 编译错误 | `src/core/mat.cpp:502` | `StsOutOfMem` not found | `Error::Code` 中没有 `StsOutOfMem` 枚举 | 将错误码对齐到 `system.h` 中已有枚举（如 `StsNoMem`）或补齐枚举定义 |
-| 编译错误 | `src/core/mat.cpp:530` | `StsBadType` not found | `Error::Code` 中没有 `StsBadType` 枚举 | 使用已有错误码（如 `StsUnsupportedFormat`）或补齐 `StsBadType` |
-| 编译错误 | `src/core/mat.cpp:966` | `StsBadType` not found | 同上 | 同上 |
+- `Error::Code` 增加了 `StsOutOfMem` / `StsBadType` 兼容别名，`cvh_test_core` 可完成编译与执行。
+- 当前 `cvh_test_core` 运行结果：`PASSED=28`，`SKIPPED=16`（均为显式 pending）。
 
 ## 2. Upstream Channel 迁移用例（已纳入台账但当前未通过/未完成）
 
@@ -58,7 +55,8 @@
 ## 3. 已接线但受阻说明
 
 - `test/core/mat_upstream_channel_port_test.cpp` 已新增 17 个上游对齐入口测试（对应上述 case）。
-- 因第 1 节构建阻塞，当前无法给出完整运行结果；待修复后再把可通过项转为 `PASS_NOW` 并更新 manifest。
+- `cvh_test_core` 已可运行；当前 channel 相关 pending 用例均通过 `GTEST_SKIP` 显式暴露。
+- 后续每解锁一个 API 能力，应把对应 case 从 `PENDING_CHANNEL` 提升为 `PASS_NOW` 并更新 manifest。
 
 ## 4. 维护规则
 
