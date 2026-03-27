@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <assert.h>
+#include <string>
 #include <vector>
 
 #include "define.h"
@@ -18,6 +19,12 @@ namespace cvh
 
 typedef std::vector<int> MatShape;
 #define MAT_MAX_DIM 8 // Max mat dimension
+
+enum class ShapeDisplayOrder
+{
+    Geometry = 0,
+    ChannelFirst = 1,
+};
 
 struct Range
 {
@@ -191,6 +198,11 @@ public:
 
     void printShape() const;
 
+    // Geometry-only view by default. ChannelFirst is a display-only projection.
+    std::string shapeString(ShapeDisplayOrder order = ShapeDisplayOrder::Geometry) const;
+    // Policy used by print()/printShape(): for 2D multi-channel mat show [C,H,W], otherwise geometry.
+    std::string displayShapeString() const;
+
     MatShape shape() const;
 
     bool empty() const;
@@ -283,6 +295,10 @@ MatExpr operator + (const MatExpr& e1, const float e);
 MatExpr operator + (const float e, const MatExpr& e2);
 MatExpr operator + (const Mat& a, const float e);
 MatExpr operator + (const float e, const Mat& b);
+MatExpr operator + (const MatExpr& e1, const Scalar& s);
+MatExpr operator + (const Scalar& s, const MatExpr& e2);
+MatExpr operator + (const Mat& a, const Scalar& s);
+MatExpr operator + (const Scalar& s, const Mat& b);
 
 MatExpr operator - (const Mat& a);
 MatExpr operator - (const MatExpr& e);
@@ -294,6 +310,10 @@ MatExpr operator - (const MatExpr& e1, const float e);
 MatExpr operator - (const float e, const MatExpr& e2);
 MatExpr operator - (const Mat& a, const float e);
 MatExpr operator - (const float e, const Mat& b);
+MatExpr operator - (const MatExpr& e1, const Scalar& s);
+MatExpr operator - (const Scalar& s, const MatExpr& e2);
+MatExpr operator - (const Mat& a, const Scalar& s);
+MatExpr operator - (const Scalar& s, const Mat& b);
 
 MatExpr operator * (const Mat& a, const Mat& b);
 MatExpr operator * (const Mat& a, const MatExpr& e);
@@ -303,6 +323,10 @@ MatExpr operator * (const MatExpr& e1, const float e);
 MatExpr operator * (const float e, const MatExpr& e2);
 MatExpr operator * (const Mat& a, const float e);
 MatExpr operator * (const float e, const Mat& b);
+MatExpr operator * (const MatExpr& e1, const Scalar& s);
+MatExpr operator * (const Scalar& s, const MatExpr& e2);
+MatExpr operator * (const Mat& a, const Scalar& s);
+MatExpr operator * (const Scalar& s, const Mat& b);
 
 MatExpr operator / (const Mat& a, const Mat& b);
 MatExpr operator / (const Mat& a, const MatExpr& e);
@@ -312,58 +336,48 @@ MatExpr operator / (const MatExpr& e1, const float e);
 MatExpr operator / (const float e, const MatExpr& e2);
 MatExpr operator / (const Mat& a, const float e);
 MatExpr operator / (const float e, const Mat& b);
+MatExpr operator / (const MatExpr& e1, const Scalar& s);
+MatExpr operator / (const Scalar& s, const MatExpr& e2);
+MatExpr operator / (const Mat& a, const Scalar& s);
+MatExpr operator / (const Scalar& s, const Mat& b);
 
 MatExpr operator == (const Mat& a, const Mat& b);
+MatExpr operator == (const Mat& a, const Scalar& s);
+MatExpr operator == (const Scalar& s, const Mat& a);
+MatExpr operator == (const Mat& a, const float s);
+MatExpr operator == (const float s, const Mat& a);
 
-// TODO support more operator, like >, <, >=, <=, != ...
-/*
-CV_EXPORTS MatExpr operator < (const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr operator < (const Mat& a, const float s);
-CV_EXPORTS MatExpr operator < (const float s, const Mat& a);
+MatExpr operator != (const Mat& a, const Mat& b);
+MatExpr operator != (const Mat& a, const Scalar& s);
+MatExpr operator != (const Scalar& s, const Mat& a);
+MatExpr operator != (const Mat& a, const float s);
+MatExpr operator != (const float s, const Mat& a);
 
-CV_EXPORTS MatExpr operator <= (const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr operator <= (const Mat& a, const float s);
-CV_EXPORTS MatExpr operator <= (const float s, const Mat& a);
+MatExpr operator < (const Mat& a, const Mat& b);
+MatExpr operator < (const Mat& a, const Scalar& s);
+MatExpr operator < (const Scalar& s, const Mat& a);
+MatExpr operator < (const Mat& a, const float s);
+MatExpr operator < (const float s, const Mat& a);
 
-CV_EXPORTS MatExpr operator == (const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr operator == (const Mat& a, const float s);
-CV_EXPORTS MatExpr operator == (const float s, const Mat& a);
+MatExpr operator <= (const Mat& a, const Mat& b);
+MatExpr operator <= (const Mat& a, const Scalar& s);
+MatExpr operator <= (const Scalar& s, const Mat& a);
+MatExpr operator <= (const Mat& a, const float s);
+MatExpr operator <= (const float s, const Mat& a);
 
-CV_EXPORTS MatExpr operator != (const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr operator != (const Mat& a, const float s);
-CV_EXPORTS MatExpr operator != (const float s, const Mat& a);
+MatExpr operator > (const Mat& a, const Mat& b);
+MatExpr operator > (const Mat& a, const Scalar& s);
+MatExpr operator > (const Scalar& s, const Mat& a);
+MatExpr operator > (const Mat& a, const float s);
+MatExpr operator > (const float s, const Mat& a);
 
-CV_EXPORTS MatExpr operator >= (const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr operator >= (const Mat& a, const float s);
-CV_EXPORTS MatExpr operator >= (const float s, const Mat& a);
+MatExpr operator >= (const Mat& a, const Mat& b);
+MatExpr operator >= (const Mat& a, const Scalar& s);
+MatExpr operator >= (const Scalar& s, const Mat& a);
+MatExpr operator >= (const Mat& a, const float s);
+MatExpr operator >= (const float s, const Mat& a);
 
-CV_EXPORTS MatExpr operator > (const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr operator > (const Mat& a, const float s);
-CV_EXPORTS MatExpr operator > (const float s, const Mat& a);
-
-CV_EXPORTS MatExpr operator & (const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr operator & (const Mat& a, const Scalar& s);
-CV_EXPORTS MatExpr operator & (const Scalar& s, const Mat& a);
-
-CV_EXPORTS MatExpr operator | (const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr operator | (const Mat& a, const Scalar& s);
-CV_EXPORTS MatExpr operator | (const Scalar& s, const Mat& a);
-
-CV_EXPORTS MatExpr operator ^ (const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr operator ^ (const Mat& a, const Scalar& s);
-CV_EXPORTS MatExpr operator ^ (const Scalar& s, const Mat& a);
-
-CV_EXPORTS MatExpr min(const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr min(const Mat& a, const float s);
-CV_EXPORTS MatExpr min(const float s, const Mat& a);
-
-CV_EXPORTS MatExpr max(const Mat& a, const Mat& b);
-CV_EXPORTS MatExpr max(const Mat& a, const float s);
-CV_EXPORTS MatExpr max(const float s, const Mat& a);
-
-CV_EXPORTS MatExpr abs(const Mat& m);
-CV_EXPORTS MatExpr abs(const MatExpr& e);
-*/
+// TODO support bitwise/min/max/abs operators for MatExpr.
 
 
 // compute shape.

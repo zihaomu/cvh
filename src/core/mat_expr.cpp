@@ -26,6 +26,44 @@ static void checkOperandsExist(const Mat& a, const Mat& b)
     }
 }
 
+static Mat evalExprToMat(const MatExpr& e)
+{
+    Mat out;
+    e.op->assign(e, out);
+    return out;
+}
+
+static Mat makeScalarMatLike(const Mat& ref, const Scalar& s)
+{
+    checkOperandsExist(ref);
+    Mat scalar_like(ref.dims, ref.size.p, ref.type());
+    scalar_like.setTo(s);
+    return scalar_like;
+}
+
+static MatExpr makeCmpExpr(const Mat& a, const Mat& b, int cmpop)
+{
+    checkOperandsExist(a, b);
+    Mat out;
+    compare(a, b, out, cmpop);
+    return MatExpr(out);
+}
+
+static MatExpr makeCmpExprWithScalar(const Mat& a, const Scalar& s, int cmpop, bool scalar_first)
+{
+    checkOperandsExist(a);
+    Mat out;
+    if (scalar_first)
+    {
+        compare(s, a, out, cmpop);
+    }
+    else
+    {
+        compare(a, s, out, cmpop);
+    }
+    return MatExpr(out);
+}
+
 class MatOp_Identity : public MatOp
 {
 public:
@@ -79,6 +117,7 @@ public:
     bool elementWise(const MatExpr& ) const override {return true;}
 
     void assign(const MatExpr& expr, Mat& m, int type = -1) const override;
+    int type(const MatExpr& expr) const override;
 
     static void makeExpr(MatExpr& res, int cmpop, const Mat& a, const Mat& b);
 };
@@ -108,14 +147,14 @@ void MatOp_AddEx::assign(const MatExpr &e, Mat &m, int _type) const
     {
         if (e.beta == 1)
         {
-            add(e.a, e.b, dst);
+            cvh::add(e.a, e.b, dst);
         }
         else if (e.beta == -1)
         {
-            subtract(e.a, e.b, dst);
+            cvh::subtract(e.a, e.b, dst);
         }
         else
-            addWeighted(e.a, e.alpha, e.b, e.beta, dst);
+            cvh::addWeighted(e.a, e.alpha, e.b, e.beta, dst);
     }
     else if (e.alpha == 1)
     {
@@ -123,7 +162,7 @@ void MatOp_AddEx::assign(const MatExpr &e, Mat &m, int _type) const
     }
     else if (e.alpha == -1)
     {
-        subtract(e.a, dst);
+        cvh::subtract(e.a, dst);
     }
     else
         CV_Assert(0 && "Unsupported type in MatOp_AddEx::assign!");
@@ -140,11 +179,11 @@ void MatOp_Bin::assign(const MatExpr &e, Mat &m, int _type) const
 
     if (e.flags == '*')
     {
-        multiply(e.a, e.b, dst);
+        cvh::multiply(e.a, e.b, dst);
     }
     else if (e.flags == '/' && e.b.data)
     {
-        divide(e.a, e.b, dst);
+        cvh::divide(e.a, e.b, dst);
     }
     else
         CV_Error(Error::StsNotImplemented, "Unsupported value!");
@@ -157,7 +196,23 @@ void MatOp_Bin::makeExpr(MatExpr& res, char op, const Mat& a, const Mat& b)
 
 void MatOp_Cmp::assign(const MatExpr &expr, Mat &m, int _type) const
 {
-    Mat temp, &dst = _type == -1 || _type == CV_8U ? m : temp;
+    const int expected_type = CV_MAKETYPE(CV_8U, expr.a.channels());
+    if (_type != -1 && _type != expected_type)
+    {
+        CV_Error_(Error::StsBadType,
+                  ("MatOp_Cmp::assign only supports dst type=%d, got=%d", expected_type, _type));
+    }
+
+    cvh::compare(expr.a, expr.b, m, expr.flags);
+}
+
+int MatOp_Cmp::type(const MatExpr &expr) const
+{
+    if (expr.a.empty())
+    {
+        return -1;
+    }
+    return CV_MAKETYPE(CV_8U, expr.a.channels());
 }
 
 void MatOp_Cmp::makeExpr(MatExpr &res, int cmpop, const Mat &a, const Mat &b)
@@ -687,10 +742,288 @@ MatExpr operator / (const float e, const Mat& b)
 
 MatExpr operator == (const Mat& a, const Mat& b)
 {
-    checkOperandsExist(a, b);
-    MatExpr e;
-    MatOp_Cmp::makeExpr(e, CV_CMP_EQ, a, b);
-    return e;
+    return makeCmpExpr(a, b, CV_CMP_EQ);
+}
+
+MatExpr operator + (const MatExpr& e1, const Scalar& s)
+{
+    Mat lhs = evalExprToMat(e1);
+    Mat out;
+    add(lhs, s, out);
+    return MatExpr(out);
+}
+
+MatExpr operator + (const Scalar& s, const MatExpr& e2)
+{
+    Mat rhs = evalExprToMat(e2);
+    Mat out;
+    add(s, rhs, out);
+    return MatExpr(out);
+}
+
+MatExpr operator + (const Mat& a, const Scalar& s)
+{
+    checkOperandsExist(a);
+    Mat out;
+    add(a, s, out);
+    return MatExpr(out);
+}
+
+MatExpr operator + (const Scalar& s, const Mat& b)
+{
+    checkOperandsExist(b);
+    Mat out;
+    add(s, b, out);
+    return MatExpr(out);
+}
+
+MatExpr operator - (const MatExpr& e1, const Scalar& s)
+{
+    Mat lhs = evalExprToMat(e1);
+    Mat out;
+    subtract(lhs, s, out);
+    return MatExpr(out);
+}
+
+MatExpr operator - (const Scalar& s, const MatExpr& e2)
+{
+    Mat rhs = evalExprToMat(e2);
+    Mat out;
+    subtract(s, rhs, out);
+    return MatExpr(out);
+}
+
+MatExpr operator - (const Mat& a, const Scalar& s)
+{
+    checkOperandsExist(a);
+    Mat out;
+    subtract(a, s, out);
+    return MatExpr(out);
+}
+
+MatExpr operator - (const Scalar& s, const Mat& b)
+{
+    checkOperandsExist(b);
+    Mat out;
+    subtract(s, b, out);
+    return MatExpr(out);
+}
+
+MatExpr operator * (const MatExpr& e1, const Scalar& s)
+{
+    Mat lhs = evalExprToMat(e1);
+    Mat rhs = makeScalarMatLike(lhs, s);
+    Mat out;
+    multiply(lhs, rhs, out);
+    return MatExpr(out);
+}
+
+MatExpr operator * (const Scalar& s, const MatExpr& e2)
+{
+    Mat rhs = evalExprToMat(e2);
+    Mat lhs = makeScalarMatLike(rhs, s);
+    Mat out;
+    multiply(lhs, rhs, out);
+    return MatExpr(out);
+}
+
+MatExpr operator * (const Mat& a, const Scalar& s)
+{
+    checkOperandsExist(a);
+    Mat rhs = makeScalarMatLike(a, s);
+    Mat out;
+    multiply(a, rhs, out);
+    return MatExpr(out);
+}
+
+MatExpr operator * (const Scalar& s, const Mat& b)
+{
+    checkOperandsExist(b);
+    Mat lhs = makeScalarMatLike(b, s);
+    Mat out;
+    multiply(lhs, b, out);
+    return MatExpr(out);
+}
+
+MatExpr operator / (const MatExpr& e1, const Scalar& s)
+{
+    Mat lhs = evalExprToMat(e1);
+    Mat rhs = makeScalarMatLike(lhs, s);
+    Mat out;
+    divide(lhs, rhs, out);
+    return MatExpr(out);
+}
+
+MatExpr operator / (const Scalar& s, const MatExpr& e2)
+{
+    Mat rhs = evalExprToMat(e2);
+    Mat lhs = makeScalarMatLike(rhs, s);
+    Mat out;
+    divide(lhs, rhs, out);
+    return MatExpr(out);
+}
+
+MatExpr operator / (const Mat& a, const Scalar& s)
+{
+    checkOperandsExist(a);
+    Mat rhs = makeScalarMatLike(a, s);
+    Mat out;
+    divide(a, rhs, out);
+    return MatExpr(out);
+}
+
+MatExpr operator / (const Scalar& s, const Mat& b)
+{
+    checkOperandsExist(b);
+    Mat lhs = makeScalarMatLike(b, s);
+    Mat out;
+    divide(lhs, b, out);
+    return MatExpr(out);
+}
+
+MatExpr operator == (const Mat& a, const Scalar& s)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_EQ, false);
+}
+
+MatExpr operator == (const Scalar& s, const Mat& a)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_EQ, true);
+}
+
+MatExpr operator == (const Mat& a, const float s)
+{
+    return a == Scalar::all(static_cast<double>(s));
+}
+
+MatExpr operator == (const float s, const Mat& a)
+{
+    return Scalar::all(static_cast<double>(s)) == a;
+}
+
+MatExpr operator != (const Mat& a, const Mat& b)
+{
+    return makeCmpExpr(a, b, CV_CMP_NE);
+}
+
+MatExpr operator != (const Mat& a, const Scalar& s)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_NE, false);
+}
+
+MatExpr operator != (const Scalar& s, const Mat& a)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_NE, true);
+}
+
+MatExpr operator != (const Mat& a, const float s)
+{
+    return a != Scalar::all(static_cast<double>(s));
+}
+
+MatExpr operator != (const float s, const Mat& a)
+{
+    return Scalar::all(static_cast<double>(s)) != a;
+}
+
+MatExpr operator < (const Mat& a, const Mat& b)
+{
+    return makeCmpExpr(a, b, CV_CMP_LT);
+}
+
+MatExpr operator < (const Mat& a, const Scalar& s)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_LT, false);
+}
+
+MatExpr operator < (const Scalar& s, const Mat& a)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_LT, true);
+}
+
+MatExpr operator < (const Mat& a, const float s)
+{
+    return a < Scalar::all(static_cast<double>(s));
+}
+
+MatExpr operator < (const float s, const Mat& a)
+{
+    return Scalar::all(static_cast<double>(s)) < a;
+}
+
+MatExpr operator <= (const Mat& a, const Mat& b)
+{
+    return makeCmpExpr(a, b, CV_CMP_LE);
+}
+
+MatExpr operator <= (const Mat& a, const Scalar& s)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_LE, false);
+}
+
+MatExpr operator <= (const Scalar& s, const Mat& a)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_LE, true);
+}
+
+MatExpr operator <= (const Mat& a, const float s)
+{
+    return a <= Scalar::all(static_cast<double>(s));
+}
+
+MatExpr operator <= (const float s, const Mat& a)
+{
+    return Scalar::all(static_cast<double>(s)) <= a;
+}
+
+MatExpr operator > (const Mat& a, const Mat& b)
+{
+    return makeCmpExpr(a, b, CV_CMP_GT);
+}
+
+MatExpr operator > (const Mat& a, const Scalar& s)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_GT, false);
+}
+
+MatExpr operator > (const Scalar& s, const Mat& a)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_GT, true);
+}
+
+MatExpr operator > (const Mat& a, const float s)
+{
+    return a > Scalar::all(static_cast<double>(s));
+}
+
+MatExpr operator > (const float s, const Mat& a)
+{
+    return Scalar::all(static_cast<double>(s)) > a;
+}
+
+MatExpr operator >= (const Mat& a, const Mat& b)
+{
+    return makeCmpExpr(a, b, CV_CMP_GE);
+}
+
+MatExpr operator >= (const Mat& a, const Scalar& s)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_GE, false);
+}
+
+MatExpr operator >= (const Scalar& s, const Mat& a)
+{
+    return makeCmpExprWithScalar(a, s, CV_CMP_GE, true);
+}
+
+MatExpr operator >= (const Mat& a, const float s)
+{
+    return a >= Scalar::all(static_cast<double>(s));
+}
+
+MatExpr operator >= (const float s, const Mat& a)
+{
+    return Scalar::all(static_cast<double>(s)) >= a;
 }
 
 }

@@ -50,6 +50,7 @@
 - `convertTo(dst, full_type)`：若 `channels` 不一致，返回 `StsBadArg`。
 - `reshape`：只改几何形状，不改通道语义。
 - `rowRange/colRange/operator()(Range, Range)`：维持浅视图与步长语义。
+- `shape()`：只返回几何维度；打印展示可提供独立视图（例如 2D 多通道显示 `[C,H,W]`），但不改变 `shape()` 合同。
 
 ### 3.3 明确禁止（防止语义漂移）
 

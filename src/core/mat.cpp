@@ -70,6 +70,20 @@ inline void update_continuous_steps(Mat& m)
     }
 }
 
+inline std::string format_shape_string(const std::vector<int>& dims)
+{
+    if (dims.empty())
+        return "[]";
+
+    std::string out = "[" + std::to_string(dims[0]);
+    for (size_t i = 1; i < dims.size(); ++i)
+    {
+        out += "x" + std::to_string(dims[i]);
+    }
+    out += "]";
+    return out;
+}
+
 template<typename _Tp>
 inline void fill_scalar_pattern(_Tp* out, size_t pixel_count, int cn, const Scalar& s)
 {
@@ -934,21 +948,7 @@ size_t Mat::total(int startDim, int endDim) const
 
 void Mat::printShape() const
 {
-    if (empty())
-    {
-        std::cout<<"shape = []"<<std::endl;
-        return;
-    }
-
-    std::cout<<"shape = ["<<size.p[0]<<"x";
-    for (int i = 1; i < dims; i++)
-    {
-        if (i == dims - 1)
-            std::cout<<size.p[i];
-        else
-            std::cout<<size.p[i]<<"x";
-    }
-    std::cout<<"]"<<std::endl;
+    std::cout << "shape = " << displayShapeString() << std::endl;
 }
 
 void Mat::print(int len) const
@@ -960,15 +960,7 @@ void Mat::print(int len) const
     }
 
     // print shape
-    std::cout<<"shape = ["<<size.p[0]<<"x";
-    for (int i = 1; i < dims; i++)
-    {
-        if (i == dims - 1)
-            std::cout<<size.p[i];
-        else
-            std::cout<<size.p[i]<<"x";
-    }
-    std::cout<<"]"<<std::endl;
+    std::cout << "shape = " << displayShapeString() << std::endl;
 
     // print value
     const size_t scalar_total = total() * static_cast<size_t>(channels());
@@ -1052,6 +1044,28 @@ MatShape Mat::shape() const
     memcpy(shape.data(), this->size.p, dims * sizeof (int));
 
     return shape;
+}
+
+std::string Mat::shapeString(ShapeDisplayOrder order) const
+{
+    if (empty())
+        return "[]";
+
+    if (order == ShapeDisplayOrder::ChannelFirst && channels() > 1 && dims == 2)
+    {
+        return format_shape_string({channels(), size.p[0], size.p[1]});
+    }
+
+    return format_shape_string(shape());
+}
+
+std::string Mat::displayShapeString() const
+{
+    if (!empty() && channels() > 1 && dims == 2)
+    {
+        return shapeString(ShapeDisplayOrder::ChannelFirst);
+    }
+    return shapeString(ShapeDisplayOrder::Geometry);
 }
 
 bool Mat::empty() const

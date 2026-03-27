@@ -29,6 +29,7 @@ target_compile_features(cvh_headers INTERFACE cxx_std_17)
 set(CVH_LEGACY_CORE_SOURCES
     src/core/basic_op_scalar.cpp
     src/core/mat.cpp
+    src/core/mat_expr.cpp
     src/core/mat_convert.cpp
     src/core/system.cpp
     src/core/utils.cpp
@@ -90,6 +91,8 @@ if(CVH_BUILD_TESTS)
             test/core/core_ops_test.cpp
             test/core/mat_channel_contract_test.cpp
             test/core/mat_layout_semantics_test.cpp
+            test/core/mat_shape_display_test.cpp
+            test/core/mat_expr_scalar_compare_test.cpp
             test/core/mat_opencv_compat_test.cpp
             test/core/mat_scalar_ops_test.cpp
             test/core/mat_submat_test.cpp

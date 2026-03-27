@@ -64,7 +64,15 @@ TEST(OpenCVUpstreamChannelPort_TEST, Core_Mat_reinterpret_OutputArray_8UC4_32FC1
 
 TEST(OpenCVUpstreamChannelPort_TEST, Core_MatExpr_issue_16655)
 {
-    skip_pending("Core_MatExpr.issue_16655", "channel-aware MatExpr compare (!=) is not implemented");
+    Mat a({5, 5}, CV_32FC3);
+    Mat b({5, 5}, CV_32FC3);
+    a.setTo(Scalar::all(1.0));
+    b.setTo(Scalar::all(2.0));
+
+    MatExpr ab_expr = a != b;
+    Mat ab_mat = ab_expr;
+    EXPECT_EQ(CV_8UC3, ab_expr.type());
+    EXPECT_EQ(CV_8UC3, ab_mat.type());
 }
 
 // From modules/core/test/test_arithm.cpp
@@ -80,17 +88,17 @@ TEST(OpenCVUpstreamChannelPort_TEST, Subtract_scalarc4_matc4)
 
 TEST(OpenCVUpstreamChannelPort_TEST, Compare_empty)
 {
-    skip_pending("Compare.empty", "compare(Mat,Mat) is not implemented");
+    skip_pending("Compare.empty", "upstream case body not ported yet (compare(Mat,Mat) base path exists)");
 }
 
 TEST(OpenCVUpstreamChannelPort_TEST, Compare_regression_8999)
 {
-    skip_pending("Compare.regression_8999", "compare(Mat,Mat) is not implemented");
+    skip_pending("Compare.regression_8999", "upstream case body not ported yet (compare(Mat,Mat) base path exists)");
 }
 
 TEST(OpenCVUpstreamChannelPort_TEST, Compare_regression_16F_do_not_crash)
 {
-    skip_pending("Compare.regression_16F_do_not_crash", "compare(Mat,Mat) is not implemented");
+    skip_pending("Compare.regression_16F_do_not_crash", "upstream case body not ported yet (compare(Mat,Mat) base path exists)");
 }
 
 // From modules/core/test/test_operations.cpp
