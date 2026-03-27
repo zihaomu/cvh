@@ -34,7 +34,14 @@ set(CVH_LEGACY_CORE_SOURCES
     src/core/system.cpp
     src/core/utils.cpp
     src/imgproc/resize_backend.cpp
+    src/highgui/highgui.cpp
 )
+
+if(WIN32)
+    list(APPEND CVH_LEGACY_CORE_SOURCES src/highgui/display_win32.cpp)
+elseif(UNIX AND NOT APPLE AND NOT ANDROID)
+    list(APPEND CVH_LEGACY_CORE_SOURCES src/highgui/display_fb.cpp)
+endif()
 
 if(CVH_ENABLE_FULL_BACKEND)
     add_library(cvh_legacy_core STATIC ${CVH_LEGACY_CORE_SOURCES})
@@ -98,6 +105,18 @@ if(CVH_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/test
     )
 
+    add_executable(cvh_test_highgui
+        test/highgui/highgui_contract_test.cpp
+    )
+    target_link_libraries(cvh_test_highgui PRIVATE cvh::headers gtest_main)
+    target_compile_features(cvh_test_highgui PRIVATE cxx_std_17)
+    target_compile_definitions(cvh_test_highgui PRIVATE M_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_include_directories(cvh_test_highgui PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/test
+    )
+
     if(TARGET cvh_legacy_core)
         add_executable(cvh_legacy_core_smoke test/smoke/cvh_legacy_core_smoke.cpp)
         target_link_libraries(cvh_legacy_core_smoke PRIVATE cvh::legacy_core)
@@ -118,6 +137,7 @@ if(CVH_BUILD_TESTS)
         add_test(NAME cvh_lite_pipeline_smoke COMMAND cvh_lite_pipeline_smoke)
         add_test(NAME cvh_resize_dispatch_lite_smoke COMMAND cvh_resize_dispatch_lite_smoke)
         add_test(NAME cvh_test_imgcodecs COMMAND cvh_test_imgcodecs)
+        add_test(NAME cvh_test_highgui COMMAND cvh_test_highgui)
         if(TARGET cvh_legacy_core)
             add_test(NAME cvh_legacy_core_smoke COMMAND cvh_legacy_core_smoke)
             add_test(NAME cvh_mode_full_smoke COMMAND cvh_mode_full_smoke)
