@@ -31,3 +31,42 @@
 
 - 关键算子有可追踪性能曲线。
 - PR 可基于 benchmark 报告判断是否有明显性能回退。
+
+## 当前可用工具
+
+- 可执行程序：`cvh_benchmark_core_ops`
+  - 源码：`benchmark/core_ops_benchmark.cpp`
+  - 覆盖：`core` 二元基础算子（含多 `depth` / `channel` / `shape`）
+  - 输出：标准 CSV（stdout）或 `--output <file>`
+
+- 回归检查脚本：`scripts/check_core_benchmark_regression.py`
+  - 对比 baseline/current CSV
+  - 超过阈值时返回非 0（可用于 CI gate）
+
+## 使用示例
+
+1. 运行 quick 基准并导出结果：
+
+```bash
+./build-full-test/cvh_benchmark_core_ops --profile quick --warmup 2 --iters 20 --repeats 5 --output benchmark/current_quick.csv
+```
+
+2. 生成一次基线（例如当前主分支）：
+
+```bash
+cp benchmark/current_quick.csv benchmark/baseline_quick.csv
+```
+
+3. 对比回归（默认允许最多 8% 变慢）：
+
+```bash
+python3 scripts/check_core_benchmark_regression.py \
+  --baseline benchmark/baseline_quick.csv \
+  --current benchmark/current_quick.csv \
+  --max-slowdown 0.08
+```
+
+## 建议流程
+
+- 日常提交：使用 `quick` profile 做回归门禁。
+- 周期性评估：使用 `full` profile 做深度扫描（更慢，但覆盖更多组合）。

@@ -27,6 +27,12 @@ inline float apply_scalar(BinaryKernelOp op, float lhs, float rhs)
             return lhs * rhs;
         case BinaryKernelOp::Div:
             return lhs / rhs;
+        case BinaryKernelOp::Max:
+            return lhs > rhs ? lhs : rhs;
+        case BinaryKernelOp::Min:
+            return lhs < rhs ? lhs : rhs;
+        case BinaryKernelOp::Mean:
+            return 0.5f * (lhs + rhs);
     }
 
     return 0.0f;
@@ -44,6 +50,12 @@ inline Batch apply_batch(BinaryKernelOp op, const Batch& lhs, const Batch& rhs)
             return lhs * rhs;
         case BinaryKernelOp::Div:
             return lhs / rhs;
+        case BinaryKernelOp::Max:
+            return xsimd::max(lhs, rhs);
+        case BinaryKernelOp::Min:
+            return xsimd::min(lhs, rhs);
+        case BinaryKernelOp::Mean:
+            return (lhs + rhs) * Batch(0.5f);
     }
 
     return Batch(0.0f);

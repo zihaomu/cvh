@@ -1,5 +1,6 @@
 #include "cvh/core/basic_op.h"
 #include "cvh/core/saturate.h"
+#include "binary_kernel_xsimd.h"
 
 #include <cmath>
 #include <type_traits>
@@ -133,11 +134,8 @@ void apply_mat_mat_binary_impl(const Mat& a, const Mat& b, Mat& dst, Op op)
 }
 
 template<typename Op>
-void dispatch_mat_mat_binary(const Mat& a, const Mat& b, Mat& dst, Op op, const char* fn_name)
+void dispatch_mat_mat_binary_impl_by_depth(const Mat& a, const Mat& b, Mat& dst, Op op, const char* fn_name)
 {
-    ensure_same_type_and_shape(a, b, fn_name);
-    ensure_binary_dst_like_src(a, dst, fn_name);
-
     switch (a.depth())
     {
         case CV_8U:
@@ -168,6 +166,74 @@ void dispatch_mat_mat_binary(const Mat& a, const Mat& b, Mat& dst, Op op, const 
             CV_Error_(Error::StsNotImplemented,
                       ("%s supports depth in [CV_8U..CV_16F], depth=%d", fn_name, a.depth()));
     }
+}
+
+inline bool try_dispatch_mat_mat_binary_xsimd_fp32(const Mat& a,
+                                                   const Mat& b,
+                                                   Mat& dst,
+                                                   cpu::BinaryKernelOp op)
+{
+    if (a.depth() != CV_32F)
+    {
+        return false;
+    }
+
+    const int cn = a.channels();
+    const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
+    const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+
+    const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(float);
+    const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(float);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(float);
+
+    for (size_t i = 0; i < outer; ++i)
+    {
+        const float* a_row = reinterpret_cast<const float*>(a.data + i * a_step0);
+        const float* b_row = reinterpret_cast<const float*>(b.data + i * b_step0);
+        float* dst_row = reinterpret_cast<float*>(dst.data + i * dst_step0);
+
+        cpu::binary_broadcast_xsimd(
+            op,
+            a_row,
+            row_elements,
+            1,
+            b_row,
+            row_elements,
+            1,
+            dst_row,
+            1,
+            row_elements);
+    }
+
+    return true;
+}
+
+template<typename Op>
+void dispatch_mat_mat_binary_arith(const Mat& a,
+                                   const Mat& b,
+                                   Mat& dst,
+                                   Op op,
+                                   cpu::BinaryKernelOp xsimd_op,
+                                   const char* fn_name)
+{
+    ensure_same_type_and_shape(a, b, fn_name);
+    ensure_binary_dst_like_src(a, dst, fn_name);
+
+    if (try_dispatch_mat_mat_binary_xsimd_fp32(a, b, dst, xsimd_op))
+    {
+        return;
+    }
+
+    dispatch_mat_mat_binary_impl_by_depth(a, b, dst, op, fn_name);
+}
+
+template<typename Op>
+void dispatch_mat_mat_binary(const Mat& a, const Mat& b, Mat& dst, Op op, const char* fn_name)
+{
+    ensure_same_type_and_shape(a, b, fn_name);
+    ensure_binary_dst_like_src(a, dst, fn_name);
+    dispatch_mat_mat_binary_impl_by_depth(a, b, dst, op, fn_name);
 }
 
 template<typename T>
@@ -741,19 +807,21 @@ void binaryFunc(BinaryOp op, const Mat& a, const Mat& b, Mat& c)
                 "binaryFunc(POW)");
             return;
         case BinaryOp::MAX:
-            dispatch_mat_mat_binary(
+            dispatch_mat_mat_binary_arith(
                 a,
                 b,
                 c,
                 [](const auto& lhs, const auto& rhs) { return lhs > rhs ? lhs : rhs; },
+                cpu::BinaryKernelOp::Max,
                 "binaryFunc(MAX)");
             return;
         case BinaryOp::MIN:
-            dispatch_mat_mat_binary(
+            dispatch_mat_mat_binary_arith(
                 a,
                 b,
                 c,
                 [](const auto& lhs, const auto& rhs) { return lhs < rhs ? lhs : rhs; },
+                cpu::BinaryKernelOp::Min,
                 "binaryFunc(MIN)");
             return;
         case BinaryOp::ATAN2:
@@ -796,13 +864,14 @@ void binaryFunc(BinaryOp op, const Mat& a, const Mat& b, Mat& c)
                 "binaryFunc(FMOD)");
             return;
         case BinaryOp::MEAN:
-            dispatch_mat_mat_binary(
+            dispatch_mat_mat_binary_arith(
                 a,
                 b,
                 c,
                 [](const auto& lhs, const auto& rhs) {
                     return (static_cast<double>(lhs) + static_cast<double>(rhs)) * 0.5;
                 },
+                cpu::BinaryKernelOp::Mean,
                 "binaryFunc(MEAN)");
             return;
         default:
@@ -812,9 +881,12 @@ void binaryFunc(BinaryOp op, const Mat& a, const Mat& b, Mat& c)
 
 void add(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary(a, b, c,
-                            [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
-                            "add(Mat,Mat)");
+    dispatch_mat_mat_binary_arith(a,
+                                  b,
+                                  c,
+                                  [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
+                                  cpu::BinaryKernelOp::Add,
+                                  "add(Mat,Mat)");
 }
 
 void add(const Mat& a, const Scalar& b, Mat& c)
@@ -845,9 +917,12 @@ void subtract(const Mat& a, Mat& c)
 
 void subtract(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary(a, b, c,
-                            [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
-                            "subtract(Mat,Mat)");
+    dispatch_mat_mat_binary_arith(a,
+                                  b,
+                                  c,
+                                  [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
+                                  cpu::BinaryKernelOp::Sub,
+                                  "subtract(Mat,Mat)");
 }
 
 void subtract(const Mat& a, const Scalar& b, Mat& c)
@@ -868,16 +943,22 @@ void subtract(const Scalar& a, const Mat& b, Mat& c)
 
 void multiply(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary(a, b, c,
-                            [](const auto& lhs, const auto& rhs) { return lhs * rhs; },
-                            "multiply(Mat,Mat)");
+    dispatch_mat_mat_binary_arith(a,
+                                  b,
+                                  c,
+                                  [](const auto& lhs, const auto& rhs) { return lhs * rhs; },
+                                  cpu::BinaryKernelOp::Mul,
+                                  "multiply(Mat,Mat)");
 }
 
 void divide(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary(a, b, c,
-                            [](const auto& lhs, const auto& rhs) { return safe_div_value(lhs, rhs); },
-                            "divide(Mat,Mat)");
+    dispatch_mat_mat_binary_arith(a,
+                                  b,
+                                  c,
+                                  [](const auto& lhs, const auto& rhs) { return safe_div_value(lhs, rhs); },
+                                  cpu::BinaryKernelOp::Div,
+                                  "divide(Mat,Mat)");
 }
 
 void compare(const Mat& a, const Mat& b, Mat& c, int op)

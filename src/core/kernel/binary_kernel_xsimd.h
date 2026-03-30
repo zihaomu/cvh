@@ -12,6 +12,9 @@ enum class BinaryKernelOp
     Sub,
     Mul,
     Div,
+    Max,
+    Min,
+    Mean,
 };
 
 void binary_broadcast_xsimd(BinaryKernelOp op,
