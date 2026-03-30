@@ -1,6 +1,7 @@
 #include "cvh.h"
 
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -31,6 +32,34 @@ cvh::Mat make_demo_image()
     return image;
 }
 
+cvh::Mat try_load_image(const std::string& input_path, std::string& loaded_from)
+{
+    cvh::Mat image = cvh::imread(input_path, cvh::IMREAD_COLOR);
+    if (!image.empty())
+    {
+        loaded_from = input_path;
+        return image;
+    }
+
+    std::filesystem::path p(input_path);
+    if (p.is_absolute())
+    {
+        return image;
+    }
+
+#if defined(CVH_EXAMPLE_ROOT_PATH)
+    const std::filesystem::path rooted = std::filesystem::path(CVH_EXAMPLE_ROOT_PATH) / p;
+    image = cvh::imread(rooted.string(), cvh::IMREAD_COLOR);
+    if (!image.empty())
+    {
+        loaded_from = rooted.string();
+        return image;
+    }
+#endif
+
+    return image;
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
@@ -41,11 +70,11 @@ int main(int argc, char** argv)
 
     if (argc > 1)
     {
-        source = argv[1];
-        image = cvh::imread(source, cvh::IMREAD_COLOR);
+        const std::string input_path = argv[1];
+        image = try_load_image(input_path, source);
         if (image.empty())
         {
-            std::cerr << "[cvh_example_highgui_imshow] imread failed: " << source
+            std::cerr << "[cvh_example_highgui_imshow] imread failed: " << input_path
                       << ", fallback to generated image\n";
             source = "generated";
             image = make_demo_image();

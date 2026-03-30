@@ -37,10 +37,22 @@ set(CVH_LEGACY_CORE_SOURCES
     src/highgui/highgui.cpp
 )
 
+set(CVH_LEGACY_CORE_PRIVATE_LIBS)
+set(CVH_LEGACY_CORE_PRIVATE_INCLUDE_DIRS)
+set(CVH_LEGACY_CORE_PRIVATE_COMPILE_DEFINITIONS)
+
 if(WIN32)
     list(APPEND CVH_LEGACY_CORE_SOURCES src/highgui/display_win32.cpp)
 elseif(UNIX AND NOT APPLE AND NOT ANDROID)
     list(APPEND CVH_LEGACY_CORE_SOURCES src/highgui/display_fb.cpp)
+
+    find_package(X11 QUIET)
+    if(X11_FOUND)
+        list(APPEND CVH_LEGACY_CORE_SOURCES src/highgui/display_x11.cpp)
+        list(APPEND CVH_LEGACY_CORE_PRIVATE_LIBS ${X11_LIBRARIES})
+        list(APPEND CVH_LEGACY_CORE_PRIVATE_INCLUDE_DIRS ${X11_INCLUDE_DIR})
+        list(APPEND CVH_LEGACY_CORE_PRIVATE_COMPILE_DEFINITIONS CVH_HAVE_X11=1)
+    endif()
 endif()
 
 if(CVH_ENABLE_FULL_BACKEND)
@@ -49,12 +61,14 @@ if(CVH_ENABLE_FULL_BACKEND)
     add_library(cvh::full ALIAS cvh_legacy_core)
     target_compile_features(cvh_legacy_core PUBLIC cxx_std_17)
     target_compile_definitions(cvh_legacy_core PUBLIC CVH_FULL=1)
-    target_link_libraries(cvh_legacy_core PUBLIC cvh::headers)
+    target_compile_definitions(cvh_legacy_core PRIVATE ${CVH_LEGACY_CORE_PRIVATE_COMPILE_DEFINITIONS})
+    target_link_libraries(cvh_legacy_core PUBLIC cvh::headers PRIVATE ${CVH_LEGACY_CORE_PRIVATE_LIBS})
     target_include_directories(cvh_legacy_core
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src/core
             ${CMAKE_CURRENT_SOURCE_DIR}/src/core/kernel
             ${CMAKE_CURRENT_SOURCE_DIR}/include/cvh/3rdparty/xsimd/include
+            ${CVH_LEGACY_CORE_PRIVATE_INCLUDE_DIRS}
     )
 
     add_executable(cvh_example_highgui_imshow
@@ -62,6 +76,7 @@ if(CVH_ENABLE_FULL_BACKEND)
     )
     target_link_libraries(cvh_example_highgui_imshow PRIVATE cvh::full)
     target_compile_features(cvh_example_highgui_imshow PRIVATE cxx_std_17)
+    target_compile_definitions(cvh_example_highgui_imshow PRIVATE CVH_EXAMPLE_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
     target_include_directories(cvh_example_highgui_imshow PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/include

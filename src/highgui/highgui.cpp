@@ -12,6 +12,9 @@
 
 #if defined(__linux__) && !defined(__ANDROID__)
 #include "display_fb.h"
+#if defined(CVH_HAVE_X11)
+#include "display_x11.h"
+#endif
 #endif
 
 #if defined(_WIN32)
@@ -74,8 +77,14 @@ inline Mat ensure_supported_u8_image(const Mat& input)
 
 inline void throw_imshow_backend_unavailable()
 {
+#if defined(__linux__) && !defined(__ANDROID__)
+    CV_Error(Error::StsError,
+             "imshow backend is unavailable at runtime. Linux requires X11 DISPLAY or framebuffer /dev/fb0 access. "
+             "Use imwrite(\"out.png\", mat) as temporary replacement.");
+#else
     CV_Error(Error::StsError,
              "imshow backend is unavailable at runtime. Use imwrite(\"out.png\", mat) as temporary replacement.");
+#endif
 }
 
 inline void blit_center(const Mat& src, Mat& dst)
@@ -231,6 +240,23 @@ void imshow_backend(const std::string& winname, const Mat& mat)
     (void)image;
     throw_imshow_backend_unavailable();
 #elif defined(__linux__) && !defined(__ANDROID__)
+#if defined(CVH_HAVE_X11)
+    if (image.channels() == 1)
+    {
+        if (display_x11::show_gray(winname.c_str(), image.data, image.size[1], image.size[0]) == 0)
+        {
+            return;
+        }
+    }
+    else if (image.channels() == 3)
+    {
+        if (display_x11::show_bgr(winname.c_str(), image.data, image.size[1], image.size[0]) == 0)
+        {
+            return;
+        }
+    }
+#endif
+
     display_fb dpy;
     if (dpy.open() == 0)
     {
@@ -273,6 +299,8 @@ int waitkey_backend(int delay)
 #if defined(_WIN32)
     const int wait = delay < 0 ? 0 : delay;
     return BitmapWindow::waitKey(static_cast<UINT>(wait));
+#elif defined(__linux__) && !defined(__ANDROID__) && defined(CVH_HAVE_X11)
+    return display_x11::wait_key(delay);
 #else
     if (delay > 0)
     {
