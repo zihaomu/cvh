@@ -209,6 +209,134 @@ inline bool try_dispatch_mat_mat_binary_xsimd_fp32(const Mat& a,
     return true;
 }
 
+inline bool to_compare_kernel_op(int op, cpu::CompareKernelOp& kernel_op)
+{
+    switch (op)
+    {
+        case CV_CMP_EQ:
+            kernel_op = cpu::CompareKernelOp::Eq;
+            return true;
+        case CV_CMP_GT:
+            kernel_op = cpu::CompareKernelOp::Gt;
+            return true;
+        case CV_CMP_GE:
+            kernel_op = cpu::CompareKernelOp::Ge;
+            return true;
+        case CV_CMP_LT:
+            kernel_op = cpu::CompareKernelOp::Lt;
+            return true;
+        case CV_CMP_LE:
+            kernel_op = cpu::CompareKernelOp::Le;
+            return true;
+        case CV_CMP_NE:
+            kernel_op = cpu::CompareKernelOp::Ne;
+            return true;
+        default:
+            return false;
+    }
+}
+
+inline bool try_dispatch_mat_mat_compare_xsimd_fp32(const Mat& a,
+                                                    const Mat& b,
+                                                    Mat& dst,
+                                                    int op)
+{
+    if (a.depth() != CV_32F)
+    {
+        return false;
+    }
+
+    cpu::CompareKernelOp kernel_op;
+    if (!to_compare_kernel_op(op, kernel_op))
+    {
+        return false;
+    }
+
+    const int cn = a.channels();
+    const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
+    const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+
+    const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(float);
+    const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(float);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(uchar);
+
+    for (size_t i = 0; i < outer; ++i)
+    {
+        const float* a_row = reinterpret_cast<const float*>(a.data + i * a_step0);
+        const float* b_row = reinterpret_cast<const float*>(b.data + i * b_step0);
+        auto* dst_row = reinterpret_cast<uchar*>(dst.data + i * dst_step0);
+
+        cpu::compare_broadcast_xsimd(
+            kernel_op,
+            a_row,
+            row_elements,
+            1,
+            b_row,
+            row_elements,
+            1,
+            dst_row,
+            1,
+            row_elements);
+    }
+
+    return true;
+}
+
+inline bool try_dispatch_mat_scalar_binary_xsimd_fp32_c1(const Mat& src,
+                                                         const Scalar& scalar,
+                                                         Mat& dst,
+                                                         cpu::BinaryKernelOp op,
+                                                         bool scalar_first)
+{
+    if (src.depth() != CV_32F || src.channels() != 1)
+    {
+        return false;
+    }
+
+    const float scalar_val = saturate_cast<float>(scalar[0]);
+    const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t row_elements = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(float);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(float);
+
+    for (size_t i = 0; i < outer; ++i)
+    {
+        const float* src_row = reinterpret_cast<const float*>(src.data + i * src_step0);
+        float* dst_row = reinterpret_cast<float*>(dst.data + i * dst_step0);
+        if (scalar_first)
+        {
+            cpu::binary_broadcast_xsimd(
+                op,
+                &scalar_val,
+                0,
+                0,
+                src_row,
+                row_elements,
+                1,
+                dst_row,
+                1,
+                row_elements);
+        }
+        else
+        {
+            cpu::binary_broadcast_xsimd(
+                op,
+                src_row,
+                row_elements,
+                1,
+                &scalar_val,
+                0,
+                0,
+                dst_row,
+                1,
+                row_elements);
+        }
+    }
+
+    return true;
+}
+
 template<typename Op>
 void dispatch_mat_mat_binary_arith(const Mat& a,
                                    const Mat& b,
@@ -410,16 +538,13 @@ void apply_mat_scalar_binary_impl(const Mat& src,
 }
 
 template<typename Op>
-void dispatch_mat_scalar_binary(const Mat& src,
-                                const Scalar& scalar,
-                                Mat& dst,
-                                Op op,
-                                bool scalar_first,
-                                const char* fn_name)
+void dispatch_mat_scalar_binary_by_depth(const Mat& src,
+                                         const Scalar& scalar,
+                                         Mat& dst,
+                                         Op op,
+                                         bool scalar_first,
+                                         const char* fn_name)
 {
-    check_scalar_channel_bound(src, fn_name);
-    ensure_binary_dst_like_src(src, dst, fn_name);
-
     switch (src.depth())
     {
         case CV_8U:
@@ -450,6 +575,39 @@ void dispatch_mat_scalar_binary(const Mat& src,
             CV_Error_(Error::StsNotImplemented,
                       ("%s supports depth in [CV_8U..CV_16F], depth=%d", fn_name, src.depth()));
     }
+}
+
+template<typename Op>
+void dispatch_mat_scalar_binary(const Mat& src,
+                                const Scalar& scalar,
+                                Mat& dst,
+                                Op op,
+                                bool scalar_first,
+                                const char* fn_name)
+{
+    check_scalar_channel_bound(src, fn_name);
+    ensure_binary_dst_like_src(src, dst, fn_name);
+    dispatch_mat_scalar_binary_by_depth(src, scalar, dst, op, scalar_first, fn_name);
+}
+
+template<typename Op>
+void dispatch_mat_scalar_binary_arith(const Mat& src,
+                                      const Scalar& scalar,
+                                      Mat& dst,
+                                      Op op,
+                                      cpu::BinaryKernelOp xsimd_op,
+                                      bool scalar_first,
+                                      const char* fn_name)
+{
+    check_scalar_channel_bound(src, fn_name);
+    ensure_binary_dst_like_src(src, dst, fn_name);
+
+    if (try_dispatch_mat_scalar_binary_xsimd_fp32_c1(src, scalar, dst, xsimd_op, scalar_first))
+    {
+        return;
+    }
+
+    dispatch_mat_scalar_binary_by_depth(src, scalar, dst, op, scalar_first, fn_name);
 }
 
 template<typename T>
@@ -583,6 +741,11 @@ void dispatch_mat_mat_compare(const Mat& a, const Mat& b, Mat& dst, int op, cons
 {
     ensure_same_type_and_shape(a, b, fn_name);
     ensure_compare_dst_like_src(a, dst, fn_name);
+
+    if (try_dispatch_mat_mat_compare_xsimd_fp32(a, b, dst, op))
+    {
+        return;
+    }
 
     switch (a.depth())
     {
@@ -891,18 +1054,24 @@ void add(const Mat& a, const Mat& b, Mat& c)
 
 void add(const Mat& a, const Scalar& b, Mat& c)
 {
-    dispatch_mat_scalar_binary(a, b, c,
-                               [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
-                               false,
-                               "add(Mat,Scalar)");
+    dispatch_mat_scalar_binary_arith(a,
+                                     b,
+                                     c,
+                                     [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
+                                     cpu::BinaryKernelOp::Add,
+                                     false,
+                                     "add(Mat,Scalar)");
 }
 
 void add(const Scalar& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_scalar_binary(b, a, c,
-                               [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
-                               true,
-                               "add(Scalar,Mat)");
+    dispatch_mat_scalar_binary_arith(b,
+                                     a,
+                                     c,
+                                     [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
+                                     cpu::BinaryKernelOp::Add,
+                                     true,
+                                     "add(Scalar,Mat)");
 }
 
 void addWeighted(const Mat& a, double alpha, const Mat& b, double beta, Mat& c)
@@ -927,18 +1096,24 @@ void subtract(const Mat& a, const Mat& b, Mat& c)
 
 void subtract(const Mat& a, const Scalar& b, Mat& c)
 {
-    dispatch_mat_scalar_binary(a, b, c,
-                               [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
-                               false,
-                               "subtract(Mat,Scalar)");
+    dispatch_mat_scalar_binary_arith(a,
+                                     b,
+                                     c,
+                                     [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
+                                     cpu::BinaryKernelOp::Sub,
+                                     false,
+                                     "subtract(Mat,Scalar)");
 }
 
 void subtract(const Scalar& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_scalar_binary(b, a, c,
-                               [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
-                               true,
-                               "subtract(Scalar,Mat)");
+    dispatch_mat_scalar_binary_arith(b,
+                                     a,
+                                     c,
+                                     [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
+                                     cpu::BinaryKernelOp::Sub,
+                                     true,
+                                     "subtract(Scalar,Mat)");
 }
 
 void multiply(const Mat& a, const Mat& b, Mat& c)

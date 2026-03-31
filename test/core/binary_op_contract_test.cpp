@@ -288,6 +288,23 @@ TEST(BinaryOpContract_TEST, compare_binary_ops_return_u8_mask)
     expect_vec_eq<uchar>(out, {255, 0, 255, 0});
 }
 
+TEST(BinaryOpContract_TEST, compare_binary_ops_return_u8_mask_on_float32)
+{
+    const Mat a = make_vec_mat<float>({1.f, 2.f, -3.f, 4.f}, CV_32FC1);
+    const Mat b = make_vec_mat<float>({1.f, 3.f, -5.f, 4.f}, CV_32FC1);
+    Mat out;
+
+    binaryFunc(BinaryOp::EQUAL, a, b, out);
+    ASSERT_EQ(out.type(), CV_8UC1);
+    expect_vec_eq<uchar>(out, {255, 0, 0, 255});
+
+    binaryFunc(BinaryOp::GREATER, a, b, out);
+    expect_vec_eq<uchar>(out, {0, 0, 255, 0});
+
+    binaryFunc(BinaryOp::LESS_EQUAL, a, b, out);
+    expect_vec_eq<uchar>(out, {255, 255, 0, 255});
+}
+
 TEST(BinaryOpContract_TEST, max_and_min_work_on_int32)
 {
     const Mat a = make_vec_mat<int>({1, -5, 10, 8}, CV_32SC1);

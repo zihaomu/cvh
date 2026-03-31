@@ -68,3 +68,8 @@ CVH_WARNING_BUDGET=0 ./scripts/ci_core_basic.sh
 - `cvh_resize_dispatch_full_smoke`（仅 Full backend 构建时，验证 `resize/cvtColor/threshold` backend 注册生效）
 - `cvh_legacy_core_smoke`（仅 Full backend 构建时）
 - `cvh_test_core`（仅 Full backend 构建时）
+
+
+## 目前存在的问题
+1. xsimd处理3通道图片的问题
+由于选择的xsimd这种跨平台指令集，其对连续缓冲区的 aligned/unaligned load/store 和 batch 运算有着明显的加速，但是对于3通道图片的滤波算法支持能力有限，因为3通道图片的滤波或者rgb2bgr会有很多interleaved的操作，这种操作是xsimd不擅长的部分，主要原因是各家对于interleaved的支持情况不同导致的。 而3通道图片又是最常用的图片格式，针对这部分问题，目前有待解决。

@@ -164,6 +164,47 @@ TEST(MatScalarOps_TEST, subtract_mat_scalar_and_scalar_mat_support_multichannel)
     }
 }
 
+TEST(MatScalarOps_TEST, add_subtract_mat_scalar_and_scalar_mat_support_float32_c1)
+{
+    Mat src({2, 3}, CV_32FC1);
+    float seed = -1.5f;
+    for (int y = 0; y < 2; ++y)
+    {
+        for (int x = 0; x < 3; ++x)
+        {
+            src.at<float>(y, x) = seed;
+            seed += 0.75f;
+        }
+    }
+
+    const Scalar s(1.25);
+    Mat add_mat_scalar;
+    Mat add_scalar_mat;
+    Mat sub_mat_scalar;
+    Mat sub_scalar_mat;
+    add(src, s, add_mat_scalar);
+    add(s, src, add_scalar_mat);
+    subtract(src, s, sub_mat_scalar);
+    subtract(s, src, sub_scalar_mat);
+
+    ASSERT_EQ(add_mat_scalar.type(), CV_32FC1);
+    ASSERT_EQ(add_mat_scalar.shape(), src.shape());
+    ASSERT_EQ(sub_scalar_mat.type(), CV_32FC1);
+    ASSERT_EQ(sub_scalar_mat.shape(), src.shape());
+
+    for (int y = 0; y < 2; ++y)
+    {
+        for (int x = 0; x < 3; ++x)
+        {
+            const float v = src.at<float>(y, x);
+            EXPECT_NEAR(add_mat_scalar.at<float>(y, x), v + 1.25f, 1e-6f);
+            EXPECT_NEAR(add_scalar_mat.at<float>(y, x), v + 1.25f, 1e-6f);
+            EXPECT_NEAR(sub_mat_scalar.at<float>(y, x), v - 1.25f, 1e-6f);
+            EXPECT_NEAR(sub_scalar_mat.at<float>(y, x), 1.25f - v, 1e-6f);
+        }
+    }
+}
+
 TEST(MatScalarOps_TEST, compare_mat_scalar_and_scalar_mat_return_u8_mask_with_channels)
 {
     Mat src({2, 2}, CV_32SC3);
