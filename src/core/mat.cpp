@@ -29,7 +29,7 @@ namespace {
 
 inline bool is_supported_depth(int depth)
 {
-    return depth >= CV_8U && depth <= CV_16F;
+    return depth >= CV_8U && depth <= CV_64F;
 }
 
 inline bool is_supported_type(int type)

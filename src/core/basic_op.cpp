@@ -1034,6 +1034,15 @@ inline bool to_kernel_op(BinaryOp op, cpu::BinaryKernelOp& kernel_op)
         case BinaryOp::DIV:
             kernel_op = cpu::BinaryKernelOp::Div;
             return true;
+        case BinaryOp::MAX:
+            kernel_op = cpu::BinaryKernelOp::Max;
+            return true;
+        case BinaryOp::MIN:
+            kernel_op = cpu::BinaryKernelOp::Min;
+            return true;
+        case BinaryOp::MEAN:
+            kernel_op = cpu::BinaryKernelOp::Mean;
+            return true;
         default:
             return false;
     }
@@ -1103,6 +1112,236 @@ inline bool try_fast_binary_float(BinaryOp op, const BinaryOpHelper& helper, con
     }
 
     return false;
+}
+
+inline bool try_fast_binary_hfloat(BinaryOp op, const BinaryOpHelper& helper, const Mat& a, const Mat& b, Mat& c)
+{
+    if (a.type() != CV_16F)
+        return false;
+
+    cpu::BinaryKernelOp kernel_op;
+    if (!to_kernel_op(op, kernel_op))
+        return false;
+
+    const void* pa = a.data;
+    const void* pb = b.data;
+    void* pc = c.data;
+    const size_t total_num = total(helper.out_shape);
+    const size_t inner = helper.out_shape.back();
+    const size_t outer = total_num / inner;
+
+    if (a.shape() == helper.out_shape && b.shape() == helper.out_shape)
+    {
+        cpu::binary_broadcast_xsimd_hfloat(kernel_op, pa, inner, 1, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (a.total() == 1)
+    {
+        cpu::binary_broadcast_xsimd_hfloat(kernel_op, pa, 0, 0, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (b.total() == 1)
+    {
+        cpu::binary_broadcast_xsimd_hfloat(kernel_op, pa, inner, 1, pb, 0, 0, pc, outer, inner);
+        return true;
+    }
+
+    if (is_row_broadcast(helper.inp0_shape_align, helper.out_shape) && b.shape() == helper.out_shape)
+    {
+        cpu::binary_broadcast_xsimd_hfloat(kernel_op, pa, 0, 1, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (a.shape() == helper.out_shape && is_row_broadcast(helper.inp1_shape_align, helper.out_shape))
+    {
+        cpu::binary_broadcast_xsimd_hfloat(kernel_op, pa, inner, 1, pb, 0, 1, pc, outer, inner);
+        return true;
+    }
+
+    return false;
+}
+
+inline bool try_fast_binary_double(BinaryOp op, const BinaryOpHelper& helper, const Mat& a, const Mat& b, Mat& c)
+{
+    if (a.type() != CV_64F)
+        return false;
+
+    cpu::BinaryKernelOp kernel_op;
+    if (!to_kernel_op(op, kernel_op))
+        return false;
+
+    const void* pa = a.data;
+    const void* pb = b.data;
+    void* pc = c.data;
+    const size_t total_num = total(helper.out_shape);
+    const size_t inner = helper.out_shape.back();
+    const size_t outer = total_num / inner;
+
+    if (a.shape() == helper.out_shape && b.shape() == helper.out_shape)
+    {
+        cpu::binary_broadcast_xsimd_double(kernel_op, pa, inner, 1, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (a.total() == 1)
+    {
+        cpu::binary_broadcast_xsimd_double(kernel_op, pa, 0, 0, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (b.total() == 1)
+    {
+        cpu::binary_broadcast_xsimd_double(kernel_op, pa, inner, 1, pb, 0, 0, pc, outer, inner);
+        return true;
+    }
+
+    if (is_row_broadcast(helper.inp0_shape_align, helper.out_shape) && b.shape() == helper.out_shape)
+    {
+        cpu::binary_broadcast_xsimd_double(kernel_op, pa, 0, 1, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (a.shape() == helper.out_shape && is_row_broadcast(helper.inp1_shape_align, helper.out_shape))
+    {
+        cpu::binary_broadcast_xsimd_double(kernel_op, pa, inner, 1, pb, 0, 1, pc, outer, inner);
+        return true;
+    }
+
+    return false;
+}
+
+inline bool try_fast_binary_int32(BinaryOp op, const BinaryOpHelper& helper, const Mat& a, const Mat& b, Mat& c)
+{
+    if (a.type() != CV_32S)
+        return false;
+
+    cpu::BinaryKernelOp kernel_op;
+    if (!to_kernel_op(op, kernel_op))
+        return false;
+
+    const void* pa = a.data;
+    const void* pb = b.data;
+    void* pc = c.data;
+    const size_t total_num = total(helper.out_shape);
+    const size_t inner = helper.out_shape.back();
+    const size_t outer = total_num / inner;
+
+    if (a.shape() == helper.out_shape && b.shape() == helper.out_shape)
+    {
+        cpu::binary_broadcast_xsimd_int32(kernel_op, pa, inner, 1, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (a.total() == 1)
+    {
+        cpu::binary_broadcast_xsimd_int32(kernel_op, pa, 0, 0, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (b.total() == 1)
+    {
+        cpu::binary_broadcast_xsimd_int32(kernel_op, pa, inner, 1, pb, 0, 0, pc, outer, inner);
+        return true;
+    }
+
+    if (is_row_broadcast(helper.inp0_shape_align, helper.out_shape) && b.shape() == helper.out_shape)
+    {
+        cpu::binary_broadcast_xsimd_int32(kernel_op, pa, 0, 1, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (a.shape() == helper.out_shape && is_row_broadcast(helper.inp1_shape_align, helper.out_shape))
+    {
+        cpu::binary_broadcast_xsimd_int32(kernel_op, pa, inner, 1, pb, 0, 1, pc, outer, inner);
+        return true;
+    }
+
+    return false;
+}
+
+template<typename T, typename KernelFunc>
+inline bool try_fast_binary_int(BinaryOp op, const BinaryOpHelper& helper, const Mat& a, const Mat& b, Mat& c, KernelFunc kernel_func)
+{
+    cpu::BinaryKernelOp kernel_op;
+    if (!to_kernel_op(op, kernel_op))
+        return false;
+
+    const void* pa = a.data;
+    const void* pb = b.data;
+    void* pc = c.data;
+    const size_t total_num = total(helper.out_shape);
+    const size_t inner = helper.out_shape.back();
+    const size_t outer = total_num / inner;
+
+    if (a.shape() == helper.out_shape && b.shape() == helper.out_shape)
+    {
+        kernel_func(kernel_op, pa, inner, 1, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (a.total() == 1)
+    {
+        kernel_func(kernel_op, pa, 0, 0, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (b.total() == 1)
+    {
+        kernel_func(kernel_op, pa, inner, 1, pb, 0, 0, pc, outer, inner);
+        return true;
+    }
+
+    if (is_row_broadcast(helper.inp0_shape_align, helper.out_shape) && b.shape() == helper.out_shape)
+    {
+        kernel_func(kernel_op, pa, 0, 1, pb, inner, 1, pc, outer, inner);
+        return true;
+    }
+
+    if (a.shape() == helper.out_shape && is_row_broadcast(helper.inp1_shape_align, helper.out_shape))
+    {
+        kernel_func(kernel_op, pa, inner, 1, pb, 0, 1, pc, outer, inner);
+        return true;
+    }
+
+    return false;
+}
+
+inline bool try_fast_binary_int16(BinaryOp op, const BinaryOpHelper& helper, const Mat& a, const Mat& b, Mat& c)
+{
+    if (a.type() != CV_16S) return false;
+    return try_fast_binary_int<std::int16_t>(op, helper, a, b, c,
+        [](cpu::BinaryKernelOp op, const void* pa, size_t sa0, size_t sa1, const void* pb, size_t sb0, size_t sb1, void* pc, size_t outer, size_t inner) {
+            cpu::binary_broadcast_xsimd_int16(op, pa, sa0, sa1, pb, sb0, sb1, pc, outer, inner);
+        });
+}
+
+inline bool try_fast_binary_uint16(BinaryOp op, const BinaryOpHelper& helper, const Mat& a, const Mat& b, Mat& c)
+{
+    if (a.type() != CV_16U) return false;
+    return try_fast_binary_int<std::uint16_t>(op, helper, a, b, c,
+        [](cpu::BinaryKernelOp op, const void* pa, size_t sa0, size_t sa1, const void* pb, size_t sb0, size_t sb1, void* pc, size_t outer, size_t inner) {
+            cpu::binary_broadcast_xsimd_uint16(op, pa, sa0, sa1, pb, sb0, sb1, pc, outer, inner);
+        });
+}
+
+inline bool try_fast_binary_int8(BinaryOp op, const BinaryOpHelper& helper, const Mat& a, const Mat& b, Mat& c)
+{
+    if (a.type() != CV_8S) return false;
+    return try_fast_binary_int<std::int8_t>(op, helper, a, b, c,
+        [](cpu::BinaryKernelOp op, const void* pa, size_t sa0, size_t sa1, const void* pb, size_t sb0, size_t sb1, void* pc, size_t outer, size_t inner) {
+            cpu::binary_broadcast_xsimd_int8(op, pa, sa0, sa1, pb, sb0, sb1, pc, outer, inner);
+        });
+}
+
+inline bool try_fast_binary_uint8(BinaryOp op, const BinaryOpHelper& helper, const Mat& a, const Mat& b, Mat& c)
+{
+    if (a.type() != CV_8U) return false;
+    return try_fast_binary_int<std::uint8_t>(op, helper, a, b, c,
+        [](cpu::BinaryKernelOp op, const void* pa, size_t sa0, size_t sa1, const void* pb, size_t sb0, size_t sb1, void* pc, size_t outer, size_t inner) {
+            cpu::binary_broadcast_xsimd_uint8(op, pa, sa0, sa1, pb, sb0, sb1, pc, outer, inner);
+        });
 }
 
 // TODO Optimized the following code.
@@ -1300,6 +1539,41 @@ void binaryFunc(BinaryOp op, const Mat& a, const Mat& b, Mat& c)
     }
 
     if (try_fast_binary_float(op, helper, a, b, c))
+    {
+        return;
+    }
+
+    if (try_fast_binary_hfloat(op, helper, a, b, c))
+    {
+        return;
+    }
+
+    if (try_fast_binary_double(op, helper, a, b, c))
+    {
+        return;
+    }
+
+    if (try_fast_binary_int32(op, helper, a, b, c))
+    {
+        return;
+    }
+
+    if (try_fast_binary_uint8(op, helper, a, b, c))
+    {
+        return;
+    }
+
+    if (try_fast_binary_int8(op, helper, a, b, c))
+    {
+        return;
+    }
+
+    if (try_fast_binary_uint16(op, helper, a, b, c))
+    {
+        return;
+    }
+
+    if (try_fast_binary_int16(op, helper, a, b, c))
     {
         return;
     }

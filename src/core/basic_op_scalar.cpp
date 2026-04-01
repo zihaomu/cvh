@@ -162,9 +162,12 @@ void dispatch_mat_mat_binary_impl_by_depth(const Mat& a, const Mat& b, Mat& dst,
         case CV_16F:
             apply_mat_mat_binary_impl<hfloat>(a, b, dst, op);
             break;
+        case CV_64F:
+            apply_mat_mat_binary_impl<double>(a, b, dst, op);
+            break;
         default:
             CV_Error_(Error::StsNotImplemented,
-                      ("%s supports depth in [CV_8U..CV_16F], depth=%d", fn_name, a.depth()));
+                      ("%s supports depth in [CV_8U..CV_64F], depth=%d", fn_name, a.depth()));
     }
 }
 
@@ -496,7 +499,7 @@ void dispatch_add_weighted(const Mat& a, double alpha, const Mat& b, double beta
             break;
         default:
             CV_Error_(Error::StsNotImplemented,
-                      ("%s supports depth in [CV_8U..CV_16F], depth=%d", fn_name, a.depth()));
+                      ("%s supports depth in [CV_8U..CV_64F], depth=%d", fn_name, a.depth()));
     }
 }
 
@@ -775,7 +778,7 @@ void dispatch_mat_mat_compare(const Mat& a, const Mat& b, Mat& dst, int op, cons
             break;
         default:
             CV_Error_(Error::StsNotImplemented,
-                      ("%s supports depth in [CV_8U..CV_16F], depth=%d", fn_name, a.depth()));
+                      ("%s supports depth in [CV_8U..CV_64F], depth=%d", fn_name, a.depth()));
     }
 }
 

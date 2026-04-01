@@ -77,6 +77,7 @@ std::string depth_to_name(int depth)
         case CV_32U: return "CV_32U";
         case CV_32F: return "CV_32F";
         case CV_16F: return "CV_16F";
+        case CV_64F: return "CV_64F";
         default: return "UNKNOWN";
     }
 }
@@ -344,9 +345,9 @@ std::vector<int> build_depths(const std::string& profile)
 {
     if (profile == "full")
     {
-        return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32U, CV_32F, CV_16F};
+        return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32U, CV_32F, CV_16F, CV_64F};
     }
-    return {CV_8U, CV_32S, CV_32F, CV_16F};
+    return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32F, CV_16F, CV_64F};
 }
 
 std::vector<BenchOp> build_ops(const std::string& profile)

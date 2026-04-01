@@ -39,6 +39,90 @@ void binary_broadcast_xsimd(BinaryKernelOp op,
                             size_t outer,
                             size_t inner);
 
+// CV_16F (hfloat) variant - converts to float internally
+void binary_broadcast_xsimd_hfloat(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner);
+
+// CV_64F (double) variant
+void binary_broadcast_xsimd_double(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner);
+
+// CV_32S (int32) variant
+void binary_broadcast_xsimd_int32(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner);
+
+// CV_16S (int16) variant
+void binary_broadcast_xsimd_int16(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner);
+
+// CV_16U (uint16) variant
+void binary_broadcast_xsimd_uint16(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner);
+
+// CV_8S (int8) variant
+void binary_broadcast_xsimd_int8(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner);
+
+// CV_8U (uint8) variant
+void binary_broadcast_xsimd_uint8(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner);
+
 void compare_broadcast_xsimd(CompareKernelOp op,
                              const float* lhs,
                              size_t lhs_outer_stride,
