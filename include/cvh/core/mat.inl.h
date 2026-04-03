@@ -138,6 +138,12 @@ inline _Tp& Mat::at(int i0)
     {
         CV_Error_(Error::StsOutOfRange, ("Mat::at(i0) out of range, i0=%d", i0));
     }
+    const size_t scalar_total = total() * static_cast<size_t>(channels());
+    if (static_cast<size_t>(i0) >= scalar_total)
+    {
+        CV_Error_(Error::StsOutOfRange,
+                  ("Mat::at(i0) out of range, i0=%d scalar_total=%zu", i0, scalar_total));
+    }
     return reinterpret_cast<_Tp*>(data)[i0];
 }
 
@@ -151,6 +157,12 @@ inline const _Tp& Mat::at(int i0) const
     if (i0 < 0)
     {
         CV_Error_(Error::StsOutOfRange, ("Mat::at(i0) out of range, i0=%d", i0));
+    }
+    const size_t scalar_total = total() * static_cast<size_t>(channels());
+    if (static_cast<size_t>(i0) >= scalar_total)
+    {
+        CV_Error_(Error::StsOutOfRange,
+                  ("Mat::at(i0) out of range, i0=%d scalar_total=%zu", i0, scalar_total));
     }
     return reinterpret_cast<const _Tp*>(data)[i0];
 }

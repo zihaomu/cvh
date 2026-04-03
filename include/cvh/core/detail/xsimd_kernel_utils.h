@@ -71,6 +71,66 @@ inline XSimdBatch load_hfloat_batch(const hfloat* src)
     return XSimdBatch::load_unaligned(tmp.data());
 }
 
+#if defined(__GNUC__) && (defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86))
+template <std::size_t Lanes = kXSimdBatchSize, typename std::enable_if<Lanes == 4, int>::type = 0>
+__attribute__((target("f16c")))
+inline void store_hfloat_batch_f16c(const XSimdBatch& src, hfloat* dst)
+{
+    std::array<float, 4> tmp {};
+    src.store_unaligned(tmp.data());
+    const __m128 v = _mm_loadu_ps(tmp.data());
+    const __m128i packed = _mm_cvtps_ph(v, 0);
+    std::array<std::uint16_t, 4> raw_bits {};
+    _mm_storel_epi64(reinterpret_cast<__m128i*>(raw_bits.data()), packed);
+    std::memcpy(dst, raw_bits.data(), sizeof(raw_bits));
+}
+
+template <std::size_t Lanes = kXSimdBatchSize, typename std::enable_if<Lanes == 8, int>::type = 0>
+__attribute__((target("avx,f16c")))
+inline void store_hfloat_batch_f16c(const XSimdBatch& src, hfloat* dst)
+{
+    std::array<float, 8> tmp {};
+    src.store_unaligned(tmp.data());
+    const __m256 v = _mm256_loadu_ps(tmp.data());
+    const __m128i packed = _mm256_cvtps_ph(v, 0);
+    std::array<std::uint16_t, 8> raw_bits {};
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(raw_bits.data()), packed);
+    std::memcpy(dst, raw_bits.data(), sizeof(raw_bits));
+}
+#endif
+
+inline void store_hfloat_batch(const XSimdBatch& src, hfloat* dst)
+{
+#if defined(__GNUC__) && (defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86))
+    static_assert(sizeof(hfloat) == sizeof(std::uint16_t), "hfloat must use 16-bit storage");
+
+    if constexpr (kXSimdBatchSize == 8)
+    {
+        if (__builtin_cpu_supports("avx") && __builtin_cpu_supports("f16c"))
+        {
+            store_hfloat_batch_f16c(src, dst);
+            return;
+        }
+    }
+
+    if constexpr (kXSimdBatchSize == 4)
+    {
+        if (__builtin_cpu_supports("f16c"))
+        {
+            store_hfloat_batch_f16c(src, dst);
+            return;
+        }
+    }
+#endif
+
+    std::array<float, kXSimdBatchSize> tmp {};
+    src.store_unaligned(tmp.data());
+    for (std::size_t idx = 0; idx < kXSimdBatchSize; ++idx)
+    {
+        dst[idx] = hfloat(tmp[idx]);
+    }
+}
+
 inline XSimdBatch load_int8_batch(const int8_t* src)
 {
     return xsimd::load_as<float>(src, xsimd::unaligned_mode {});

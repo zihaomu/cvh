@@ -9,6 +9,7 @@ option(CVH_BUILD_LEGACY_CORE "Deprecated alias of CVH_BUILD_FULL_BACKEND" ON)
 option(CVH_BUILD_BACKEND_KERNEL_SOURCES "Build sources requiring legacy backend kernels" ON)
 option(CVH_BUILD_TESTS "Build all test targets (smoke + core)" ON)
 option(CVH_BUILD_BENCHMARKS "Build benchmark targets" ON)
+option(CVH_USE_OPENMP "Enable OpenMP acceleration in backend kernels when available" ON)
 
 if(APPLE)
     enable_language(OBJCXX)
@@ -36,6 +37,7 @@ target_compile_features(cvh_headers INTERFACE cxx_std_17)
 set(CVH_LEGACY_CORE_SOURCES
     src/core/basic_op_scalar.cpp
     src/core/kernel/binary_kernel_xsimd.cpp
+    src/core/kernel/transpose_kernel.cpp
     src/core/mat.cpp
     src/core/mat_expr.cpp
     src/core/mat_convert.cpp
@@ -83,6 +85,17 @@ if(CVH_ENABLE_FULL_BACKEND)
             ${CMAKE_CURRENT_SOURCE_DIR}/include/cvh/3rdparty/xsimd/include
             ${CVH_LEGACY_CORE_PRIVATE_INCLUDE_DIRS}
     )
+
+    if(CVH_USE_OPENMP)
+        find_package(OpenMP QUIET)
+        if(OpenMP_CXX_FOUND)
+            target_link_libraries(cvh_legacy_core PRIVATE OpenMP::OpenMP_CXX)
+            target_compile_definitions(cvh_legacy_core PRIVATE CVH_WITH_OPENMP=1)
+            message(STATUS "cvh_legacy_core: OpenMP enabled")
+        else()
+            message(STATUS "cvh_legacy_core: OpenMP requested but not found; building without OpenMP")
+        endif()
+    endif()
 
     if(CVH_BUILD_BENCHMARKS)
         add_executable(cvh_benchmark_core_ops

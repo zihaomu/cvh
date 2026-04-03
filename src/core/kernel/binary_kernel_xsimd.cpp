@@ -1,5 +1,6 @@
 #include "binary_kernel_xsimd.h"
 #include "cvh/core/detail/openmp_utils.h"
+#include "cvh/core/detail/xsimd_kernel_utils.h"
 #include "cvh/core/define.h"
 
 #include "xsimd/xsimd.hpp"
@@ -131,7 +132,7 @@ inline void binary_broadcast_xsimd_hfloat_impl(BinaryKernelOp op,
                             size_t outer,
                             size_t inner)
 {
-    // For hfloat (CV_16F), we convert to float, process, then convert back
+    // For hfloat (CV_16F), process in float batch and convert back in batch.
     const long long outer_ll = static_cast<long long>(outer);
 #ifdef _OPENMP
 #pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
@@ -143,35 +144,17 @@ inline void binary_broadcast_xsimd_hfloat_impl(BinaryKernelOp op,
         const hfloat* rhs_row = reinterpret_cast<const hfloat*>(rhs) + outer_i * rhs_outer_stride;
         hfloat* out_row = reinterpret_cast<hfloat*>(out) + outer_i * inner;
 
-        // Temporary buffer for float conversion
-        std::array<float, kLanes> lhs_buf;
-        std::array<float, kLanes> rhs_buf;
-        std::array<float, kLanes> out_buf;
-
         size_t inner_idx = 0;
         if (lhs_inner_stride <= 1 && rhs_inner_stride <= 1)
         {
+            const Batch lhs_scalar = lhs_inner_stride == 0 ? Batch(static_cast<float>(lhs_row[0])) : Batch(0.0f);
+            const Batch rhs_scalar = rhs_inner_stride == 0 ? Batch(static_cast<float>(rhs_row[0])) : Batch(0.0f);
             for (; inner_idx + kLanes <= inner; inner_idx += kLanes)
             {
-                // Load hfloat and convert to float
-                for (size_t lane = 0; lane < kLanes; ++lane)
-                {
-                    lhs_buf[lane] = lhs_inner_stride == 0 ? static_cast<float>(lhs_row[0])
-                                                          : static_cast<float>(lhs_row[inner_idx + lane]);
-                    rhs_buf[lane] = rhs_inner_stride == 0 ? static_cast<float>(rhs_row[0])
-                                                          : static_cast<float>(rhs_row[inner_idx + lane]);
-                }
-
-                const Batch lhs_vec = Batch::load_unaligned(lhs_buf.data());
-                const Batch rhs_vec = Batch::load_unaligned(rhs_buf.data());
+                const Batch lhs_vec = lhs_inner_stride == 0 ? lhs_scalar : load_hfloat_batch(lhs_row + inner_idx);
+                const Batch rhs_vec = rhs_inner_stride == 0 ? rhs_scalar : load_hfloat_batch(rhs_row + inner_idx);
                 const Batch out_vec = apply_batch(op, lhs_vec, rhs_vec);
-                out_vec.store_unaligned(out_buf.data());
-
-                // Convert back to hfloat
-                for (size_t lane = 0; lane < kLanes; ++lane)
-                {
-                    out_row[inner_idx + lane] = hfloat(out_buf[lane]);
-                }
+                store_hfloat_batch(out_vec, out_row + inner_idx);
             }
         }
 
@@ -653,6 +636,7 @@ void compare_broadcast_xsimd(CompareKernelOp op,
                              size_t rhs_outer_stride,
                              size_t rhs_inner_stride,
                              std::uint8_t* out,
+                             size_t out_outer_stride,
                              size_t outer,
                              size_t inner)
 {
@@ -665,7 +649,7 @@ void compare_broadcast_xsimd(CompareKernelOp op,
         const size_t outer_i = static_cast<size_t>(outer_idx);
         const float* lhs_row = lhs + outer_i * lhs_outer_stride;
         const float* rhs_row = rhs + outer_i * rhs_outer_stride;
-        std::uint8_t* out_row = out + outer_i * inner;
+        std::uint8_t* out_row = out + outer_i * out_outer_stride;
 
         size_t inner_idx = 0;
         if (lhs_inner_stride <= 1 && rhs_inner_stride <= 1)
@@ -695,6 +679,351 @@ void compare_broadcast_xsimd(CompareKernelOp op,
             const float lhs_val = lhs_row[inner_idx * lhs_inner_stride];
             const float rhs_val = rhs_row[inner_idx * rhs_inner_stride];
             out_row[inner_idx] = apply_compare_scalar(op, lhs_val, rhs_val) ? 255 : 0;
+        }
+    }
+}
+
+void compare_broadcast_xsimd_hfloat(CompareKernelOp op,
+                                    const void* lhs,
+                                    size_t lhs_outer_stride,
+                                    size_t lhs_inner_stride,
+                                    const void* rhs,
+                                    size_t rhs_outer_stride,
+                                    size_t rhs_inner_stride,
+                                    std::uint8_t* out,
+                                    size_t out_outer_stride,
+                                    size_t outer,
+                                    size_t inner)
+{
+    const hfloat* lhs_ptr = reinterpret_cast<const hfloat*>(lhs);
+    const hfloat* rhs_ptr = reinterpret_cast<const hfloat*>(rhs);
+    const long long outer_ll = static_cast<long long>(outer);
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const hfloat* lhs_row = lhs_ptr + outer_i * lhs_outer_stride;
+        const hfloat* rhs_row = rhs_ptr + outer_i * rhs_outer_stride;
+        std::uint8_t* out_row = out + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        if (lhs_inner_stride <= 1 && rhs_inner_stride <= 1)
+        {
+            const Batch lhs_scalar = lhs_inner_stride == 0 ? Batch(static_cast<float>(lhs_row[0])) : Batch(0.0f);
+            const Batch rhs_scalar = rhs_inner_stride == 0 ? Batch(static_cast<float>(rhs_row[0])) : Batch(0.0f);
+            std::array<float, kLanes> tmp {};
+            for (; inner_idx + kLanes <= inner; inner_idx += kLanes)
+            {
+                const Batch lhs_vec = lhs_inner_stride == 0 ? lhs_scalar : load_hfloat_batch(lhs_row + inner_idx);
+                const Batch rhs_vec = rhs_inner_stride == 0 ? rhs_scalar : load_hfloat_batch(rhs_row + inner_idx);
+                const Batch::batch_bool_type cmp_mask = apply_compare_batch(op, lhs_vec, rhs_vec);
+                const Batch out_vec = xsimd::select(cmp_mask, Batch(255.0f), Batch(0.0f));
+                out_vec.store_unaligned(tmp.data());
+
+                for (size_t lane = 0; lane < kLanes; ++lane)
+                {
+                    out_row[inner_idx + lane] = static_cast<std::uint8_t>(tmp[lane]);
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const float lhs_val = lhs_inner_stride == 0 ? static_cast<float>(lhs_row[0])
+                                                        : static_cast<float>(lhs_row[inner_idx * lhs_inner_stride]);
+            const float rhs_val = rhs_inner_stride == 0 ? static_cast<float>(rhs_row[0])
+                                                        : static_cast<float>(rhs_row[inner_idx * rhs_inner_stride]);
+            out_row[inner_idx] = apply_compare_scalar(op, lhs_val, rhs_val) ? 255 : 0;
+        }
+    }
+}
+
+inline void build_phase_batches(const float* scalar_lanes, int channels, std::array<Batch, 4>& phase_batches)
+{
+    const size_t phase_count = static_cast<size_t>(channels);
+    std::array<float, kLanes> lane_pattern {};
+    for (size_t phase = 0; phase < phase_count; ++phase)
+    {
+        for (size_t lane = 0; lane < kLanes; ++lane)
+        {
+            lane_pattern[lane] = scalar_lanes[(phase + lane) % phase_count];
+        }
+        phase_batches[phase] = Batch::load_unaligned(lane_pattern.data());
+    }
+}
+
+void binary_scalar_channels_xsimd(BinaryKernelOp op,
+                                  const float* src,
+                                  size_t src_outer_stride,
+                                  const float* scalar_lanes,
+                                  int channels,
+                                  float* out,
+                                  size_t out_outer_stride,
+                                  size_t outer,
+                                  size_t inner,
+                                  bool scalar_first)
+{
+    if (channels <= 0 || channels > 4 || outer == 0 || inner == 0)
+    {
+        return;
+    }
+
+    std::array<Batch, 4> phase_batches;
+    build_phase_batches(scalar_lanes, channels, phase_batches);
+    const size_t phase_count = static_cast<size_t>(channels);
+    const size_t vec_phase_step = kLanes % phase_count;
+    const long long outer_ll = static_cast<long long>(outer);
+
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const float* src_row = src + outer_i * src_outer_stride;
+        float* out_row = out + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        size_t phase = 0;
+        for (; inner_idx + kLanes <= inner; inner_idx += kLanes)
+        {
+            const Batch src_vec = Batch::load_unaligned(src_row + inner_idx);
+            const Batch& scalar_vec = phase_batches[phase];
+            const Batch out_vec = scalar_first ? apply_batch(op, scalar_vec, src_vec)
+                                               : apply_batch(op, src_vec, scalar_vec);
+            out_vec.store_unaligned(out_row + inner_idx);
+            if (vec_phase_step != 0)
+            {
+                phase += vec_phase_step;
+                if (phase >= phase_count)
+                {
+                    phase -= phase_count;
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const float scalar_val = scalar_lanes[phase];
+            out_row[inner_idx] = scalar_first ? apply_scalar(op, scalar_val, src_row[inner_idx])
+                                              : apply_scalar(op, src_row[inner_idx], scalar_val);
+            ++phase;
+            if (phase == phase_count)
+            {
+                phase = 0;
+            }
+        }
+    }
+}
+
+void binary_scalar_channels_xsimd_hfloat(BinaryKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const float* scalar_lanes,
+                                         int channels,
+                                         void* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first)
+{
+    if (channels <= 0 || channels > 4 || outer == 0 || inner == 0)
+    {
+        return;
+    }
+
+    const hfloat* src_ptr = reinterpret_cast<const hfloat*>(src);
+    hfloat* out_ptr = reinterpret_cast<hfloat*>(out);
+    std::array<Batch, 4> phase_batches;
+    build_phase_batches(scalar_lanes, channels, phase_batches);
+    const size_t phase_count = static_cast<size_t>(channels);
+    const size_t vec_phase_step = kLanes % phase_count;
+    const long long outer_ll = static_cast<long long>(outer);
+
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const hfloat* src_row = src_ptr + outer_i * src_outer_stride;
+        hfloat* out_row = out_ptr + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        size_t phase = 0;
+        for (; inner_idx + kLanes <= inner; inner_idx += kLanes)
+        {
+            const Batch src_vec = load_hfloat_batch(src_row + inner_idx);
+            const Batch& scalar_vec = phase_batches[phase];
+            const Batch out_vec = scalar_first ? apply_batch(op, scalar_vec, src_vec)
+                                               : apply_batch(op, src_vec, scalar_vec);
+            store_hfloat_batch(out_vec, out_row + inner_idx);
+            if (vec_phase_step != 0)
+            {
+                phase += vec_phase_step;
+                if (phase >= phase_count)
+                {
+                    phase -= phase_count;
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const float scalar_val = scalar_lanes[phase];
+            const float src_val = static_cast<float>(src_row[inner_idx]);
+            const float out_val = scalar_first ? apply_scalar(op, scalar_val, src_val)
+                                               : apply_scalar(op, src_val, scalar_val);
+            out_row[inner_idx] = hfloat(out_val);
+            ++phase;
+            if (phase == phase_count)
+            {
+                phase = 0;
+            }
+        }
+    }
+}
+
+void compare_scalar_channels_xsimd(CompareKernelOp op,
+                                   const float* src,
+                                   size_t src_outer_stride,
+                                   const float* scalar_lanes,
+                                   int channels,
+                                   std::uint8_t* out,
+                                   size_t out_outer_stride,
+                                   size_t outer,
+                                   size_t inner,
+                                   bool scalar_first)
+{
+    if (channels <= 0 || channels > 4 || outer == 0 || inner == 0)
+    {
+        return;
+    }
+
+    std::array<Batch, 4> phase_batches;
+    build_phase_batches(scalar_lanes, channels, phase_batches);
+    const size_t phase_count = static_cast<size_t>(channels);
+    const size_t vec_phase_step = kLanes % phase_count;
+    const long long outer_ll = static_cast<long long>(outer);
+
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const float* src_row = src + outer_i * src_outer_stride;
+        std::uint8_t* out_row = out + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        size_t phase = 0;
+        std::array<float, kLanes> tmp {};
+        for (; inner_idx + kLanes <= inner; inner_idx += kLanes)
+        {
+            const Batch src_vec = Batch::load_unaligned(src_row + inner_idx);
+            const Batch& scalar_vec = phase_batches[phase];
+            const Batch::batch_bool_type mask = scalar_first ? apply_compare_batch(op, scalar_vec, src_vec)
+                                                             : apply_compare_batch(op, src_vec, scalar_vec);
+            const Batch out_vec = xsimd::select(mask, Batch(255.0f), Batch(0.0f));
+            out_vec.store_unaligned(tmp.data());
+            for (size_t lane = 0; lane < kLanes; ++lane)
+            {
+                out_row[inner_idx + lane] = static_cast<std::uint8_t>(tmp[lane]);
+            }
+            if (vec_phase_step != 0)
+            {
+                phase += vec_phase_step;
+                if (phase >= phase_count)
+                {
+                    phase -= phase_count;
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const float scalar_val = scalar_lanes[phase];
+            out_row[inner_idx] = scalar_first ? (apply_compare_scalar(op, scalar_val, src_row[inner_idx]) ? 255 : 0)
+                                              : (apply_compare_scalar(op, src_row[inner_idx], scalar_val) ? 255 : 0);
+            ++phase;
+            if (phase == phase_count)
+            {
+                phase = 0;
+            }
+        }
+    }
+}
+
+void compare_scalar_channels_xsimd_hfloat(CompareKernelOp op,
+                                          const void* src,
+                                          size_t src_outer_stride,
+                                          const float* scalar_lanes,
+                                          int channels,
+                                          std::uint8_t* out,
+                                          size_t out_outer_stride,
+                                          size_t outer,
+                                          size_t inner,
+                                          bool scalar_first)
+{
+    if (channels <= 0 || channels > 4 || outer == 0 || inner == 0)
+    {
+        return;
+    }
+
+    const hfloat* src_ptr = reinterpret_cast<const hfloat*>(src);
+    std::array<Batch, 4> phase_batches;
+    build_phase_batches(scalar_lanes, channels, phase_batches);
+    const size_t phase_count = static_cast<size_t>(channels);
+    const size_t vec_phase_step = kLanes % phase_count;
+    const long long outer_ll = static_cast<long long>(outer);
+
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const hfloat* src_row = src_ptr + outer_i * src_outer_stride;
+        std::uint8_t* out_row = out + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        size_t phase = 0;
+        std::array<float, kLanes> tmp {};
+        for (; inner_idx + kLanes <= inner; inner_idx += kLanes)
+        {
+            const Batch src_vec = load_hfloat_batch(src_row + inner_idx);
+            const Batch& scalar_vec = phase_batches[phase];
+            const Batch::batch_bool_type mask = scalar_first ? apply_compare_batch(op, scalar_vec, src_vec)
+                                                             : apply_compare_batch(op, src_vec, scalar_vec);
+            const Batch out_vec = xsimd::select(mask, Batch(255.0f), Batch(0.0f));
+            out_vec.store_unaligned(tmp.data());
+            for (size_t lane = 0; lane < kLanes; ++lane)
+            {
+                out_row[inner_idx + lane] = static_cast<std::uint8_t>(tmp[lane]);
+            }
+            if (vec_phase_step != 0)
+            {
+                phase += vec_phase_step;
+                if (phase >= phase_count)
+                {
+                    phase -= phase_count;
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const float scalar_val = scalar_lanes[phase];
+            const float src_val = static_cast<float>(src_row[inner_idx]);
+            out_row[inner_idx] = scalar_first ? (apply_compare_scalar(op, scalar_val, src_val) ? 255 : 0)
+                                              : (apply_compare_scalar(op, src_val, scalar_val) ? 255 : 0);
+            ++phase;
+            if (phase == phase_count)
+            {
+                phase = 0;
+            }
         }
     }
 }

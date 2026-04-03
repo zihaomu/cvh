@@ -62,9 +62,13 @@ void subtract(const Scalar& a, const Mat& b, Mat& c);
 
 // a * b = c
 void multiply(const Mat& a, const Mat& b, Mat& c);
+void multiply(const Mat& a, const Scalar& b, Mat& c);
+void multiply(const Scalar& a, const Mat& b, Mat& c);
 
 // a / b = c
 void divide(const Mat& a, const Mat& b, Mat& c);
+void divide(const Mat& a, const Scalar& b, Mat& c);
+void divide(const Scalar& a, const Mat& b, Mat& c);
 
 void compare(const Mat& a, const Mat& b, Mat& c, int op);
 void compare(const Mat& a, const Scalar& b, Mat& c, int op);

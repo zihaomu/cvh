@@ -5,6 +5,84 @@
 
 using namespace cvh;
 
+namespace {
+
+void fill_with_byte_pattern(Mat& mat)
+{
+    const size_t byte_count = mat.total() * static_cast<size_t>(CV_ELEM_SIZE(mat.type()));
+    for (size_t i = 0; i < byte_count; ++i)
+    {
+        mat.data[i] = static_cast<uchar>((i * 131u + 17u) & 0xFFu);
+    }
+}
+
+void expect_transpose2d_bytes_equal(const Mat& src, const Mat& dst)
+{
+    ASSERT_EQ(src.dims, 2);
+    ASSERT_EQ(dst.dims, 2);
+    ASSERT_EQ(dst.type(), src.type());
+    ASSERT_EQ(dst.size[0], src.size[1]);
+    ASSERT_EQ(dst.size[1], src.size[0]);
+
+    const int rows = src.size[0];
+    const int cols = src.size[1];
+    const size_t elem_bytes = static_cast<size_t>(CV_ELEM_SIZE(src.type()));
+    const size_t src_row_bytes = static_cast<size_t>(cols) * elem_bytes;
+    const size_t dst_row_bytes = static_cast<size_t>(rows) * elem_bytes;
+
+    for (int row = 0; row < rows; ++row)
+    {
+        for (int col = 0; col < cols; ++col)
+        {
+            const size_t src_offset = static_cast<size_t>(row) * src_row_bytes + static_cast<size_t>(col) * elem_bytes;
+            const size_t dst_offset = static_cast<size_t>(col) * dst_row_bytes + static_cast<size_t>(row) * elem_bytes;
+            for (size_t b = 0; b < elem_bytes; ++b)
+            {
+                ASSERT_EQ(dst.data[dst_offset + b], src.data[src_offset + b])
+                    << "row=" << row << ", col=" << col << ", byte=" << b;
+            }
+        }
+    }
+}
+
+void expect_transpose_last2_3d_bytes_equal(const Mat& src, const Mat& dst)
+{
+    ASSERT_EQ(src.dims, 3);
+    ASSERT_EQ(dst.dims, 3);
+    ASSERT_EQ(dst.type(), src.type());
+    ASSERT_EQ(dst.size[0], src.size[0]);
+    ASSERT_EQ(dst.size[1], src.size[2]);
+    ASSERT_EQ(dst.size[2], src.size[1]);
+
+    const int batch = src.size[0];
+    const int rows = src.size[1];
+    const int cols = src.size[2];
+    const size_t elem_bytes = static_cast<size_t>(CV_ELEM_SIZE(src.type()));
+    const size_t src_plane_bytes = static_cast<size_t>(rows) * static_cast<size_t>(cols) * elem_bytes;
+    const size_t dst_plane_bytes = static_cast<size_t>(cols) * static_cast<size_t>(rows) * elem_bytes;
+
+    for (int bidx = 0; bidx < batch; ++bidx)
+    {
+        for (int row = 0; row < rows; ++row)
+        {
+            for (int col = 0; col < cols; ++col)
+            {
+                const size_t src_offset = static_cast<size_t>(bidx) * src_plane_bytes +
+                                          (static_cast<size_t>(row) * static_cast<size_t>(cols) + static_cast<size_t>(col)) * elem_bytes;
+                const size_t dst_offset = static_cast<size_t>(bidx) * dst_plane_bytes +
+                                          (static_cast<size_t>(col) * static_cast<size_t>(rows) + static_cast<size_t>(row)) * elem_bytes;
+                for (size_t by = 0; by < elem_bytes; ++by)
+                {
+                    ASSERT_EQ(dst.data[dst_offset + by], src.data[src_offset + by])
+                        << "batch=" << bidx << ", row=" << row << ", col=" << col << ", byte=" << by;
+                }
+            }
+        }
+    }
+}
+
+}  // namespace
+
 TEST(MatContract_TEST, clone_is_deep_copy)
 {
     Mat src({2, 3}, CV_32F);
@@ -169,4 +247,61 @@ TEST(MatContract_TEST, unsupported_depth_is_rejected_in_create)
     Mat m;
     const int sizes[2] = {2, 2};
     EXPECT_THROW(m.create(2, sizes, CV_64F), Exception);
+}
+
+TEST(MatContract_TEST, at_i0_checks_upper_bound)
+{
+    Mat m({2, 2}, CV_8U);
+    m.setTo(1.0f);
+
+    EXPECT_NO_THROW((void)m.at<uchar>(0));
+    EXPECT_NO_THROW((void)m.at<uchar>(3));
+    EXPECT_THROW((void)m.at<uchar>(4), Exception);
+
+    const Mat cm = m;
+    EXPECT_NO_THROW((void)cm.at<uchar>(3));
+    EXPECT_THROW((void)cm.at<uchar>(4), Exception);
+}
+
+TEST(MatContract_TEST, transpose2d_preserves_interleaved_bytes_for_multi_type_multi_channel)
+{
+    const int types[] = {
+        CV_8UC1,
+        CV_8UC3,
+        CV_8UC4,
+        CV_16SC1,
+        CV_16SC3,
+        CV_16FC4,
+        CV_32SC2,
+        CV_32FC3,
+        CV_32FC4,
+    };
+
+    for (const int type : types)
+    {
+        Mat src({5, 7}, type);
+        fill_with_byte_pattern(src);
+
+        Mat dst = transpose(src);
+        expect_transpose2d_bytes_equal(src, dst);
+    }
+}
+
+TEST(MatContract_TEST, transpose3d_last_two_swap_preserves_interleaved_bytes_for_multichannel_types)
+{
+    const int types[] = {
+        CV_8UC3,
+        CV_16SC3,
+        CV_32FC3,
+        CV_32FC4,
+    };
+
+    for (const int type : types)
+    {
+        Mat src({2, 4, 6}, type);
+        fill_with_byte_pattern(src);
+
+        Mat dst = transpose(src);
+        expect_transpose_last2_3d_bytes_equal(src, dst);
+    }
 }

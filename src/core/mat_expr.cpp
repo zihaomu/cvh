@@ -33,14 +33,6 @@ static Mat evalExprToMat(const MatExpr& e)
     return out;
 }
 
-static Mat makeScalarMatLike(const Mat& ref, const Scalar& s)
-{
-    checkOperandsExist(ref);
-    Mat scalar_like(ref.dims, ref.size.p, ref.type());
-    scalar_like.setTo(s);
-    return scalar_like;
-}
-
 static MatExpr makeCmpExpr(const Mat& a, const Mat& b, int cmpop)
 {
     checkOperandsExist(a, b);
@@ -611,52 +603,34 @@ MatExpr operator * (const MatExpr& e1, const MatExpr& e2)
 
 MatExpr operator * (const MatExpr& e1, const float e)
 {
-    // convert float to specific type.
-    int type = e1.type();
-    Mat em = Mat({1}, type);
-    em.setTo(e);
-
-    MatExpr en;
-    e1.op->multiply(e1, MatExpr(em), en);
-    return en;
+    Mat lhs = evalExprToMat(e1);
+    Mat out;
+    multiply(lhs, Scalar::all(static_cast<double>(e)), out);
+    return MatExpr(out);
 }
 
 MatExpr operator * (const float e, const MatExpr& e2)
 {
-    // convert float to specific type.
-    int type = e2.type();
-    Mat em = Mat({1}, type);
-    em.setTo(e);
-
-    MatExpr en;
-    e2.op->multiply(MatExpr(em), e2, en);
-    return en;
+    Mat rhs = evalExprToMat(e2);
+    Mat out;
+    multiply(Scalar::all(static_cast<double>(e)), rhs, out);
+    return MatExpr(out);
 }
 
 MatExpr operator * (const Mat& a, const float e)
 {
     checkOperandsExist(a);
-
-    int type = a.type();
-    Mat b = Mat({1}, type);
-    b.setTo(e);
-
-    MatExpr en;
-    MatOp_Bin::makeExpr(en, '*', a, b);
-    return en;
+    Mat out;
+    multiply(a, Scalar::all(static_cast<double>(e)), out);
+    return MatExpr(out);
 }
 
 MatExpr operator * (const float e, const Mat& b)
 {
     checkOperandsExist(b);
-
-    int type = b.type();
-    Mat a = Mat({1}, type);
-    a.setTo(e);
-
-    MatExpr en;
-    MatOp_Bin::makeExpr(en, '*', a, b);
-    return en;
+    Mat out;
+    multiply(Scalar::all(static_cast<double>(e)), b, out);
+    return MatExpr(out);
 }
 
 MatExpr operator / (const Mat& a, const Mat& b)
@@ -692,52 +666,34 @@ MatExpr operator / (const MatExpr& e1, const MatExpr& e2)
 
 MatExpr operator / (const MatExpr& e1, const float e)
 {
-    // convert float to specific type.
-    int type = e1.type();
-    Mat em = Mat({1}, type);
-    em.setTo(e);
-
-    MatExpr en;
-    e1.op->divide(e1, MatExpr(em), en);
-    return en;
+    Mat lhs = evalExprToMat(e1);
+    Mat out;
+    divide(lhs, Scalar::all(static_cast<double>(e)), out);
+    return MatExpr(out);
 }
 
 MatExpr operator / (const float e, const MatExpr& e2)
 {
-    // convert float to specific type.
-    int type = e2.type();
-    Mat em = Mat({1}, type);
-    em.setTo(e);
-
-    MatExpr en;
-    e2.op->divide(MatExpr(em), e2, en);
-    return en;
+    Mat rhs = evalExprToMat(e2);
+    Mat out;
+    divide(Scalar::all(static_cast<double>(e)), rhs, out);
+    return MatExpr(out);
 }
 
 MatExpr operator / (const Mat& a, const float e)
 {
     checkOperandsExist(a);
-
-    int type = a.type();
-    Mat b = Mat({1}, type);
-    b.setTo(e);
-
-    MatExpr en;
-    MatOp_Bin::makeExpr(en, '/', a, b);
-    return en;
+    Mat out;
+    divide(a, Scalar::all(static_cast<double>(e)), out);
+    return MatExpr(out);
 }
 
 MatExpr operator / (const float e, const Mat& b)
 {
     checkOperandsExist(b);
-
-    int type = b.type();
-    Mat a = Mat({1}, type);
-    a.setTo(e);
-
-    MatExpr en;
-    MatOp_Bin::makeExpr(en, '/', a, b);
-    return en;
+    Mat out;
+    divide(Scalar::all(static_cast<double>(e)), b, out);
+    return MatExpr(out);
 }
 
 MatExpr operator == (const Mat& a, const Mat& b)
@@ -812,72 +768,64 @@ MatExpr operator - (const Scalar& s, const Mat& b)
 MatExpr operator * (const MatExpr& e1, const Scalar& s)
 {
     Mat lhs = evalExprToMat(e1);
-    Mat rhs = makeScalarMatLike(lhs, s);
     Mat out;
-    multiply(lhs, rhs, out);
+    multiply(lhs, s, out);
     return MatExpr(out);
 }
 
 MatExpr operator * (const Scalar& s, const MatExpr& e2)
 {
     Mat rhs = evalExprToMat(e2);
-    Mat lhs = makeScalarMatLike(rhs, s);
     Mat out;
-    multiply(lhs, rhs, out);
+    multiply(s, rhs, out);
     return MatExpr(out);
 }
 
 MatExpr operator * (const Mat& a, const Scalar& s)
 {
     checkOperandsExist(a);
-    Mat rhs = makeScalarMatLike(a, s);
     Mat out;
-    multiply(a, rhs, out);
+    multiply(a, s, out);
     return MatExpr(out);
 }
 
 MatExpr operator * (const Scalar& s, const Mat& b)
 {
     checkOperandsExist(b);
-    Mat lhs = makeScalarMatLike(b, s);
     Mat out;
-    multiply(lhs, b, out);
+    multiply(s, b, out);
     return MatExpr(out);
 }
 
 MatExpr operator / (const MatExpr& e1, const Scalar& s)
 {
     Mat lhs = evalExprToMat(e1);
-    Mat rhs = makeScalarMatLike(lhs, s);
     Mat out;
-    divide(lhs, rhs, out);
+    divide(lhs, s, out);
     return MatExpr(out);
 }
 
 MatExpr operator / (const Scalar& s, const MatExpr& e2)
 {
     Mat rhs = evalExprToMat(e2);
-    Mat lhs = makeScalarMatLike(rhs, s);
     Mat out;
-    divide(lhs, rhs, out);
+    divide(s, rhs, out);
     return MatExpr(out);
 }
 
 MatExpr operator / (const Mat& a, const Scalar& s)
 {
     checkOperandsExist(a);
-    Mat rhs = makeScalarMatLike(a, s);
     Mat out;
-    divide(a, rhs, out);
+    divide(a, s, out);
     return MatExpr(out);
 }
 
 MatExpr operator / (const Scalar& s, const Mat& b)
 {
     checkOperandsExist(b);
-    Mat lhs = makeScalarMatLike(b, s);
     Mat out;
-    divide(lhs, b, out);
+    divide(s, b, out);
     return MatExpr(out);
 }
 

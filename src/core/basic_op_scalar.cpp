@@ -1,9 +1,13 @@
 #include "cvh/core/basic_op.h"
 #include "cvh/core/saturate.h"
 #include "binary_kernel_xsimd.h"
+#include "transpose_kernel.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <type_traits>
+#include <vector>
 
 namespace cvh
 {
@@ -212,6 +216,232 @@ inline bool try_dispatch_mat_mat_binary_xsimd_fp32(const Mat& a,
     return true;
 }
 
+inline bool is_uniform_scalar_for_channels(const Scalar& scalar, int channels)
+{
+    for (int ch = 1; ch < channels; ++ch)
+    {
+        if (scalar[ch] != scalar[0])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+inline bool is_int_xsimd_op_supported(cpu::BinaryKernelOp op)
+{
+    return op == cpu::BinaryKernelOp::Max || op == cpu::BinaryKernelOp::Min;
+}
+
+inline bool try_dispatch_mat_mat_binary_xsimd(const Mat& a,
+                                              const Mat& b,
+                                              Mat& dst,
+                                              cpu::BinaryKernelOp op)
+{
+    if (try_dispatch_mat_mat_binary_xsimd_fp32(a, b, dst, op))
+    {
+        return true;
+    }
+
+    const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
+    const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(a.channels());
+
+    switch (a.depth())
+    {
+        case CV_16F:
+        {
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(hfloat);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(hfloat);
+            const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(hfloat);
+            for (size_t i = 0; i < outer; ++i)
+            {
+                const void* a_row = a.data + i * a_step0;
+                const void* b_row = b.data + i * b_step0;
+                void* dst_row = dst.data + i * dst_step0;
+                cpu::binary_broadcast_xsimd_hfloat(
+                    op,
+                    a_row,
+                    row_elements,
+                    1,
+                    b_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            return true;
+        }
+        case CV_64F:
+        {
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(double);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(double);
+            const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(double);
+            for (size_t i = 0; i < outer; ++i)
+            {
+                const void* a_row = a.data + i * a_step0;
+                const void* b_row = b.data + i * b_step0;
+                void* dst_row = dst.data + i * dst_step0;
+                cpu::binary_broadcast_xsimd_double(
+                    op,
+                    a_row,
+                    row_elements,
+                    1,
+                    b_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            return true;
+        }
+        case CV_32S:
+        {
+            if (!is_int_xsimd_op_supported(op))
+            {
+                return false;
+            }
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(int);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(int);
+            const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(int);
+            for (size_t i = 0; i < outer; ++i)
+            {
+                const void* a_row = a.data + i * a_step0;
+                const void* b_row = b.data + i * b_step0;
+                void* dst_row = dst.data + i * dst_step0;
+                cpu::binary_broadcast_xsimd_int32(
+                    op,
+                    a_row,
+                    row_elements,
+                    1,
+                    b_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            return true;
+        }
+        case CV_16S:
+        {
+            if (!is_int_xsimd_op_supported(op))
+            {
+                return false;
+            }
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(short);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(short);
+            const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(short);
+            for (size_t i = 0; i < outer; ++i)
+            {
+                const void* a_row = a.data + i * a_step0;
+                const void* b_row = b.data + i * b_step0;
+                void* dst_row = dst.data + i * dst_step0;
+                cpu::binary_broadcast_xsimd_int16(
+                    op,
+                    a_row,
+                    row_elements,
+                    1,
+                    b_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            return true;
+        }
+        case CV_16U:
+        {
+            if (!is_int_xsimd_op_supported(op))
+            {
+                return false;
+            }
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(ushort);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(ushort);
+            const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(ushort);
+            for (size_t i = 0; i < outer; ++i)
+            {
+                const void* a_row = a.data + i * a_step0;
+                const void* b_row = b.data + i * b_step0;
+                void* dst_row = dst.data + i * dst_step0;
+                cpu::binary_broadcast_xsimd_uint16(
+                    op,
+                    a_row,
+                    row_elements,
+                    1,
+                    b_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            return true;
+        }
+        case CV_8S:
+        {
+            if (!is_int_xsimd_op_supported(op))
+            {
+                return false;
+            }
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(schar);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(schar);
+            const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(schar);
+            for (size_t i = 0; i < outer; ++i)
+            {
+                const void* a_row = a.data + i * a_step0;
+                const void* b_row = b.data + i * b_step0;
+                void* dst_row = dst.data + i * dst_step0;
+                cpu::binary_broadcast_xsimd_int8(
+                    op,
+                    a_row,
+                    row_elements,
+                    1,
+                    b_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            return true;
+        }
+        case CV_8U:
+        {
+            if (!is_int_xsimd_op_supported(op))
+            {
+                return false;
+            }
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(uchar);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(uchar);
+            const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(uchar);
+            for (size_t i = 0; i < outer; ++i)
+            {
+                const void* a_row = a.data + i * a_step0;
+                const void* b_row = b.data + i * b_step0;
+                void* dst_row = dst.data + i * dst_step0;
+                cpu::binary_broadcast_xsimd_uint8(
+                    op,
+                    a_row,
+                    row_elements,
+                    1,
+                    b_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 inline bool to_compare_kernel_op(int op, cpu::CompareKernelOp& kernel_op)
 {
     switch (op)
@@ -263,74 +493,231 @@ inline bool try_dispatch_mat_mat_compare_xsimd_fp32(const Mat& a,
     const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(float);
     const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(float);
     const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(uchar);
+    cpu::compare_broadcast_xsimd(
+        kernel_op,
+        reinterpret_cast<const float*>(a.data),
+        a_step0 / sizeof(float),
+        1,
+        reinterpret_cast<const float*>(b.data),
+        b_step0 / sizeof(float),
+        1,
+        reinterpret_cast<uchar*>(dst.data),
+        dst_step0 / sizeof(uchar),
+        outer,
+        row_elements);
 
-    for (size_t i = 0; i < outer; ++i)
+    return true;
+}
+
+inline bool try_dispatch_mat_mat_compare_xsimd_fp16(const Mat& a,
+                                                    const Mat& b,
+                                                    Mat& dst,
+                                                    int op)
+{
+#ifndef _OPENMP
+    (void)a;
+    (void)b;
+    (void)dst;
+    (void)op;
+    return false;
+#else
+    if (a.depth() != CV_16F)
     {
-        const float* a_row = reinterpret_cast<const float*>(a.data + i * a_step0);
-        const float* b_row = reinterpret_cast<const float*>(b.data + i * b_step0);
-        auto* dst_row = reinterpret_cast<uchar*>(dst.data + i * dst_step0);
+        return false;
+    }
 
-        cpu::compare_broadcast_xsimd(
-            kernel_op,
-            a_row,
-            row_elements,
-            1,
-            b_row,
-            row_elements,
-            1,
-            dst_row,
-            1,
-            row_elements);
+    cpu::CompareKernelOp kernel_op;
+    if (!to_compare_kernel_op(op, kernel_op))
+    {
+        return false;
+    }
+
+    const int cn = a.channels();
+    const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
+    const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+
+    const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(hfloat);
+    const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(hfloat);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(uchar);
+    cpu::compare_broadcast_xsimd_hfloat(
+        kernel_op,
+        a.data,
+        a_step0 / sizeof(hfloat),
+        1,
+        b.data,
+        b_step0 / sizeof(hfloat),
+        1,
+        reinterpret_cast<uchar*>(dst.data),
+        dst_step0 / sizeof(uchar),
+        outer,
+        row_elements);
+
+    return true;
+#endif
+}
+
+inline bool try_dispatch_mat_scalar_binary_xsimd_fp32(const Mat& src,
+                                                      const Scalar& scalar,
+                                                      Mat& dst,
+                                                      cpu::BinaryKernelOp op,
+                                                      bool scalar_first)
+{
+    if (src.depth() != CV_32F)
+    {
+        return false;
+    }
+
+    const int cn = src.channels();
+    if (cn <= 0)
+    {
+        return false;
+    }
+
+    float scalar_lanes[4] = {0.f, 0.f, 0.f, 0.f};
+    for (int ch = 0; ch < cn; ++ch)
+    {
+        scalar_lanes[ch] = saturate_cast<float>(scalar[ch]);
+    }
+
+    const bool uniform_scalar = is_uniform_scalar_for_channels(scalar, cn);
+    const float scalar_val = scalar_lanes[0];
+    const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixel_per_outer = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(float);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(float);
+    const size_t src_outer_stride = src_step0 / sizeof(float);
+    const size_t dst_outer_stride = dst_step0 / sizeof(float);
+
+    if (uniform_scalar)
+    {
+        for (size_t i = 0; i < outer; ++i)
+        {
+            const float* src_row = reinterpret_cast<const float*>(src.data + i * src_step0);
+            float* dst_row = reinterpret_cast<float*>(dst.data + i * dst_step0);
+            if (scalar_first)
+            {
+                cpu::binary_broadcast_xsimd(
+                    op,
+                    &scalar_val,
+                    0,
+                    0,
+                    src_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            else
+            {
+                cpu::binary_broadcast_xsimd(
+                    op,
+                    src_row,
+                    row_elements,
+                    1,
+                    &scalar_val,
+                    0,
+                    0,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+        }
+    }
+    else
+    {
+        cpu::binary_scalar_channels_xsimd(op,
+                                          reinterpret_cast<const float*>(src.data),
+                                          src_outer_stride,
+                                          scalar_lanes,
+                                          cn,
+                                          reinterpret_cast<float*>(dst.data),
+                                          dst_outer_stride,
+                                          outer,
+                                          row_elements,
+                                          scalar_first);
     }
 
     return true;
 }
 
-inline bool try_dispatch_mat_scalar_binary_xsimd_fp32_c1(const Mat& src,
-                                                         const Scalar& scalar,
-                                                         Mat& dst,
-                                                         cpu::BinaryKernelOp op,
-                                                         bool scalar_first)
+inline bool try_dispatch_mat_scalar_binary_xsimd_fp16(const Mat& src,
+                                                      const Scalar& scalar,
+                                                      Mat& dst,
+                                                      cpu::BinaryKernelOp op,
+                                                      bool scalar_first)
 {
-    if (src.depth() != CV_32F || src.channels() != 1)
+    if (src.depth() != CV_16F)
     {
         return false;
     }
 
-    const float scalar_val = saturate_cast<float>(scalar[0]);
+    const int cn = src.channels();
+    if (cn <= 0 || cn > 4)
+    {
+        return false;
+    }
+
+    float scalar_lanes[4] = {0.f, 0.f, 0.f, 0.f};
+    for (int ch = 0; ch < cn; ++ch)
+    {
+        scalar_lanes[ch] = saturate_cast<float>(scalar[ch]);
+    }
+    const bool uniform_scalar = is_uniform_scalar_for_channels(scalar, cn);
+    const hfloat scalar_val = saturate_cast<hfloat>(scalar_lanes[0]);
     const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
-    const size_t row_elements = src.dims > 1 ? src.total(1, src.dims) : src.total();
-    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(float);
-    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(float);
+    const size_t pixel_per_outer = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(hfloat);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(hfloat);
+    const size_t src_outer_stride = src_step0 / sizeof(hfloat);
+    const size_t dst_outer_stride = dst_step0 / sizeof(hfloat);
+
+    if (!uniform_scalar)
+    {
+        cpu::binary_scalar_channels_xsimd_hfloat(op,
+                                                 src.data,
+                                                 src_outer_stride,
+                                                 scalar_lanes,
+                                                 cn,
+                                                 dst.data,
+                                                 dst_outer_stride,
+                                                 outer,
+                                                 row_elements,
+                                                 scalar_first);
+        return true;
+    }
 
     for (size_t i = 0; i < outer; ++i)
     {
-        const float* src_row = reinterpret_cast<const float*>(src.data + i * src_step0);
-        float* dst_row = reinterpret_cast<float*>(dst.data + i * dst_step0);
-        if (scalar_first)
+        const void* src_row = src.data + i * src_step0;
+        void* dst_row = dst.data + i * dst_step0;
+        if (!scalar_first)
         {
-            cpu::binary_broadcast_xsimd(
+            cpu::binary_broadcast_xsimd_hfloat(
                 op,
-                &scalar_val,
-                0,
-                0,
                 src_row,
                 row_elements,
                 1,
+                &scalar_val,
+                0,
+                0,
                 dst_row,
                 1,
                 row_elements);
         }
         else
         {
-            cpu::binary_broadcast_xsimd(
+            cpu::binary_broadcast_xsimd_hfloat(
                 op,
-                src_row,
-                row_elements,
-                1,
                 &scalar_val,
                 0,
                 0,
+                src_row,
+                row_elements,
+                1,
                 dst_row,
                 1,
                 row_elements);
@@ -338,6 +725,191 @@ inline bool try_dispatch_mat_scalar_binary_xsimd_fp32_c1(const Mat& src,
     }
 
     return true;
+}
+
+inline bool try_dispatch_mat_scalar_compare_xsimd_fp32(const Mat& src,
+                                                       const Scalar& scalar,
+                                                       Mat& dst,
+                                                       int op,
+                                                       bool scalar_first)
+{
+    if (src.depth() != CV_32F)
+    {
+        return false;
+    }
+
+    const int cn = src.channels();
+    if (cn <= 0)
+    {
+        return false;
+    }
+
+    cpu::CompareKernelOp kernel_op;
+    if (!to_compare_kernel_op(op, kernel_op))
+    {
+        return false;
+    }
+
+    float scalar_lanes[4] = {0.f, 0.f, 0.f, 0.f};
+    for (int ch = 0; ch < cn; ++ch)
+    {
+        scalar_lanes[ch] = saturate_cast<float>(scalar[ch]);
+    }
+    const bool uniform_scalar = is_uniform_scalar_for_channels(scalar, cn);
+    const float scalar_val = scalar_lanes[0];
+    const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixel_per_outer = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(float);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(uchar);
+    const size_t src_outer_stride = src_step0 / sizeof(float);
+    const size_t dst_outer_stride = dst_step0 / sizeof(uchar);
+
+    if (uniform_scalar)
+    {
+        if (scalar_first)
+        {
+            cpu::compare_broadcast_xsimd(
+                kernel_op,
+                &scalar_val,
+                0,
+                0,
+                reinterpret_cast<const float*>(src.data),
+                src_outer_stride,
+                1,
+                reinterpret_cast<uchar*>(dst.data),
+                dst_outer_stride,
+                outer,
+                row_elements);
+        }
+        else
+        {
+            cpu::compare_broadcast_xsimd(
+                kernel_op,
+                reinterpret_cast<const float*>(src.data),
+                src_outer_stride,
+                1,
+                &scalar_val,
+                0,
+                0,
+                reinterpret_cast<uchar*>(dst.data),
+                dst_outer_stride,
+                outer,
+                row_elements);
+        }
+    }
+    else
+    {
+        cpu::compare_scalar_channels_xsimd(kernel_op,
+                                           reinterpret_cast<const float*>(src.data),
+                                           src_outer_stride,
+                                           scalar_lanes,
+                                           cn,
+                                           reinterpret_cast<uchar*>(dst.data),
+                                           dst_outer_stride,
+                                           outer,
+                                           row_elements,
+                                           scalar_first);
+    }
+
+    return true;
+}
+
+inline bool try_dispatch_mat_scalar_compare_xsimd_fp16(const Mat& src,
+                                                       const Scalar& scalar,
+                                                       Mat& dst,
+                                                       int op,
+                                                       bool scalar_first)
+{
+#ifndef _OPENMP
+    (void)src;
+    (void)scalar;
+    (void)dst;
+    (void)op;
+    (void)scalar_first;
+    return false;
+#else
+    if (src.depth() != CV_16F)
+    {
+        return false;
+    }
+
+    const int cn = src.channels();
+    if (cn <= 0 || cn > 4)
+    {
+        return false;
+    }
+
+    cpu::CompareKernelOp kernel_op;
+    if (!to_compare_kernel_op(op, kernel_op))
+    {
+        return false;
+    }
+
+    float scalar_lanes[4] = {0.f, 0.f, 0.f, 0.f};
+    for (int ch = 0; ch < cn; ++ch)
+    {
+        scalar_lanes[ch] = saturate_cast<float>(scalar[ch]);
+    }
+    const bool uniform_scalar = is_uniform_scalar_for_channels(scalar, cn);
+    const hfloat scalar_val = saturate_cast<hfloat>(scalar_lanes[0]);
+    const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixel_per_outer = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(hfloat);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(uchar);
+    const size_t src_outer_stride = src_step0 / sizeof(hfloat);
+    const size_t dst_outer_stride = dst_step0 / sizeof(uchar);
+
+    if (uniform_scalar)
+    {
+        if (scalar_first)
+        {
+            cpu::compare_broadcast_xsimd_hfloat(
+                kernel_op,
+                &scalar_val,
+                0,
+                0,
+                src.data,
+                src_outer_stride,
+                1,
+                reinterpret_cast<uchar*>(dst.data),
+                dst_outer_stride,
+                outer,
+                row_elements);
+        }
+        else
+        {
+            cpu::compare_broadcast_xsimd_hfloat(
+                kernel_op,
+                src.data,
+                src_outer_stride,
+                1,
+                &scalar_val,
+                0,
+                0,
+                reinterpret_cast<uchar*>(dst.data),
+                dst_outer_stride,
+                outer,
+                row_elements);
+        }
+    }
+    else
+    {
+        cpu::compare_scalar_channels_xsimd_hfloat(kernel_op,
+                                                  src.data,
+                                                  src_outer_stride,
+                                                  scalar_lanes,
+                                                  cn,
+                                                  reinterpret_cast<uchar*>(dst.data),
+                                                  dst_outer_stride,
+                                                  outer,
+                                                  row_elements,
+                                                  scalar_first);
+    }
+
+    return true;
+#endif
 }
 
 template<typename Op>
@@ -351,7 +923,7 @@ void dispatch_mat_mat_binary_arith(const Mat& a,
     ensure_same_type_and_shape(a, b, fn_name);
     ensure_binary_dst_like_src(a, dst, fn_name);
 
-    if (try_dispatch_mat_mat_binary_xsimd_fp32(a, b, dst, xsimd_op))
+    if (try_dispatch_mat_mat_binary_xsimd(a, b, dst, xsimd_op))
     {
         return;
     }
@@ -605,7 +1177,8 @@ void dispatch_mat_scalar_binary_arith(const Mat& src,
     check_scalar_channel_bound(src, fn_name);
     ensure_binary_dst_like_src(src, dst, fn_name);
 
-    if (try_dispatch_mat_scalar_binary_xsimd_fp32_c1(src, scalar, dst, xsimd_op, scalar_first))
+    if (try_dispatch_mat_scalar_binary_xsimd_fp32(src, scalar, dst, xsimd_op, scalar_first) ||
+        try_dispatch_mat_scalar_binary_xsimd_fp16(src, scalar, dst, xsimd_op, scalar_first))
     {
         return;
     }
@@ -679,6 +1252,12 @@ void dispatch_mat_scalar_compare(const Mat& src,
     check_scalar_channel_bound(src, fn_name);
     ensure_compare_dst_like_src(src, dst, fn_name);
 
+    if (try_dispatch_mat_scalar_compare_xsimd_fp32(src, scalar, dst, op, scalar_first) ||
+        try_dispatch_mat_scalar_compare_xsimd_fp16(src, scalar, dst, op, scalar_first))
+    {
+        return;
+    }
+
     switch (src.depth())
     {
         case CV_8U:
@@ -745,7 +1324,8 @@ void dispatch_mat_mat_compare(const Mat& a, const Mat& b, Mat& dst, int op, cons
     ensure_same_type_and_shape(a, b, fn_name);
     ensure_compare_dst_like_src(a, dst, fn_name);
 
-    if (try_dispatch_mat_mat_compare_xsimd_fp32(a, b, dst, op))
+    if (try_dispatch_mat_mat_compare_xsimd_fp32(a, b, dst, op) ||
+        try_dispatch_mat_mat_compare_xsimd_fp16(a, b, dst, op))
     {
         return;
     }
@@ -1129,6 +1709,28 @@ void multiply(const Mat& a, const Mat& b, Mat& c)
                                   "multiply(Mat,Mat)");
 }
 
+void multiply(const Mat& a, const Scalar& b, Mat& c)
+{
+    dispatch_mat_scalar_binary_arith(a,
+                                     b,
+                                     c,
+                                     [](const auto& lhs, const auto& rhs) { return lhs * rhs; },
+                                     cpu::BinaryKernelOp::Mul,
+                                     false,
+                                     "multiply(Mat,Scalar)");
+}
+
+void multiply(const Scalar& a, const Mat& b, Mat& c)
+{
+    dispatch_mat_scalar_binary_arith(b,
+                                     a,
+                                     c,
+                                     [](const auto& lhs, const auto& rhs) { return lhs * rhs; },
+                                     cpu::BinaryKernelOp::Mul,
+                                     true,
+                                     "multiply(Scalar,Mat)");
+}
+
 void divide(const Mat& a, const Mat& b, Mat& c)
 {
     dispatch_mat_mat_binary_arith(a,
@@ -1137,6 +1739,28 @@ void divide(const Mat& a, const Mat& b, Mat& c)
                                   [](const auto& lhs, const auto& rhs) { return safe_div_value(lhs, rhs); },
                                   cpu::BinaryKernelOp::Div,
                                   "divide(Mat,Mat)");
+}
+
+void divide(const Mat& a, const Scalar& b, Mat& c)
+{
+    dispatch_mat_scalar_binary_arith(a,
+                                     b,
+                                     c,
+                                     [](const auto& lhs, const auto& rhs) { return safe_div_value(lhs, rhs); },
+                                     cpu::BinaryKernelOp::Div,
+                                     false,
+                                     "divide(Mat,Scalar)");
+}
+
+void divide(const Scalar& a, const Mat& b, Mat& c)
+{
+    dispatch_mat_scalar_binary_arith(b,
+                                     a,
+                                     c,
+                                     [](const auto& lhs, const auto& rhs) { return safe_div_value(lhs, rhs); },
+                                     cpu::BinaryKernelOp::Div,
+                                     true,
+                                     "divide(Scalar,Mat)");
 }
 
 void compare(const Mat& a, const Mat& b, Mat& c, int op)
@@ -1152,6 +1776,164 @@ void compare(const Mat& a, const Scalar& b, Mat& c, int op)
 void compare(const Scalar& a, const Mat& b, Mat& c, int op)
 {
     dispatch_mat_scalar_compare(b, a, c, op, true, "compare(Scalar,Mat)");
+}
+
+Mat transpose(const Mat& input)
+{
+    CV_Assert(!input.empty() && "The transpose function get empty input!");
+    const MatShape input_shape = input.shape();
+    if (input_shape.size() == 1)
+    {
+        Mat out = input.clone();
+        out.setSize({1, input_shape[0]});
+        return out;
+    }
+
+    const int dim = static_cast<int>(input_shape.size());
+    std::vector<int> out_order(static_cast<size_t>(dim));
+    for (int i = 0; i < dim; ++i)
+    {
+        out_order[static_cast<size_t>(i)] = i;
+    }
+
+    std::swap(out_order[static_cast<size_t>(dim - 2)], out_order[static_cast<size_t>(dim - 1)]);
+    return transposeND(input, out_order);
+}
+
+Mat transposeND(const Mat& input, const std::vector<int> order)
+{
+    if (input.dims != static_cast<int>(order.size()))
+    {
+        CV_Error_(Error::StsBadSize,
+                  ("In transposeND, input dim is not equal to order size! input dim=%d, order size=%d",
+                   input.dims,
+                   static_cast<int>(order.size())));
+    }
+
+    std::vector<int> order_sorted = order;
+    std::sort(order_sorted.begin(), order_sorted.end());
+    for (int i = 0; i < static_cast<int>(order_sorted.size()); ++i)
+    {
+        if (order_sorted[static_cast<size_t>(i)] != i)
+        {
+            CV_Error(Error::StsBadSize, "New order should be a valid permutation of old order.");
+        }
+    }
+
+    const MatShape old_shape = input.shape();
+    std::vector<int> new_shape(order.size());
+    for (int i = 0; i < static_cast<int>(order.size()); ++i)
+    {
+        new_shape[static_cast<size_t>(i)] = old_shape[static_cast<size_t>(order[static_cast<size_t>(i)])];
+    }
+
+    Mat out(new_shape, input.type());
+
+    bool is_last_two_swap = order.size() >= 2;
+    for (int i = 0; i < static_cast<int>(order.size()) && is_last_two_swap; ++i)
+    {
+        int expected = i;
+        if (i == static_cast<int>(order.size()) - 2)
+        {
+            expected = static_cast<int>(order.size()) - 1;
+        }
+        else if (i == static_cast<int>(order.size()) - 1)
+        {
+            expected = static_cast<int>(order.size()) - 2;
+        }
+
+        if (order[static_cast<size_t>(i)] != expected)
+        {
+            is_last_two_swap = false;
+        }
+    }
+
+    if (is_last_two_swap)
+    {
+        const int rows = old_shape[old_shape.size() - 2];
+        const int cols = old_shape[old_shape.size() - 1];
+        const size_t elem_size1 = CV_ELEM_SIZE1(input.type());
+        const int channels = input.channels();
+        const size_t elem_size = elem_size1 * static_cast<size_t>(channels);
+        const size_t plane_bytes = static_cast<size_t>(rows) * static_cast<size_t>(cols) * elem_size;
+        const size_t batch = input.total() / static_cast<size_t>(rows * cols);
+
+        const unsigned char* src = input.data;
+        unsigned char* dst = out.data;
+        for (size_t batch_idx = 0; batch_idx < batch; ++batch_idx)
+        {
+            cpu::transpose2d_kernel_blocked(src + batch_idx * plane_bytes,
+                                            dst + batch_idx * plane_bytes,
+                                            rows,
+                                            cols,
+                                            elem_size1,
+                                            channels);
+        }
+        return out;
+    }
+
+    const int dims = static_cast<int>(order.size());
+    int continuous_idx = 0;
+    for (int i = dims - 1; i >= 0; --i)
+    {
+        if (order[static_cast<size_t>(i)] != i)
+        {
+            continuous_idx = i + 1;
+            break;
+        }
+    }
+
+    size_t continuous_size = 1;
+    if (continuous_idx != dims)
+    {
+        continuous_size = total(new_shape, continuous_idx);
+    }
+    if (continuous_idx == 0)
+    {
+        continuous_size = total(new_shape);
+    }
+
+    size_t step_in = 1;
+    std::vector<size_t> input_steps(order.size());
+    std::vector<size_t> input_steps_old(order.size());
+
+    for (int i = dims - 1; i >= 0; --i)
+    {
+        input_steps_old[static_cast<size_t>(i)] = step_in;
+        step_in *= static_cast<size_t>(old_shape[static_cast<size_t>(i)]);
+    }
+
+    for (int i = dims - 1; i >= 0; --i)
+    {
+        input_steps[static_cast<size_t>(i)] =
+            input_steps_old[static_cast<size_t>(order[static_cast<size_t>(i)])];
+    }
+
+    const size_t out_size = input.total() / continuous_size;
+    const unsigned char* src = input.data;
+    unsigned char* dst = out.data;
+    size_t src_offset = 0;
+    const size_t elem_size = CV_ELEM_SIZE(out.type());
+    const size_t continuous_bytes = elem_size * continuous_size;
+
+    for (size_t i = 0; i < out_size; ++i)
+    {
+        std::memcpy(dst, src + elem_size * src_offset, continuous_bytes);
+        dst += continuous_bytes;
+
+        for (int j = continuous_idx - 1; j >= 0; --j)
+        {
+            src_offset += input_steps[static_cast<size_t>(j)];
+            const size_t dim_size = static_cast<size_t>(out.size[j]);
+            if ((src_offset / input_steps[static_cast<size_t>(j)]) % dim_size != 0)
+            {
+                break;
+            }
+            src_offset -= input_steps[static_cast<size_t>(j)] * dim_size;
+        }
+    }
+
+    return out;
 }
 
 } // namespace cvh

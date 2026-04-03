@@ -10,7 +10,8 @@ void transpose2d_kernel_blocked(const unsigned char* src,
                                 unsigned char* dst,
                                 int rows,
                                 int cols,
-                                size_t elem_size);
+                                size_t elem_size1,
+                                int channels);
 
 }  // namespace cpu
 }  // namespace cvh

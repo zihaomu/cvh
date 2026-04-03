@@ -635,7 +635,9 @@ Mat transposeND(const Mat& input, const std::vector<int> order)
     {
         const int rows = oldShape[oldShape.size() - 2];
         const int cols = oldShape[oldShape.size() - 1];
-        const size_t elem_size = CV_ELEM_SIZE(input.type());
+        const size_t elem_size1 = CV_ELEM_SIZE1(input.type());
+        const int channels = input.channels();
+        const size_t elem_size = elem_size1 * static_cast<size_t>(channels);
         const size_t plane_bytes = static_cast<size_t>(rows) * cols * elem_size;
         const size_t batch = input.total() / static_cast<size_t>(rows * cols);
 
@@ -647,7 +649,8 @@ Mat transposeND(const Mat& input, const std::vector<int> order)
                                             dst + batch_idx * plane_bytes,
                                             rows,
                                             cols,
-                                            elem_size);
+                                            elem_size1,
+                                            channels);
         }
 
         return out;

@@ -36,14 +36,23 @@
 
 - 可执行程序：`cvh_benchmark_core_ops`
   - 源码：`benchmark/core_ops_benchmark.cpp`
-  - 覆盖：`core` 二元基础算子（含多 `depth` / `channel` / `shape`）
+  - 覆盖：`core` 二元基础算子与 `compare(Mat,Mat)`（含多 `depth` / `channel` / `shape`）
   - 输出：标准 CSV（stdout）或 `--output <file>`
 
 - 回归检查脚本：`scripts/check_core_benchmark_regression.py`
   - 对比 baseline/current CSV
+  - 支持全局阈值 `--max-slowdown`
+  - 支持分桶阈值 `--max-slowdown-by-op-depth`（按 `op+depth` 或单维覆盖）
   - 超过阈值时返回非 0（可用于 CI gate）
 
 ## 使用示例
+
+0. （可选）启用 OpenMP 构建（对 `compare` 等已并行化 kernel 提升明显）：
+
+```bash
+cmake -S . -B build-full-test -DCVH_USE_OPENMP=ON
+cmake --build build-full-test -j --target cvh_benchmark_core_ops
+```
 
 1. 运行 quick 基准并导出结果：
 
@@ -64,6 +73,17 @@ python3 scripts/check_core_benchmark_regression.py \
   --baseline benchmark/baseline_quick.csv \
   --current benchmark/current_quick.csv \
   --max-slowdown 0.08
+```
+
+4. 对热点分桶设置阈值（例如对 `CV_16F` 和 compare 单独放宽）：
+
+```bash
+python3 scripts/check_core_benchmark_regression.py \
+  --baseline benchmark/baseline_quick.csv \
+  --current benchmark/current_quick.csv \
+  --max-slowdown 0.08 \
+  --max-slowdown-by-op-depth CV_16F=0.20 \
+  --max-slowdown-by-op-depth CMP_GT:CV_16F=0.25
 ```
 
 ## 建议流程

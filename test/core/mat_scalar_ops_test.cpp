@@ -205,6 +205,59 @@ TEST(MatScalarOps_TEST, add_subtract_mat_scalar_and_scalar_mat_support_float32_c
     }
 }
 
+TEST(MatScalarOps_TEST, multiply_divide_mat_scalar_and_scalar_mat_support_float32_c1)
+{
+    Mat src({2, 3}, CV_32FC1);
+    float seed = 0.5f;
+    for (int y = 0; y < 2; ++y)
+    {
+        for (int x = 0; x < 3; ++x)
+        {
+            src.at<float>(y, x) = seed;
+            seed += 0.5f;
+        }
+    }
+
+    const Scalar s(2.0);
+    Mat mul_mat_scalar;
+    Mat mul_scalar_mat;
+    Mat div_mat_scalar;
+    Mat div_scalar_mat;
+    multiply(src, s, mul_mat_scalar);
+    multiply(s, src, mul_scalar_mat);
+    divide(src, s, div_mat_scalar);
+    divide(s, src, div_scalar_mat);
+
+    ASSERT_EQ(mul_mat_scalar.type(), CV_32FC1);
+    ASSERT_EQ(mul_mat_scalar.shape(), src.shape());
+    ASSERT_EQ(div_scalar_mat.type(), CV_32FC1);
+    ASSERT_EQ(div_scalar_mat.shape(), src.shape());
+
+    for (int y = 0; y < 2; ++y)
+    {
+        for (int x = 0; x < 3; ++x)
+        {
+            const float v = src.at<float>(y, x);
+            EXPECT_NEAR(mul_mat_scalar.at<float>(y, x), v * 2.0f, 1e-6f);
+            EXPECT_NEAR(mul_scalar_mat.at<float>(y, x), v * 2.0f, 1e-6f);
+            EXPECT_NEAR(div_mat_scalar.at<float>(y, x), v / 2.0f, 1e-6f);
+            EXPECT_NEAR(div_scalar_mat.at<float>(y, x), 2.0f / v, 1e-6f);
+        }
+    }
+
+    Mat expr_mul = src * Scalar(2.0);
+    Mat expr_div = Scalar(2.0) / src;
+    for (int y = 0; y < 2; ++y)
+    {
+        for (int x = 0; x < 3; ++x)
+        {
+            const float v = src.at<float>(y, x);
+            EXPECT_NEAR(expr_mul.at<float>(y, x), v * 2.0f, 1e-6f);
+            EXPECT_NEAR(expr_div.at<float>(y, x), 2.0f / v, 1e-6f);
+        }
+    }
+}
+
 TEST(MatScalarOps_TEST, compare_mat_scalar_and_scalar_mat_return_u8_mask_with_channels)
 {
     Mat src({2, 2}, CV_32SC3);
@@ -300,6 +353,10 @@ TEST(MatScalarOps_TEST, scalar_binary_and_compare_reject_more_than_four_channels
     EXPECT_THROW(add(Scalar::all(1.0), src, dst), Exception);
     EXPECT_THROW(subtract(src, Scalar::all(1.0), dst), Exception);
     EXPECT_THROW(subtract(Scalar::all(1.0), src, dst), Exception);
+    EXPECT_THROW(multiply(src, Scalar::all(2.0), dst), Exception);
+    EXPECT_THROW(multiply(Scalar::all(2.0), src, dst), Exception);
+    EXPECT_THROW(divide(src, Scalar::all(2.0), dst), Exception);
+    EXPECT_THROW(divide(Scalar::all(2.0), src, dst), Exception);
     EXPECT_THROW(compare(src, Scalar::all(1.0), dst, CV_CMP_EQ), Exception);
     EXPECT_THROW(compare(Scalar::all(1.0), src, dst, CV_CMP_EQ), Exception);
 }
