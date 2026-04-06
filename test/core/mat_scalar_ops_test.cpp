@@ -298,6 +298,33 @@ TEST(MatScalarOps_TEST, compare_mat_scalar_and_scalar_mat_return_u8_mask_with_ch
     }
 }
 
+TEST(MatScalarOps_TEST, compare_fp16_scalar_paths_work_without_openmp_requirement)
+{
+    Mat src({1, 4}, CV_16FC1);
+    src.at<hfloat>(0, 0) = hfloat(-1.0f);
+    src.at<hfloat>(0, 1) = hfloat(0.5f);
+    src.at<hfloat>(0, 2) = hfloat(2.0f);
+    src.at<hfloat>(0, 3) = hfloat(4.0f);
+
+    Mat mat_scalar_mask;
+    Mat scalar_mat_mask;
+    compare(src, Scalar(1.0), mat_scalar_mask, CV_CMP_GT);
+    compare(Scalar(3.0), src, scalar_mat_mask, CV_CMP_GT);
+
+    ASSERT_EQ(mat_scalar_mask.type(), CV_8UC1);
+    ASSERT_EQ(scalar_mat_mask.type(), CV_8UC1);
+
+    EXPECT_EQ(mat_scalar_mask.at<uchar>(0, 0), static_cast<uchar>(0));
+    EXPECT_EQ(mat_scalar_mask.at<uchar>(0, 1), static_cast<uchar>(0));
+    EXPECT_EQ(mat_scalar_mask.at<uchar>(0, 2), static_cast<uchar>(255));
+    EXPECT_EQ(mat_scalar_mask.at<uchar>(0, 3), static_cast<uchar>(255));
+
+    EXPECT_EQ(scalar_mat_mask.at<uchar>(0, 0), static_cast<uchar>(255));
+    EXPECT_EQ(scalar_mat_mask.at<uchar>(0, 1), static_cast<uchar>(255));
+    EXPECT_EQ(scalar_mat_mask.at<uchar>(0, 2), static_cast<uchar>(255));
+    EXPECT_EQ(scalar_mat_mask.at<uchar>(0, 3), static_cast<uchar>(0));
+}
+
 TEST(MatScalarOps_TEST, scalar_binary_and_compare_support_non_continuous_roi)
 {
     Mat base({2, 5}, CV_32SC3);

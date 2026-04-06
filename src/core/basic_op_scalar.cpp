@@ -1,4 +1,5 @@
 #include "cvh/core/basic_op.h"
+#include "cvh/core/detail/dispatch_control.h"
 #include "cvh/core/saturate.h"
 #include "binary_kernel_xsimd.h"
 #include "transpose_kernel.h"
@@ -228,9 +229,28 @@ inline bool is_uniform_scalar_for_channels(const Scalar& scalar, int channels)
     return true;
 }
 
-inline bool is_int_xsimd_op_supported(cpu::BinaryKernelOp op)
+inline bool is_int_xsimd_op_supported(int depth, cpu::BinaryKernelOp op)
 {
-    return op == cpu::BinaryKernelOp::Max || op == cpu::BinaryKernelOp::Min;
+    if (op == cpu::BinaryKernelOp::Max || op == cpu::BinaryKernelOp::Min)
+    {
+        return true;
+    }
+
+    if (depth == CV_8U || depth == CV_8S || depth == CV_16U || depth == CV_16S)
+    {
+        return op == cpu::BinaryKernelOp::Add ||
+               op == cpu::BinaryKernelOp::Sub ||
+               op == cpu::BinaryKernelOp::Mul;
+    }
+
+    if (depth == CV_32S || depth == CV_32U)
+    {
+        return op == cpu::BinaryKernelOp::Add ||
+               op == cpu::BinaryKernelOp::Sub ||
+               op == cpu::BinaryKernelOp::Mul;
+    }
+
+    return false;
 }
 
 inline bool try_dispatch_mat_mat_binary_xsimd(const Mat& a,
@@ -299,7 +319,7 @@ inline bool try_dispatch_mat_mat_binary_xsimd(const Mat& a,
         }
         case CV_32S:
         {
-            if (!is_int_xsimd_op_supported(op))
+            if (!is_int_xsimd_op_supported(a.depth(), op))
             {
                 return false;
             }
@@ -325,9 +345,37 @@ inline bool try_dispatch_mat_mat_binary_xsimd(const Mat& a,
             }
             return true;
         }
+        case CV_32U:
+        {
+            if (!is_int_xsimd_op_supported(a.depth(), op))
+            {
+                return false;
+            }
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(uint);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(uint);
+            const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(uint);
+            for (size_t i = 0; i < outer; ++i)
+            {
+                const void* a_row = a.data + i * a_step0;
+                const void* b_row = b.data + i * b_step0;
+                void* dst_row = dst.data + i * dst_step0;
+                cpu::binary_broadcast_xsimd_uint32(
+                    op,
+                    a_row,
+                    row_elements,
+                    1,
+                    b_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            return true;
+        }
         case CV_16S:
         {
-            if (!is_int_xsimd_op_supported(op))
+            if (!is_int_xsimd_op_supported(a.depth(), op))
             {
                 return false;
             }
@@ -355,7 +403,7 @@ inline bool try_dispatch_mat_mat_binary_xsimd(const Mat& a,
         }
         case CV_16U:
         {
-            if (!is_int_xsimd_op_supported(op))
+            if (!is_int_xsimd_op_supported(a.depth(), op))
             {
                 return false;
             }
@@ -383,7 +431,7 @@ inline bool try_dispatch_mat_mat_binary_xsimd(const Mat& a,
         }
         case CV_8S:
         {
-            if (!is_int_xsimd_op_supported(op))
+            if (!is_int_xsimd_op_supported(a.depth(), op))
             {
                 return false;
             }
@@ -411,7 +459,7 @@ inline bool try_dispatch_mat_mat_binary_xsimd(const Mat& a,
         }
         case CV_8U:
         {
-            if (!is_int_xsimd_op_supported(op))
+            if (!is_int_xsimd_op_supported(a.depth(), op))
             {
                 return false;
             }
@@ -555,6 +603,90 @@ inline bool try_dispatch_mat_mat_compare_xsimd_fp16(const Mat& a,
 
     return true;
 #endif
+}
+
+inline bool try_dispatch_mat_mat_compare_xsimd_int(const Mat& a,
+                                                   const Mat& b,
+                                                   Mat& dst,
+                                                   int op)
+{
+    cpu::CompareKernelOp kernel_op;
+    if (!to_compare_kernel_op(op, kernel_op))
+    {
+        return false;
+    }
+
+    const int cn = a.channels();
+    const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
+    const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(uchar);
+
+    switch (a.depth())
+    {
+        case CV_8U:
+        {
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(uchar);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(uchar);
+            cpu::compare_broadcast_xsimd_uint8(kernel_op, a.data, a_step0 / sizeof(uchar), 1,
+                                               b.data, b_step0 / sizeof(uchar), 1,
+                                               reinterpret_cast<uchar*>(dst.data),
+                                               dst_step0 / sizeof(uchar), outer, row_elements);
+            return true;
+        }
+        case CV_8S:
+        {
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(schar);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(schar);
+            cpu::compare_broadcast_xsimd_int8(kernel_op, a.data, a_step0 / sizeof(schar), 1,
+                                              b.data, b_step0 / sizeof(schar), 1,
+                                              reinterpret_cast<uchar*>(dst.data),
+                                              dst_step0 / sizeof(uchar), outer, row_elements);
+            return true;
+        }
+        case CV_16U:
+        {
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(ushort);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(ushort);
+            cpu::compare_broadcast_xsimd_uint16(kernel_op, a.data, a_step0 / sizeof(ushort), 1,
+                                                b.data, b_step0 / sizeof(ushort), 1,
+                                                reinterpret_cast<uchar*>(dst.data),
+                                                dst_step0 / sizeof(uchar), outer, row_elements);
+            return true;
+        }
+        case CV_16S:
+        {
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(short);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(short);
+            cpu::compare_broadcast_xsimd_int16(kernel_op, a.data, a_step0 / sizeof(short), 1,
+                                               b.data, b_step0 / sizeof(short), 1,
+                                               reinterpret_cast<uchar*>(dst.data),
+                                               dst_step0 / sizeof(uchar), outer, row_elements);
+            return true;
+        }
+        case CV_32S:
+        {
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(int);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(int);
+            cpu::compare_broadcast_xsimd_int32(kernel_op, a.data, a_step0 / sizeof(int), 1,
+                                               b.data, b_step0 / sizeof(int), 1,
+                                               reinterpret_cast<uchar*>(dst.data),
+                                               dst_step0 / sizeof(uchar), outer, row_elements);
+            return true;
+        }
+        case CV_32U:
+        {
+            const size_t a_step0 = a.dims > 1 ? a.step(0) : row_elements * sizeof(uint);
+            const size_t b_step0 = b.dims > 1 ? b.step(0) : row_elements * sizeof(uint);
+            cpu::compare_broadcast_xsimd_uint32(kernel_op, a.data, a_step0 / sizeof(uint), 1,
+                                                b.data, b_step0 / sizeof(uint), 1,
+                                                reinterpret_cast<uchar*>(dst.data),
+                                                dst_step0 / sizeof(uchar), outer, row_elements);
+            return true;
+        }
+        default:
+            return false;
+    }
 }
 
 inline bool try_dispatch_mat_scalar_binary_xsimd_fp32(const Mat& src,
@@ -727,6 +859,375 @@ inline bool try_dispatch_mat_scalar_binary_xsimd_fp16(const Mat& src,
     return true;
 }
 
+inline bool try_dispatch_mat_scalar_binary_xsimd_int32(const Mat& src,
+                                                       const Scalar& scalar,
+                                                       Mat& dst,
+                                                       cpu::BinaryKernelOp op,
+                                                       bool scalar_first)
+{
+    if (src.depth() != CV_32S)
+    {
+        return false;
+    }
+
+    const int cn = src.channels();
+    if (cn <= 0 || cn > 4)
+    {
+        return false;
+    }
+
+    std::int32_t scalar_lanes[4] = {0, 0, 0, 0};
+    for (int ch = 0; ch < cn; ++ch)
+    {
+        scalar_lanes[ch] = saturate_cast<std::int32_t>(scalar[ch]);
+    }
+
+    const bool uniform_scalar = is_uniform_scalar_for_channels(scalar, cn);
+    const std::int32_t scalar_val = scalar_lanes[0];
+    const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixel_per_outer = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(std::int32_t);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(std::int32_t);
+    const size_t src_outer_stride = src_step0 / sizeof(std::int32_t);
+    const size_t dst_outer_stride = dst_step0 / sizeof(std::int32_t);
+
+    if (uniform_scalar)
+    {
+        for (size_t i = 0; i < outer; ++i)
+        {
+            const void* src_row = src.data + i * src_step0;
+            void* dst_row = dst.data + i * dst_step0;
+            if (scalar_first)
+            {
+                cpu::binary_broadcast_xsimd_int32(
+                    op,
+                    &scalar_val,
+                    0,
+                    0,
+                    src_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            else
+            {
+                cpu::binary_broadcast_xsimd_int32(
+                    op,
+                    src_row,
+                    row_elements,
+                    1,
+                    &scalar_val,
+                    0,
+                    0,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+        }
+    }
+    else
+    {
+        cpu::binary_scalar_channels_xsimd_int32(op,
+                                                src.data,
+                                                src_outer_stride,
+                                                scalar_lanes,
+                                                cn,
+                                                dst.data,
+                                                dst_outer_stride,
+                                                outer,
+                                                row_elements,
+                                                scalar_first);
+    }
+
+    return true;
+}
+
+template<typename T>
+inline bool try_dispatch_mat_scalar_binary_xsimd_smallint(const Mat& src,
+                                                          const Scalar& scalar,
+                                                          Mat& dst,
+                                                          cpu::BinaryKernelOp op,
+                                                          bool scalar_first,
+                                                          int expected_depth)
+{
+    if (op != cpu::BinaryKernelOp::Add &&
+        op != cpu::BinaryKernelOp::Sub &&
+        op != cpu::BinaryKernelOp::Mul)
+    {
+        return false;
+    }
+
+    if (src.depth() != expected_depth)
+    {
+        return false;
+    }
+
+    const int cn = src.channels();
+    if (cn <= 0 || cn > 4)
+    {
+        return false;
+    }
+
+    T scalar_lanes[4] = {T(0), T(0), T(0), T(0)};
+    for (int ch = 0; ch < cn; ++ch)
+    {
+        scalar_lanes[ch] = saturate_cast<T>(scalar[ch]);
+    }
+
+    const bool uniform_scalar = is_uniform_scalar_for_channels(scalar, cn);
+    const T scalar_val = scalar_lanes[0];
+    const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixel_per_outer = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(T);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(T);
+    const size_t src_outer_stride = src_step0 / sizeof(T);
+    const size_t dst_outer_stride = dst_step0 / sizeof(T);
+
+    if (uniform_scalar)
+    {
+        for (size_t i = 0; i < outer; ++i)
+        {
+            const void* src_row = src.data + i * src_step0;
+            void* dst_row = dst.data + i * dst_step0;
+            if (expected_depth == CV_8U)
+            {
+                cpu::binary_broadcast_xsimd_uint8(op,
+                                                  scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                  scalar_first ? 0 : row_elements,
+                                                  scalar_first ? 0 : 1,
+                                                  scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                  scalar_first ? row_elements : 0,
+                                                  scalar_first ? 1 : 0,
+                                                  dst_row,
+                                                  1,
+                                                  row_elements);
+            }
+            else if (expected_depth == CV_8S)
+            {
+                cpu::binary_broadcast_xsimd_int8(op,
+                                                 scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                 scalar_first ? 0 : row_elements,
+                                                 scalar_first ? 0 : 1,
+                                                 scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                 scalar_first ? row_elements : 0,
+                                                 scalar_first ? 1 : 0,
+                                                 dst_row,
+                                                 1,
+                                                 row_elements);
+            }
+            else if (expected_depth == CV_16U)
+            {
+                cpu::binary_broadcast_xsimd_uint16(op,
+                                                   scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                   scalar_first ? 0 : row_elements,
+                                                   scalar_first ? 0 : 1,
+                                                   scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                   scalar_first ? row_elements : 0,
+                                                   scalar_first ? 1 : 0,
+                                                   dst_row,
+                                                   1,
+                                                   row_elements);
+            }
+            else
+            {
+                cpu::binary_broadcast_xsimd_int16(op,
+                                                  scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                  scalar_first ? 0 : row_elements,
+                                                  scalar_first ? 0 : 1,
+                                                  scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                  scalar_first ? row_elements : 0,
+                                                  scalar_first ? 1 : 0,
+                                                  dst_row,
+                                                  1,
+                                                  row_elements);
+            }
+        }
+    }
+    else
+    {
+        if (expected_depth == CV_8U)
+        {
+            cpu::binary_scalar_channels_xsimd_uint8(op,
+                                                    src.data,
+                                                    src_outer_stride,
+                                                    reinterpret_cast<const std::uint8_t*>(scalar_lanes),
+                                                    cn,
+                                                    dst.data,
+                                                    dst_outer_stride,
+                                                    outer,
+                                                    row_elements,
+                                                    scalar_first);
+        }
+        else if (expected_depth == CV_8S)
+        {
+            cpu::binary_scalar_channels_xsimd_int8(op,
+                                                   src.data,
+                                                   src_outer_stride,
+                                                   reinterpret_cast<const std::int8_t*>(scalar_lanes),
+                                                   cn,
+                                                   dst.data,
+                                                   dst_outer_stride,
+                                                   outer,
+                                                   row_elements,
+                                                   scalar_first);
+        }
+        else if (expected_depth == CV_16U)
+        {
+            cpu::binary_scalar_channels_xsimd_uint16(op,
+                                                     src.data,
+                                                     src_outer_stride,
+                                                     reinterpret_cast<const std::uint16_t*>(scalar_lanes),
+                                                     cn,
+                                                     dst.data,
+                                                     dst_outer_stride,
+                                                     outer,
+                                                     row_elements,
+                                                     scalar_first);
+        }
+        else
+        {
+            cpu::binary_scalar_channels_xsimd_int16(op,
+                                                    src.data,
+                                                    src_outer_stride,
+                                                    reinterpret_cast<const std::int16_t*>(scalar_lanes),
+                                                    cn,
+                                                    dst.data,
+                                                    dst_outer_stride,
+                                                    outer,
+                                                    row_elements,
+                                                    scalar_first);
+        }
+    }
+
+    return true;
+}
+
+inline bool try_dispatch_mat_scalar_binary_xsimd_uint8(const Mat& src,
+                                                       const Scalar& scalar,
+                                                       Mat& dst,
+                                                       cpu::BinaryKernelOp op,
+                                                       bool scalar_first)
+{
+    return try_dispatch_mat_scalar_binary_xsimd_smallint<uchar>(src, scalar, dst, op, scalar_first, CV_8U);
+}
+
+inline bool try_dispatch_mat_scalar_binary_xsimd_int8(const Mat& src,
+                                                      const Scalar& scalar,
+                                                      Mat& dst,
+                                                      cpu::BinaryKernelOp op,
+                                                      bool scalar_first)
+{
+    return try_dispatch_mat_scalar_binary_xsimd_smallint<schar>(src, scalar, dst, op, scalar_first, CV_8S);
+}
+
+inline bool try_dispatch_mat_scalar_binary_xsimd_uint16(const Mat& src,
+                                                        const Scalar& scalar,
+                                                        Mat& dst,
+                                                        cpu::BinaryKernelOp op,
+                                                        bool scalar_first)
+{
+    return try_dispatch_mat_scalar_binary_xsimd_smallint<ushort>(src, scalar, dst, op, scalar_first, CV_16U);
+}
+
+inline bool try_dispatch_mat_scalar_binary_xsimd_int16(const Mat& src,
+                                                       const Scalar& scalar,
+                                                       Mat& dst,
+                                                       cpu::BinaryKernelOp op,
+                                                       bool scalar_first)
+{
+    return try_dispatch_mat_scalar_binary_xsimd_smallint<short>(src, scalar, dst, op, scalar_first, CV_16S);
+}
+
+inline bool try_dispatch_mat_scalar_binary_xsimd_uint32(const Mat& src,
+                                                        const Scalar& scalar,
+                                                        Mat& dst,
+                                                        cpu::BinaryKernelOp op,
+                                                        bool scalar_first)
+{
+    if (src.depth() != CV_32U)
+    {
+        return false;
+    }
+
+    const int cn = src.channels();
+    if (cn <= 0 || cn > 4)
+    {
+        return false;
+    }
+
+    std::uint32_t scalar_lanes[4] = {0u, 0u, 0u, 0u};
+    for (int ch = 0; ch < cn; ++ch)
+    {
+        scalar_lanes[ch] = saturate_cast<std::uint32_t>(scalar[ch]);
+    }
+
+    const bool uniform_scalar = is_uniform_scalar_for_channels(scalar, cn);
+    const std::uint32_t scalar_val = scalar_lanes[0];
+    const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixel_per_outer = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(std::uint32_t);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(std::uint32_t);
+    const size_t src_outer_stride = src_step0 / sizeof(std::uint32_t);
+    const size_t dst_outer_stride = dst_step0 / sizeof(std::uint32_t);
+
+    if (uniform_scalar)
+    {
+        for (size_t i = 0; i < outer; ++i)
+        {
+            const void* src_row = src.data + i * src_step0;
+            void* dst_row = dst.data + i * dst_step0;
+            if (scalar_first)
+            {
+                cpu::binary_broadcast_xsimd_uint32(
+                    op,
+                    &scalar_val,
+                    0,
+                    0,
+                    src_row,
+                    row_elements,
+                    1,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+            else
+            {
+                cpu::binary_broadcast_xsimd_uint32(
+                    op,
+                    src_row,
+                    row_elements,
+                    1,
+                    &scalar_val,
+                    0,
+                    0,
+                    dst_row,
+                    1,
+                    row_elements);
+            }
+        }
+    }
+    else
+    {
+        cpu::binary_scalar_channels_xsimd_uint32(op,
+                                                 src.data,
+                                                 src_outer_stride,
+                                                 scalar_lanes,
+                                                 cn,
+                                                 dst.data,
+                                                 dst_outer_stride,
+                                                 outer,
+                                                 row_elements,
+                                                 scalar_first);
+    }
+
+    return true;
+}
+
 inline bool try_dispatch_mat_scalar_compare_xsimd_fp32(const Mat& src,
                                                        const Scalar& scalar,
                                                        Mat& dst,
@@ -821,14 +1322,6 @@ inline bool try_dispatch_mat_scalar_compare_xsimd_fp16(const Mat& src,
                                                        int op,
                                                        bool scalar_first)
 {
-#ifndef _OPENMP
-    (void)src;
-    (void)scalar;
-    (void)dst;
-    (void)op;
-    (void)scalar_first;
-    return false;
-#else
     if (src.depth() != CV_16F)
     {
         return false;
@@ -909,7 +1402,169 @@ inline bool try_dispatch_mat_scalar_compare_xsimd_fp16(const Mat& src,
     }
 
     return true;
-#endif
+}
+
+template<typename T>
+inline bool try_dispatch_mat_scalar_compare_xsimd_int(const Mat& src,
+                                                      const Scalar& scalar,
+                                                      Mat& dst,
+                                                      int op,
+                                                      bool scalar_first,
+                                                      int expected_depth)
+{
+    if (src.depth() != expected_depth)
+    {
+        return false;
+    }
+
+    const int cn = src.channels();
+    if (cn <= 0 || cn > 4)
+    {
+        return false;
+    }
+
+    cpu::CompareKernelOp kernel_op;
+    if (!to_compare_kernel_op(op, kernel_op))
+    {
+        return false;
+    }
+
+    T scalar_lanes[4] = {T(0), T(0), T(0), T(0)};
+    for (int ch = 0; ch < cn; ++ch)
+    {
+        scalar_lanes[ch] = saturate_cast<T>(scalar[ch]);
+    }
+    const bool uniform_scalar = is_uniform_scalar_for_channels(scalar, cn);
+    const T scalar_val = scalar_lanes[0];
+    const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixel_per_outer = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_elements = pixel_per_outer * static_cast<size_t>(cn);
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_elements * sizeof(T);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_elements * sizeof(uchar);
+    const size_t src_outer_stride = src_step0 / sizeof(T);
+    const size_t dst_outer_stride = dst_step0 / sizeof(uchar);
+
+    if (uniform_scalar)
+    {
+        for (size_t i = 0; i < outer; ++i)
+        {
+            const void* src_row = src.data + i * src_step0;
+            uchar* dst_row = reinterpret_cast<uchar*>(dst.data + i * dst_step0);
+            if (expected_depth == CV_8U)
+            {
+                cpu::compare_broadcast_xsimd_uint8(kernel_op,
+                                                   scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                   scalar_first ? 0 : row_elements,
+                                                   scalar_first ? 0 : 1,
+                                                   scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                   scalar_first ? row_elements : 0,
+                                                   scalar_first ? 1 : 0,
+                                                   dst_row, row_elements, 1, row_elements);
+            }
+            else if (expected_depth == CV_8S)
+            {
+                cpu::compare_broadcast_xsimd_int8(kernel_op,
+                                                  scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                  scalar_first ? 0 : row_elements,
+                                                  scalar_first ? 0 : 1,
+                                                  scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                  scalar_first ? row_elements : 0,
+                                                  scalar_first ? 1 : 0,
+                                                  dst_row, row_elements, 1, row_elements);
+            }
+            else if (expected_depth == CV_16U)
+            {
+                cpu::compare_broadcast_xsimd_uint16(kernel_op,
+                                                    scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                    scalar_first ? 0 : row_elements,
+                                                    scalar_first ? 0 : 1,
+                                                    scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                    scalar_first ? row_elements : 0,
+                                                    scalar_first ? 1 : 0,
+                                                    dst_row, row_elements, 1, row_elements);
+            }
+            else if (expected_depth == CV_16S)
+            {
+                cpu::compare_broadcast_xsimd_int16(kernel_op,
+                                                   scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                   scalar_first ? 0 : row_elements,
+                                                   scalar_first ? 0 : 1,
+                                                   scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                   scalar_first ? row_elements : 0,
+                                                   scalar_first ? 1 : 0,
+                                                   dst_row, row_elements, 1, row_elements);
+            }
+            else if (expected_depth == CV_32S)
+            {
+                cpu::compare_broadcast_xsimd_int32(kernel_op,
+                                                   scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                   scalar_first ? 0 : row_elements,
+                                                   scalar_first ? 0 : 1,
+                                                   scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                   scalar_first ? row_elements : 0,
+                                                   scalar_first ? 1 : 0,
+                                                   dst_row, row_elements, 1, row_elements);
+            }
+            else
+            {
+                cpu::compare_broadcast_xsimd_uint32(kernel_op,
+                                                    scalar_first ? static_cast<const void*>(&scalar_val) : src_row,
+                                                    scalar_first ? 0 : row_elements,
+                                                    scalar_first ? 0 : 1,
+                                                    scalar_first ? src_row : static_cast<const void*>(&scalar_val),
+                                                    scalar_first ? row_elements : 0,
+                                                    scalar_first ? 1 : 0,
+                                                    dst_row, row_elements, 1, row_elements);
+            }
+        }
+    }
+    else
+    {
+        if (expected_depth == CV_8U)
+        {
+            cpu::compare_scalar_channels_xsimd_uint8(kernel_op, src.data, src_outer_stride,
+                                                     reinterpret_cast<const std::uint8_t*>(scalar_lanes), cn,
+                                                     reinterpret_cast<uchar*>(dst.data), dst_outer_stride,
+                                                     outer, row_elements, scalar_first);
+        }
+        else if (expected_depth == CV_8S)
+        {
+            cpu::compare_scalar_channels_xsimd_int8(kernel_op, src.data, src_outer_stride,
+                                                    reinterpret_cast<const std::int8_t*>(scalar_lanes), cn,
+                                                    reinterpret_cast<uchar*>(dst.data), dst_outer_stride,
+                                                    outer, row_elements, scalar_first);
+        }
+        else if (expected_depth == CV_16U)
+        {
+            cpu::compare_scalar_channels_xsimd_uint16(kernel_op, src.data, src_outer_stride,
+                                                      reinterpret_cast<const std::uint16_t*>(scalar_lanes), cn,
+                                                      reinterpret_cast<uchar*>(dst.data), dst_outer_stride,
+                                                      outer, row_elements, scalar_first);
+        }
+        else if (expected_depth == CV_16S)
+        {
+            cpu::compare_scalar_channels_xsimd_int16(kernel_op, src.data, src_outer_stride,
+                                                     reinterpret_cast<const std::int16_t*>(scalar_lanes), cn,
+                                                     reinterpret_cast<uchar*>(dst.data), dst_outer_stride,
+                                                     outer, row_elements, scalar_first);
+        }
+        else if (expected_depth == CV_32S)
+        {
+            cpu::compare_scalar_channels_xsimd_int32(kernel_op, src.data, src_outer_stride,
+                                                     reinterpret_cast<const std::int32_t*>(scalar_lanes), cn,
+                                                     reinterpret_cast<uchar*>(dst.data), dst_outer_stride,
+                                                     outer, row_elements, scalar_first);
+        }
+        else
+        {
+            cpu::compare_scalar_channels_xsimd_uint32(kernel_op, src.data, src_outer_stride,
+                                                      reinterpret_cast<const std::uint32_t*>(scalar_lanes), cn,
+                                                      reinterpret_cast<uchar*>(dst.data), dst_outer_stride,
+                                                      outer, row_elements, scalar_first);
+        }
+    }
+
+    return true;
 }
 
 template<typename Op>
@@ -923,11 +1578,21 @@ void dispatch_mat_mat_binary_arith(const Mat& a,
     ensure_same_type_and_shape(a, b, fn_name);
     ensure_binary_dst_like_src(a, dst, fn_name);
 
-    if (try_dispatch_mat_mat_binary_xsimd(a, b, dst, xsimd_op))
+    const cpu::DispatchMode mode = cpu::dispatch_mode();
+    if (mode != cpu::DispatchMode::ScalarOnly &&
+        try_dispatch_mat_mat_binary_xsimd(a, b, dst, xsimd_op))
     {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::XSimd);
         return;
     }
 
+    if (mode == cpu::DispatchMode::XSimdOnly)
+    {
+        CV_Error_(Error::StsNotImplemented,
+                  ("%s xsimd-only mode requested but no xsimd path is available", fn_name));
+    }
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     dispatch_mat_mat_binary_impl_by_depth(a, b, dst, op, fn_name);
 }
 
@@ -1177,12 +1842,28 @@ void dispatch_mat_scalar_binary_arith(const Mat& src,
     check_scalar_channel_bound(src, fn_name);
     ensure_binary_dst_like_src(src, dst, fn_name);
 
-    if (try_dispatch_mat_scalar_binary_xsimd_fp32(src, scalar, dst, xsimd_op, scalar_first) ||
-        try_dispatch_mat_scalar_binary_xsimd_fp16(src, scalar, dst, xsimd_op, scalar_first))
+    const cpu::DispatchMode mode = cpu::dispatch_mode();
+    if (mode != cpu::DispatchMode::ScalarOnly &&
+        (try_dispatch_mat_scalar_binary_xsimd_fp32(src, scalar, dst, xsimd_op, scalar_first) ||
+         try_dispatch_mat_scalar_binary_xsimd_fp16(src, scalar, dst, xsimd_op, scalar_first) ||
+         try_dispatch_mat_scalar_binary_xsimd_uint8(src, scalar, dst, xsimd_op, scalar_first) ||
+         try_dispatch_mat_scalar_binary_xsimd_int8(src, scalar, dst, xsimd_op, scalar_first) ||
+         try_dispatch_mat_scalar_binary_xsimd_uint16(src, scalar, dst, xsimd_op, scalar_first) ||
+         try_dispatch_mat_scalar_binary_xsimd_int16(src, scalar, dst, xsimd_op, scalar_first) ||
+         try_dispatch_mat_scalar_binary_xsimd_int32(src, scalar, dst, xsimd_op, scalar_first) ||
+         try_dispatch_mat_scalar_binary_xsimd_uint32(src, scalar, dst, xsimd_op, scalar_first)))
     {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::XSimd);
         return;
     }
 
+    if (mode == cpu::DispatchMode::XSimdOnly)
+    {
+        CV_Error_(Error::StsNotImplemented,
+                  ("%s xsimd-only mode requested but no xsimd path is available", fn_name));
+    }
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     dispatch_mat_scalar_binary_by_depth(src, scalar, dst, op, scalar_first, fn_name);
 }
 
@@ -1252,11 +1933,28 @@ void dispatch_mat_scalar_compare(const Mat& src,
     check_scalar_channel_bound(src, fn_name);
     ensure_compare_dst_like_src(src, dst, fn_name);
 
-    if (try_dispatch_mat_scalar_compare_xsimd_fp32(src, scalar, dst, op, scalar_first) ||
-        try_dispatch_mat_scalar_compare_xsimd_fp16(src, scalar, dst, op, scalar_first))
+    const cpu::DispatchMode mode = cpu::dispatch_mode();
+    if (mode != cpu::DispatchMode::ScalarOnly &&
+        (try_dispatch_mat_scalar_compare_xsimd_fp32(src, scalar, dst, op, scalar_first) ||
+         try_dispatch_mat_scalar_compare_xsimd_fp16(src, scalar, dst, op, scalar_first) ||
+         try_dispatch_mat_scalar_compare_xsimd_int<uchar>(src, scalar, dst, op, scalar_first, CV_8U) ||
+         try_dispatch_mat_scalar_compare_xsimd_int<schar>(src, scalar, dst, op, scalar_first, CV_8S) ||
+         try_dispatch_mat_scalar_compare_xsimd_int<ushort>(src, scalar, dst, op, scalar_first, CV_16U) ||
+         try_dispatch_mat_scalar_compare_xsimd_int<short>(src, scalar, dst, op, scalar_first, CV_16S) ||
+         try_dispatch_mat_scalar_compare_xsimd_int<int>(src, scalar, dst, op, scalar_first, CV_32S) ||
+         try_dispatch_mat_scalar_compare_xsimd_int<uint>(src, scalar, dst, op, scalar_first, CV_32U)))
     {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::XSimd);
         return;
     }
+
+    if (mode == cpu::DispatchMode::XSimdOnly)
+    {
+        CV_Error_(Error::StsNotImplemented,
+                  ("%s xsimd-only mode requested but no xsimd path is available", fn_name));
+    }
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
 
     switch (src.depth())
     {
@@ -1324,11 +2022,23 @@ void dispatch_mat_mat_compare(const Mat& a, const Mat& b, Mat& dst, int op, cons
     ensure_same_type_and_shape(a, b, fn_name);
     ensure_compare_dst_like_src(a, dst, fn_name);
 
-    if (try_dispatch_mat_mat_compare_xsimd_fp32(a, b, dst, op) ||
-        try_dispatch_mat_mat_compare_xsimd_fp16(a, b, dst, op))
+    const cpu::DispatchMode mode = cpu::dispatch_mode();
+    if (mode != cpu::DispatchMode::ScalarOnly &&
+        (try_dispatch_mat_mat_compare_xsimd_fp32(a, b, dst, op) ||
+         try_dispatch_mat_mat_compare_xsimd_fp16(a, b, dst, op) ||
+         try_dispatch_mat_mat_compare_xsimd_int(a, b, dst, op)))
     {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::XSimd);
         return;
     }
+
+    if (mode == cpu::DispatchMode::XSimdOnly)
+    {
+        CV_Error_(Error::StsNotImplemented,
+                  ("%s xsimd-only mode requested but no xsimd path is available", fn_name));
+    }
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
 
     switch (a.depth())
     {

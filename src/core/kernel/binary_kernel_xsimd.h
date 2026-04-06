@@ -75,6 +75,18 @@ void binary_broadcast_xsimd_int32(BinaryKernelOp op,
                             size_t outer,
                             size_t inner);
 
+// CV_32U (uint32) variant
+void binary_broadcast_xsimd_uint32(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner);
+
 // CV_16S (int16) variant
 void binary_broadcast_xsimd_int16(BinaryKernelOp op,
                             const void* lhs,
@@ -148,6 +160,78 @@ void compare_broadcast_xsimd_hfloat(CompareKernelOp op,
                                     size_t outer,
                                     size_t inner);
 
+void compare_broadcast_xsimd_int32(CompareKernelOp op,
+                                   const void* lhs,
+                                   size_t lhs_outer_stride,
+                                   size_t lhs_inner_stride,
+                                   const void* rhs,
+                                   size_t rhs_outer_stride,
+                                   size_t rhs_inner_stride,
+                                   std::uint8_t* out,
+                                   size_t out_outer_stride,
+                                   size_t outer,
+                                   size_t inner);
+
+void compare_broadcast_xsimd_uint32(CompareKernelOp op,
+                                    const void* lhs,
+                                    size_t lhs_outer_stride,
+                                    size_t lhs_inner_stride,
+                                    const void* rhs,
+                                    size_t rhs_outer_stride,
+                                    size_t rhs_inner_stride,
+                                    std::uint8_t* out,
+                                    size_t out_outer_stride,
+                                    size_t outer,
+                                    size_t inner);
+
+void compare_broadcast_xsimd_int16(CompareKernelOp op,
+                                   const void* lhs,
+                                   size_t lhs_outer_stride,
+                                   size_t lhs_inner_stride,
+                                   const void* rhs,
+                                   size_t rhs_outer_stride,
+                                   size_t rhs_inner_stride,
+                                   std::uint8_t* out,
+                                   size_t out_outer_stride,
+                                   size_t outer,
+                                   size_t inner);
+
+void compare_broadcast_xsimd_uint16(CompareKernelOp op,
+                                    const void* lhs,
+                                    size_t lhs_outer_stride,
+                                    size_t lhs_inner_stride,
+                                    const void* rhs,
+                                    size_t rhs_outer_stride,
+                                    size_t rhs_inner_stride,
+                                    std::uint8_t* out,
+                                    size_t out_outer_stride,
+                                    size_t outer,
+                                    size_t inner);
+
+void compare_broadcast_xsimd_int8(CompareKernelOp op,
+                                  const void* lhs,
+                                  size_t lhs_outer_stride,
+                                  size_t lhs_inner_stride,
+                                  const void* rhs,
+                                  size_t rhs_outer_stride,
+                                  size_t rhs_inner_stride,
+                                  std::uint8_t* out,
+                                  size_t out_outer_stride,
+                                  size_t outer,
+                                  size_t inner);
+
+void compare_broadcast_xsimd_uint8(CompareKernelOp op,
+                                   const void* lhs,
+                                   size_t lhs_outer_stride,
+                                   size_t lhs_inner_stride,
+                                   const void* rhs,
+                                   size_t rhs_outer_stride,
+                                   size_t rhs_inner_stride,
+                                   std::uint8_t* out,
+                                   size_t out_outer_stride,
+                                   size_t outer,
+                                   size_t inner);
+
 // Row-level helper for Mat-Scalar paths where scalar lanes differ per channel.
 // `inner` is row element count (pixel_count * channels), `channels` is interleaved channel count.
 void binary_scalar_channels_xsimd(BinaryKernelOp op,
@@ -172,6 +256,72 @@ void binary_scalar_channels_xsimd_hfloat(BinaryKernelOp op,
                                          size_t inner,
                                          bool scalar_first);
 
+void binary_scalar_channels_xsimd_int32(BinaryKernelOp op,
+                                        const void* src,
+                                        size_t src_outer_stride,
+                                        const std::int32_t* scalar_lanes,
+                                        int channels,
+                                        void* out,
+                                        size_t out_outer_stride,
+                                        size_t outer,
+                                        size_t inner,
+                                        bool scalar_first);
+
+void binary_scalar_channels_xsimd_uint32(BinaryKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::uint32_t* scalar_lanes,
+                                         int channels,
+                                         void* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first);
+
+void binary_scalar_channels_xsimd_int16(BinaryKernelOp op,
+                                        const void* src,
+                                        size_t src_outer_stride,
+                                        const std::int16_t* scalar_lanes,
+                                        int channels,
+                                        void* out,
+                                        size_t out_outer_stride,
+                                        size_t outer,
+                                        size_t inner,
+                                        bool scalar_first);
+
+void binary_scalar_channels_xsimd_uint16(BinaryKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::uint16_t* scalar_lanes,
+                                         int channels,
+                                         void* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first);
+
+void binary_scalar_channels_xsimd_int8(BinaryKernelOp op,
+                                       const void* src,
+                                       size_t src_outer_stride,
+                                       const std::int8_t* scalar_lanes,
+                                       int channels,
+                                       void* out,
+                                       size_t out_outer_stride,
+                                       size_t outer,
+                                       size_t inner,
+                                       bool scalar_first);
+
+void binary_scalar_channels_xsimd_uint8(BinaryKernelOp op,
+                                        const void* src,
+                                        size_t src_outer_stride,
+                                        const std::uint8_t* scalar_lanes,
+                                        int channels,
+                                        void* out,
+                                        size_t out_outer_stride,
+                                        size_t outer,
+                                        size_t inner,
+                                        bool scalar_first);
+
 void compare_scalar_channels_xsimd(CompareKernelOp op,
                                    const float* src,
                                    size_t src_outer_stride,
@@ -193,6 +343,72 @@ void compare_scalar_channels_xsimd_hfloat(CompareKernelOp op,
                                           size_t outer,
                                           size_t inner,
                                           bool scalar_first);
+
+void compare_scalar_channels_xsimd_int32(CompareKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::int32_t* scalar_lanes,
+                                         int channels,
+                                         std::uint8_t* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first);
+
+void compare_scalar_channels_xsimd_uint32(CompareKernelOp op,
+                                          const void* src,
+                                          size_t src_outer_stride,
+                                          const std::uint32_t* scalar_lanes,
+                                          int channels,
+                                          std::uint8_t* out,
+                                          size_t out_outer_stride,
+                                          size_t outer,
+                                          size_t inner,
+                                          bool scalar_first);
+
+void compare_scalar_channels_xsimd_int16(CompareKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::int16_t* scalar_lanes,
+                                         int channels,
+                                         std::uint8_t* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first);
+
+void compare_scalar_channels_xsimd_uint16(CompareKernelOp op,
+                                          const void* src,
+                                          size_t src_outer_stride,
+                                          const std::uint16_t* scalar_lanes,
+                                          int channels,
+                                          std::uint8_t* out,
+                                          size_t out_outer_stride,
+                                          size_t outer,
+                                          size_t inner,
+                                          bool scalar_first);
+
+void compare_scalar_channels_xsimd_int8(CompareKernelOp op,
+                                        const void* src,
+                                        size_t src_outer_stride,
+                                        const std::int8_t* scalar_lanes,
+                                        int channels,
+                                        std::uint8_t* out,
+                                        size_t out_outer_stride,
+                                        size_t outer,
+                                        size_t inner,
+                                        bool scalar_first);
+
+void compare_scalar_channels_xsimd_uint8(CompareKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::uint8_t* scalar_lanes,
+                                         int channels,
+                                         std::uint8_t* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first);
 
 }  // namespace cpu
 }  // namespace cvh

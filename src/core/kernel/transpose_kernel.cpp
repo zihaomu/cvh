@@ -1,5 +1,7 @@
 #include "transpose_kernel.h"
+#include "cvh/core/detail/dispatch_control.h"
 #include "cvh/core/detail/openmp_utils.h"
+#include "cvh/core/system.h"
 #include "xsimd/xsimd.hpp"
 
 #include <algorithm>
@@ -178,10 +180,20 @@ void transpose2d_kernel_blocked(const unsigned char* src,
     }
 
     const size_t elem_size = elem_size1 * static_cast<size_t>(channels);
-    if (try_transpose2d_xsimd_for_element_size(src, dst, rows, cols, elem_size))
+    const DispatchMode mode = dispatch_mode();
+    if (mode != DispatchMode::ScalarOnly &&
+        try_transpose2d_xsimd_for_element_size(src, dst, rows, cols, elem_size))
     {
+        set_last_dispatch_tag(DispatchTag::XSimd);
         return;
     }
+
+    if (mode == DispatchMode::XSimdOnly)
+    {
+        CV_Error(Error::StsNotImplemented, "transpose2d_kernel_blocked xsimd-only mode requested but no xsimd path is available");
+    }
+
+    set_last_dispatch_tag(DispatchTag::Scalar);
 
     // Fixed-size pixel fallback avoids per-element memcpy call overhead for
     // common multi-channel layouts not representable as 1/2/4/8-byte lanes.

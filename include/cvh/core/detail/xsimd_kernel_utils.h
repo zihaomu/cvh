@@ -15,6 +15,10 @@
 #include <immintrin.h>
 #endif
 
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#endif
+
 namespace cvh {
 namespace cpu {
 
@@ -60,6 +64,15 @@ inline XSimdBatch load_hfloat_batch(const hfloat* src)
         {
             return load_hfloat_batch_f16c(src);
         }
+    }
+#endif
+
+#if defined(__aarch64__) && defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC)
+    if constexpr (kXSimdBatchSize == 4)
+    {
+        std::array<__fp16, 4> tmp {};
+        std::memcpy(tmp.data(), src, sizeof(tmp));
+        return XSimdBatch(vcvt_f32_f16(vld1_f16(tmp.data())));
     }
 #endif
 
@@ -120,6 +133,18 @@ inline void store_hfloat_batch(const XSimdBatch& src, hfloat* dst)
             store_hfloat_batch_f16c(src, dst);
             return;
         }
+    }
+#endif
+
+#if defined(__aarch64__) && defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC)
+    if constexpr (kXSimdBatchSize == 4)
+    {
+        alignas(16) std::array<float, 4> tmp_f32 {};
+        std::array<__fp16, 4> tmp_f16 {};
+        src.store_unaligned(tmp_f32.data());
+        vst1_f16(tmp_f16.data(), vcvt_f16_f32(vld1q_f32(tmp_f32.data())));
+        std::memcpy(dst, tmp_f16.data(), sizeof(tmp_f16));
+        return;
     }
 #endif
 

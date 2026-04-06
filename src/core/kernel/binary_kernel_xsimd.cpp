@@ -1,5 +1,6 @@
 #include "binary_kernel_xsimd.h"
 #include "cvh/core/detail/openmp_utils.h"
+#include "cvh/core/saturate.h"
 #include "cvh/core/detail/xsimd_kernel_utils.h"
 #include "cvh/core/define.h"
 
@@ -25,6 +26,9 @@ constexpr size_t kLanes64 = Batch64::size;
 
 using Batch32 = xsimd::batch<std::int32_t>;
 constexpr size_t kLanes32 = Batch32::size;
+
+using BatchU32 = xsimd::batch<std::uint32_t>;
+constexpr size_t kLanesU32 = BatchU32::size;
 
 using Batch16 = xsimd::batch<std::int16_t>;
 constexpr size_t kLanes16 = Batch16::size;
@@ -100,6 +104,52 @@ inline bool apply_compare_scalar(CompareKernelOp op, float lhs, float rhs)
 }
 
 inline Batch::batch_bool_type apply_compare_batch(CompareKernelOp op, const Batch& lhs, const Batch& rhs)
+{
+    switch (op)
+    {
+        case CompareKernelOp::Eq:
+            return lhs == rhs;
+        case CompareKernelOp::Gt:
+            return lhs > rhs;
+        case CompareKernelOp::Ge:
+            return lhs >= rhs;
+        case CompareKernelOp::Lt:
+            return lhs < rhs;
+        case CompareKernelOp::Le:
+            return lhs <= rhs;
+        case CompareKernelOp::Ne:
+            return lhs != rhs;
+    }
+
+    return lhs != rhs;
+}
+
+template<typename T>
+inline bool apply_compare_scalar_typed(CompareKernelOp op, T lhs, T rhs)
+{
+    switch (op)
+    {
+        case CompareKernelOp::Eq:
+            return lhs == rhs;
+        case CompareKernelOp::Gt:
+            return lhs > rhs;
+        case CompareKernelOp::Ge:
+            return lhs >= rhs;
+        case CompareKernelOp::Lt:
+            return lhs < rhs;
+        case CompareKernelOp::Le:
+            return lhs <= rhs;
+        case CompareKernelOp::Ne:
+            return lhs != rhs;
+    }
+
+    return false;
+}
+
+template<typename BatchType>
+inline typename BatchType::batch_bool_type apply_compare_batch_typed(CompareKernelOp op,
+                                                                     const BatchType& lhs,
+                                                                     const BatchType& rhs)
 {
     switch (op)
     {
@@ -453,6 +503,115 @@ void binary_broadcast_xsimd_int32(BinaryKernelOp op,
                                        out, outer, inner);
 }
 
+inline std::uint32_t apply_scalar_u32(BinaryKernelOp op, std::uint32_t lhs, std::uint32_t rhs)
+{
+    switch (op)
+    {
+        case BinaryKernelOp::Add:
+            return lhs + rhs;
+        case BinaryKernelOp::Sub:
+            return lhs - rhs;
+        case BinaryKernelOp::Mul:
+            return lhs * rhs;
+        case BinaryKernelOp::Div:
+            return rhs != 0 ? lhs / rhs : 0u;
+        case BinaryKernelOp::Max:
+            return lhs > rhs ? lhs : rhs;
+        case BinaryKernelOp::Min:
+            return lhs < rhs ? lhs : rhs;
+        case BinaryKernelOp::Mean:
+            return (lhs + rhs) / 2u;
+        default:
+            return 0u;
+    }
+}
+
+inline BatchU32 apply_batch_u32(BinaryKernelOp op, const BatchU32& lhs, const BatchU32& rhs)
+{
+    switch (op)
+    {
+        case BinaryKernelOp::Add:
+            return lhs + rhs;
+        case BinaryKernelOp::Sub:
+            return lhs - rhs;
+        case BinaryKernelOp::Mul:
+            return lhs * rhs;
+        case BinaryKernelOp::Div:
+            return lhs / rhs;
+        case BinaryKernelOp::Max:
+            return xsimd::max(lhs, rhs);
+        case BinaryKernelOp::Min:
+            return xsimd::min(lhs, rhs);
+        case BinaryKernelOp::Mean:
+            return (lhs + rhs) / BatchU32(2u);
+        default:
+            return BatchU32(0u);
+    }
+}
+
+inline void binary_broadcast_xsimd_uint32_impl(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner)
+{
+    const long long outer_ll = static_cast<long long>(outer);
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const std::uint32_t* lhs_row = reinterpret_cast<const std::uint32_t*>(lhs) + outer_i * lhs_outer_stride;
+        const std::uint32_t* rhs_row = reinterpret_cast<const std::uint32_t*>(rhs) + outer_i * rhs_outer_stride;
+        std::uint32_t* out_row = reinterpret_cast<std::uint32_t*>(out) + outer_i * inner;
+
+        size_t inner_idx = 0;
+        if (lhs_inner_stride <= 1 && rhs_inner_stride <= 1)
+        {
+            for (; inner_idx + kLanesU32 <= inner; inner_idx += kLanesU32)
+            {
+                const BatchU32 lhs_vec = lhs_inner_stride == 0
+                    ? BatchU32(lhs_row[0])
+                    : BatchU32::load_unaligned(lhs_row + inner_idx);
+                const BatchU32 rhs_vec = rhs_inner_stride == 0
+                    ? BatchU32(rhs_row[0])
+                    : BatchU32::load_unaligned(rhs_row + inner_idx);
+                const BatchU32 out_vec = apply_batch_u32(op, lhs_vec, rhs_vec);
+                out_vec.store_unaligned(out_row + inner_idx);
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const std::uint32_t lhs_val = lhs_row[inner_idx * lhs_inner_stride];
+            const std::uint32_t rhs_val = rhs_row[inner_idx * rhs_inner_stride];
+            out_row[inner_idx] = apply_scalar_u32(op, lhs_val, rhs_val);
+        }
+    }
+}
+
+void binary_broadcast_xsimd_uint32(BinaryKernelOp op,
+                            const void* lhs,
+                            size_t lhs_outer_stride,
+                            size_t lhs_inner_stride,
+                            const void* rhs,
+                            size_t rhs_outer_stride,
+                            size_t rhs_inner_stride,
+                            void* out,
+                            size_t outer,
+                            size_t inner)
+{
+    binary_broadcast_xsimd_uint32_impl(op, lhs, lhs_outer_stride, lhs_inner_stride,
+                                       rhs, rhs_outer_stride, rhs_inner_stride,
+                                       out, outer, inner);
+}
+
 // Generic integer kernel for 8-bit and 16-bit types with saturation
 template<typename T, typename BatchType, size_t kLanesInt>
 inline void binary_broadcast_xsimd_int_impl(BinaryKernelOp op,
@@ -466,6 +625,22 @@ inline void binary_broadcast_xsimd_int_impl(BinaryKernelOp op,
                             size_t outer,
                             size_t inner)
 {
+    auto store_saturated_mul_batch = [](const BatchType& lhs_vec, const BatchType& rhs_vec, T* out_ptr)
+    {
+        const auto lhs_wide = xsimd::widen(lhs_vec);
+        const auto rhs_wide = xsimd::widen(rhs_vec);
+        using WideBatch = typename decltype(lhs_wide)::value_type;
+        using WideT = xsimd::widen_t<T>;
+        constexpr size_t kWideLanes = WideBatch::size;
+        std::array<WideT, kLanesInt> tmp {};
+        (lhs_wide[0] * rhs_wide[0]).store_unaligned(tmp.data());
+        (lhs_wide[1] * rhs_wide[1]).store_unaligned(tmp.data() + kWideLanes);
+        for (size_t lane = 0; lane < kLanesInt; ++lane)
+        {
+            out_ptr[lane] = saturate_cast<T>(tmp[lane]);
+        }
+    };
+
     const long long outer_ll = static_cast<long long>(outer);
 #ifdef _OPENMP
 #pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
@@ -493,30 +668,36 @@ inline void binary_broadcast_xsimd_int_impl(BinaryKernelOp op,
                 switch (op)
                 {
                     case BinaryKernelOp::Add:
-                        out_vec = lhs_vec + rhs_vec;
+                        out_vec = xsimd::sadd(lhs_vec, rhs_vec);
+                        out_vec.store_unaligned(out_row + inner_idx);
                         break;
                     case BinaryKernelOp::Sub:
-                        out_vec = lhs_vec - rhs_vec;
+                        out_vec = xsimd::ssub(lhs_vec, rhs_vec);
+                        out_vec.store_unaligned(out_row + inner_idx);
                         break;
                     case BinaryKernelOp::Mul:
-                        out_vec = lhs_vec * rhs_vec;
+                        store_saturated_mul_batch(lhs_vec, rhs_vec, out_row + inner_idx);
                         break;
                     case BinaryKernelOp::Div:
                         out_vec = lhs_vec / rhs_vec;
+                        out_vec.store_unaligned(out_row + inner_idx);
                         break;
                     case BinaryKernelOp::Max:
                         out_vec = xsimd::max(lhs_vec, rhs_vec);
+                        out_vec.store_unaligned(out_row + inner_idx);
                         break;
                     case BinaryKernelOp::Min:
                         out_vec = xsimd::min(lhs_vec, rhs_vec);
+                        out_vec.store_unaligned(out_row + inner_idx);
                         break;
                     case BinaryKernelOp::Mean:
                         out_vec = (lhs_vec + rhs_vec) / BatchType(2);
+                        out_vec.store_unaligned(out_row + inner_idx);
                         break;
                     default:
                         out_vec = BatchType(0);
+                        out_vec.store_unaligned(out_row + inner_idx);
                 }
-                out_vec.store_unaligned(out_row + inner_idx);
             }
         }
 
@@ -528,13 +709,13 @@ inline void binary_broadcast_xsimd_int_impl(BinaryKernelOp op,
             switch (op)
             {
                 case BinaryKernelOp::Add:
-                    result = lhs_val + rhs_val;
+                    result = saturate_cast<T>(static_cast<long long>(lhs_val) + static_cast<long long>(rhs_val));
                     break;
                 case BinaryKernelOp::Sub:
-                    result = lhs_val - rhs_val;
+                    result = saturate_cast<T>(static_cast<long long>(lhs_val) - static_cast<long long>(rhs_val));
                     break;
                 case BinaryKernelOp::Mul:
-                    result = lhs_val * rhs_val;
+                    result = saturate_cast<T>(static_cast<long long>(lhs_val) * static_cast<long long>(rhs_val));
                     break;
                 case BinaryKernelOp::Div:
                     result = rhs_val != 0 ? lhs_val / rhs_val : 0;
@@ -740,6 +921,161 @@ void compare_broadcast_xsimd_hfloat(CompareKernelOp op,
     }
 }
 
+template<typename T, typename BatchType, size_t kLanesInt>
+inline void compare_broadcast_xsimd_int_impl(CompareKernelOp op,
+                                             const void* lhs,
+                                             size_t lhs_outer_stride,
+                                             size_t lhs_inner_stride,
+                                             const void* rhs,
+                                             size_t rhs_outer_stride,
+                                             size_t rhs_inner_stride,
+                                             std::uint8_t* out,
+                                             size_t out_outer_stride,
+                                             size_t outer,
+                                             size_t inner)
+{
+    const long long outer_ll = static_cast<long long>(outer);
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const T* lhs_row = reinterpret_cast<const T*>(lhs) + outer_i * lhs_outer_stride;
+        const T* rhs_row = reinterpret_cast<const T*>(rhs) + outer_i * rhs_outer_stride;
+        std::uint8_t* out_row = out + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        if (lhs_inner_stride <= 1 && rhs_inner_stride <= 1)
+        {
+            std::array<T, kLanesInt> tmp {};
+            for (; inner_idx + kLanesInt <= inner; inner_idx += kLanesInt)
+            {
+                const BatchType lhs_vec = lhs_inner_stride == 0
+                    ? BatchType(lhs_row[0])
+                    : BatchType::load_unaligned(lhs_row + inner_idx);
+                const BatchType rhs_vec = rhs_inner_stride == 0
+                    ? BatchType(rhs_row[0])
+                    : BatchType::load_unaligned(rhs_row + inner_idx);
+                const auto cmp_mask = apply_compare_batch_typed(op, lhs_vec, rhs_vec);
+                const BatchType out_vec = xsimd::select(cmp_mask, BatchType(T(255)), BatchType(T(0)));
+                out_vec.store_unaligned(tmp.data());
+                for (size_t lane = 0; lane < kLanesInt; ++lane)
+                {
+                    out_row[inner_idx + lane] = static_cast<std::uint8_t>(tmp[lane]);
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const T lhs_val = lhs_row[inner_idx * lhs_inner_stride];
+            const T rhs_val = rhs_row[inner_idx * rhs_inner_stride];
+            out_row[inner_idx] = apply_compare_scalar_typed(op, lhs_val, rhs_val) ? 255 : 0;
+        }
+    }
+}
+
+void compare_broadcast_xsimd_int32(CompareKernelOp op,
+                                   const void* lhs,
+                                   size_t lhs_outer_stride,
+                                   size_t lhs_inner_stride,
+                                   const void* rhs,
+                                   size_t rhs_outer_stride,
+                                   size_t rhs_inner_stride,
+                                   std::uint8_t* out,
+                                   size_t out_outer_stride,
+                                   size_t outer,
+                                   size_t inner)
+{
+    compare_broadcast_xsimd_int_impl<std::int32_t, Batch32, kLanes32>(
+        op, lhs, lhs_outer_stride, lhs_inner_stride, rhs, rhs_outer_stride, rhs_inner_stride, out, out_outer_stride, outer, inner);
+}
+
+void compare_broadcast_xsimd_uint32(CompareKernelOp op,
+                                    const void* lhs,
+                                    size_t lhs_outer_stride,
+                                    size_t lhs_inner_stride,
+                                    const void* rhs,
+                                    size_t rhs_outer_stride,
+                                    size_t rhs_inner_stride,
+                                    std::uint8_t* out,
+                                    size_t out_outer_stride,
+                                    size_t outer,
+                                    size_t inner)
+{
+    compare_broadcast_xsimd_int_impl<std::uint32_t, BatchU32, kLanesU32>(
+        op, lhs, lhs_outer_stride, lhs_inner_stride, rhs, rhs_outer_stride, rhs_inner_stride, out, out_outer_stride, outer, inner);
+}
+
+void compare_broadcast_xsimd_int16(CompareKernelOp op,
+                                   const void* lhs,
+                                   size_t lhs_outer_stride,
+                                   size_t lhs_inner_stride,
+                                   const void* rhs,
+                                   size_t rhs_outer_stride,
+                                   size_t rhs_inner_stride,
+                                   std::uint8_t* out,
+                                   size_t out_outer_stride,
+                                   size_t outer,
+                                   size_t inner)
+{
+    compare_broadcast_xsimd_int_impl<std::int16_t, Batch16, kLanes16>(
+        op, lhs, lhs_outer_stride, lhs_inner_stride, rhs, rhs_outer_stride, rhs_inner_stride, out, out_outer_stride, outer, inner);
+}
+
+void compare_broadcast_xsimd_uint16(CompareKernelOp op,
+                                    const void* lhs,
+                                    size_t lhs_outer_stride,
+                                    size_t lhs_inner_stride,
+                                    const void* rhs,
+                                    size_t rhs_outer_stride,
+                                    size_t rhs_inner_stride,
+                                    std::uint8_t* out,
+                                    size_t out_outer_stride,
+                                    size_t outer,
+                                    size_t inner)
+{
+    using BatchU16 = xsimd::batch<std::uint16_t>;
+    constexpr size_t kLanesU16 = BatchU16::size;
+    compare_broadcast_xsimd_int_impl<std::uint16_t, BatchU16, kLanesU16>(
+        op, lhs, lhs_outer_stride, lhs_inner_stride, rhs, rhs_outer_stride, rhs_inner_stride, out, out_outer_stride, outer, inner);
+}
+
+void compare_broadcast_xsimd_int8(CompareKernelOp op,
+                                  const void* lhs,
+                                  size_t lhs_outer_stride,
+                                  size_t lhs_inner_stride,
+                                  const void* rhs,
+                                  size_t rhs_outer_stride,
+                                  size_t rhs_inner_stride,
+                                  std::uint8_t* out,
+                                  size_t out_outer_stride,
+                                  size_t outer,
+                                  size_t inner)
+{
+    compare_broadcast_xsimd_int_impl<std::int8_t, Batch8, kLanes8>(
+        op, lhs, lhs_outer_stride, lhs_inner_stride, rhs, rhs_outer_stride, rhs_inner_stride, out, out_outer_stride, outer, inner);
+}
+
+void compare_broadcast_xsimd_uint8(CompareKernelOp op,
+                                   const void* lhs,
+                                   size_t lhs_outer_stride,
+                                   size_t lhs_inner_stride,
+                                   const void* rhs,
+                                   size_t rhs_outer_stride,
+                                   size_t rhs_inner_stride,
+                                   std::uint8_t* out,
+                                   size_t out_outer_stride,
+                                   size_t outer,
+                                   size_t inner)
+{
+    using BatchU8 = xsimd::batch<std::uint8_t>;
+    constexpr size_t kLanesU8 = BatchU8::size;
+    compare_broadcast_xsimd_int_impl<std::uint8_t, BatchU8, kLanesU8>(
+        op, lhs, lhs_outer_stride, lhs_inner_stride, rhs, rhs_outer_stride, rhs_inner_stride, out, out_outer_stride, outer, inner);
+}
+
 inline void build_phase_batches(const float* scalar_lanes, int channels, std::array<Batch, 4>& phase_batches)
 {
     const size_t phase_count = static_cast<size_t>(channels);
@@ -751,6 +1087,21 @@ inline void build_phase_batches(const float* scalar_lanes, int channels, std::ar
             lane_pattern[lane] = scalar_lanes[(phase + lane) % phase_count];
         }
         phase_batches[phase] = Batch::load_unaligned(lane_pattern.data());
+    }
+}
+
+template<typename T, typename BatchType>
+inline void build_phase_batches_typed(const T* scalar_lanes, int channels, std::array<BatchType, 4>& phase_batches)
+{
+    const size_t phase_count = static_cast<size_t>(channels);
+    std::array<T, BatchType::size> lane_pattern {};
+    for (size_t phase = 0; phase < phase_count; ++phase)
+    {
+        for (size_t lane = 0; lane < BatchType::size; ++lane)
+        {
+            lane_pattern[lane] = scalar_lanes[(phase + lane) % phase_count];
+        }
+        phase_batches[phase] = BatchType::load_unaligned(lane_pattern.data());
     }
 }
 
@@ -884,6 +1235,348 @@ void binary_scalar_channels_xsimd_hfloat(BinaryKernelOp op,
             }
         }
     }
+}
+
+void binary_scalar_channels_xsimd_int32(BinaryKernelOp op,
+                                        const void* src,
+                                        size_t src_outer_stride,
+                                        const std::int32_t* scalar_lanes,
+                                        int channels,
+                                        void* out,
+                                        size_t out_outer_stride,
+                                        size_t outer,
+                                        size_t inner,
+                                        bool scalar_first)
+{
+    if (channels <= 0 || channels > 4 || outer == 0 || inner == 0)
+    {
+        return;
+    }
+
+    const std::int32_t* src_ptr = reinterpret_cast<const std::int32_t*>(src);
+    std::int32_t* out_ptr = reinterpret_cast<std::int32_t*>(out);
+    std::array<Batch32, 4> phase_batches;
+    build_phase_batches_typed<std::int32_t, Batch32>(scalar_lanes, channels, phase_batches);
+    const size_t phase_count = static_cast<size_t>(channels);
+    const size_t vec_phase_step = kLanes32 % phase_count;
+    const long long outer_ll = static_cast<long long>(outer);
+
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const std::int32_t* src_row = src_ptr + outer_i * src_outer_stride;
+        std::int32_t* out_row = out_ptr + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        size_t phase = 0;
+        for (; inner_idx + kLanes32 <= inner; inner_idx += kLanes32)
+        {
+            const Batch32 src_vec = Batch32::load_unaligned(src_row + inner_idx);
+            const Batch32& scalar_vec = phase_batches[phase];
+            const Batch32 out_vec = scalar_first ? apply_batch_i32(op, scalar_vec, src_vec)
+                                                 : apply_batch_i32(op, src_vec, scalar_vec);
+            out_vec.store_unaligned(out_row + inner_idx);
+            if (vec_phase_step != 0)
+            {
+                phase += vec_phase_step;
+                if (phase >= phase_count)
+                {
+                    phase -= phase_count;
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const std::int32_t scalar_val = scalar_lanes[phase];
+            out_row[inner_idx] = scalar_first ? apply_scalar_i32(op, scalar_val, src_row[inner_idx])
+                                              : apply_scalar_i32(op, src_row[inner_idx], scalar_val);
+            ++phase;
+            if (phase == phase_count)
+            {
+                phase = 0;
+            }
+        }
+    }
+}
+
+void binary_scalar_channels_xsimd_uint32(BinaryKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::uint32_t* scalar_lanes,
+                                         int channels,
+                                         void* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first)
+{
+    if (channels <= 0 || channels > 4 || outer == 0 || inner == 0)
+    {
+        return;
+    }
+
+    const std::uint32_t* src_ptr = reinterpret_cast<const std::uint32_t*>(src);
+    std::uint32_t* out_ptr = reinterpret_cast<std::uint32_t*>(out);
+    std::array<BatchU32, 4> phase_batches;
+    build_phase_batches_typed<std::uint32_t, BatchU32>(scalar_lanes, channels, phase_batches);
+    const size_t phase_count = static_cast<size_t>(channels);
+    const size_t vec_phase_step = kLanesU32 % phase_count;
+    const long long outer_ll = static_cast<long long>(outer);
+
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const std::uint32_t* src_row = src_ptr + outer_i * src_outer_stride;
+        std::uint32_t* out_row = out_ptr + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        size_t phase = 0;
+        for (; inner_idx + kLanesU32 <= inner; inner_idx += kLanesU32)
+        {
+            const BatchU32 src_vec = BatchU32::load_unaligned(src_row + inner_idx);
+            const BatchU32& scalar_vec = phase_batches[phase];
+            const BatchU32 out_vec = scalar_first ? apply_batch_u32(op, scalar_vec, src_vec)
+                                                  : apply_batch_u32(op, src_vec, scalar_vec);
+            out_vec.store_unaligned(out_row + inner_idx);
+            if (vec_phase_step != 0)
+            {
+                phase += vec_phase_step;
+                if (phase >= phase_count)
+                {
+                    phase -= phase_count;
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const std::uint32_t scalar_val = scalar_lanes[phase];
+            out_row[inner_idx] = scalar_first ? apply_scalar_u32(op, scalar_val, src_row[inner_idx])
+                                              : apply_scalar_u32(op, src_row[inner_idx], scalar_val);
+            ++phase;
+            if (phase == phase_count)
+            {
+                phase = 0;
+            }
+        }
+    }
+}
+
+template<typename T, typename BatchType>
+inline T apply_scalar_smallint(BinaryKernelOp op, T lhs, T rhs)
+{
+    switch (op)
+    {
+        case BinaryKernelOp::Add:
+            return saturate_cast<T>(static_cast<long long>(lhs) + static_cast<long long>(rhs));
+        case BinaryKernelOp::Sub:
+            return saturate_cast<T>(static_cast<long long>(lhs) - static_cast<long long>(rhs));
+        case BinaryKernelOp::Mul:
+            return lhs * rhs;
+        case BinaryKernelOp::Div:
+            return rhs != 0 ? static_cast<T>(lhs / rhs) : static_cast<T>(0);
+        case BinaryKernelOp::Max:
+            return lhs > rhs ? lhs : rhs;
+        case BinaryKernelOp::Min:
+            return lhs < rhs ? lhs : rhs;
+        case BinaryKernelOp::Mean:
+            return static_cast<T>((static_cast<long long>(lhs) + static_cast<long long>(rhs)) / 2);
+        default:
+            return static_cast<T>(0);
+    }
+}
+
+template<typename T, typename BatchType, size_t kLanesInt>
+inline BatchType apply_batch_smallint(BinaryKernelOp op, const BatchType& lhs, const BatchType& rhs)
+{
+    switch (op)
+    {
+        case BinaryKernelOp::Add:
+            return xsimd::sadd(lhs, rhs);
+        case BinaryKernelOp::Sub:
+            return xsimd::ssub(lhs, rhs);
+        case BinaryKernelOp::Mul:
+            return lhs * rhs;
+        case BinaryKernelOp::Div:
+            return lhs / rhs;
+        case BinaryKernelOp::Max:
+            return xsimd::max(lhs, rhs);
+        case BinaryKernelOp::Min:
+            return xsimd::min(lhs, rhs);
+        case BinaryKernelOp::Mean:
+            return (lhs + rhs) / BatchType(2);
+        default:
+            return BatchType(0);
+    }
+}
+
+template<typename T, typename BatchType, size_t kLanesInt>
+inline void store_saturated_mul_smallint_batch(const BatchType& lhs_vec, const BatchType& rhs_vec, T* out_ptr)
+{
+    const auto lhs_wide = xsimd::widen(lhs_vec);
+    const auto rhs_wide = xsimd::widen(rhs_vec);
+    using WideBatch = typename decltype(lhs_wide)::value_type;
+    using WideT = xsimd::widen_t<T>;
+    constexpr size_t kWideLanes = WideBatch::size;
+    std::array<WideT, kLanesInt> tmp {};
+    (lhs_wide[0] * rhs_wide[0]).store_unaligned(tmp.data());
+    (lhs_wide[1] * rhs_wide[1]).store_unaligned(tmp.data() + kWideLanes);
+    for (size_t lane = 0; lane < kLanesInt; ++lane)
+    {
+        out_ptr[lane] = saturate_cast<T>(tmp[lane]);
+    }
+}
+
+template<typename T, typename BatchType, size_t kLanesInt>
+inline void binary_scalar_channels_xsimd_smallint_impl(BinaryKernelOp op,
+                                                       const void* src,
+                                                       size_t src_outer_stride,
+                                                       const T* scalar_lanes,
+                                                       int channels,
+                                                       void* out,
+                                                       size_t out_outer_stride,
+                                                       size_t outer,
+                                                       size_t inner,
+                                                       bool scalar_first)
+{
+    if (channels <= 0 || channels > 4 || outer == 0 || inner == 0)
+    {
+        return;
+    }
+
+    const T* src_ptr = reinterpret_cast<const T*>(src);
+    T* out_ptr = reinterpret_cast<T*>(out);
+    std::array<BatchType, 4> phase_batches;
+    build_phase_batches_typed<T, BatchType>(scalar_lanes, channels, phase_batches);
+    const size_t phase_count = static_cast<size_t>(channels);
+    const size_t vec_phase_step = kLanesInt % phase_count;
+    const long long outer_ll = static_cast<long long>(outer);
+
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const T* src_row = src_ptr + outer_i * src_outer_stride;
+        T* out_row = out_ptr + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        size_t phase = 0;
+        for (; inner_idx + kLanesInt <= inner; inner_idx += kLanesInt)
+        {
+            const BatchType src_vec = BatchType::load_unaligned(src_row + inner_idx);
+            const BatchType& scalar_vec = phase_batches[phase];
+            if (op == BinaryKernelOp::Mul)
+            {
+                if (scalar_first)
+                {
+                    store_saturated_mul_smallint_batch<T, BatchType, kLanesInt>(scalar_vec, src_vec, out_row + inner_idx);
+                }
+                else
+                {
+                    store_saturated_mul_smallint_batch<T, BatchType, kLanesInt>(src_vec, scalar_vec, out_row + inner_idx);
+                }
+            }
+            else
+            {
+                const BatchType out_vec = scalar_first ? apply_batch_smallint<T, BatchType, kLanesInt>(op, scalar_vec, src_vec)
+                                                       : apply_batch_smallint<T, BatchType, kLanesInt>(op, src_vec, scalar_vec);
+                out_vec.store_unaligned(out_row + inner_idx);
+            }
+            if (vec_phase_step != 0)
+            {
+                phase += vec_phase_step;
+                if (phase >= phase_count)
+                {
+                    phase -= phase_count;
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const T scalar_val = scalar_lanes[phase];
+            out_row[inner_idx] = scalar_first ? apply_scalar_smallint<T, BatchType>(op, scalar_val, src_row[inner_idx])
+                                              : apply_scalar_smallint<T, BatchType>(op, src_row[inner_idx], scalar_val);
+            ++phase;
+            if (phase == phase_count)
+            {
+                phase = 0;
+            }
+        }
+    }
+}
+
+void binary_scalar_channels_xsimd_int16(BinaryKernelOp op,
+                                        const void* src,
+                                        size_t src_outer_stride,
+                                        const std::int16_t* scalar_lanes,
+                                        int channels,
+                                        void* out,
+                                        size_t out_outer_stride,
+                                        size_t outer,
+                                        size_t inner,
+                                        bool scalar_first)
+{
+    binary_scalar_channels_xsimd_smallint_impl<std::int16_t, Batch16, kLanes16>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
+}
+
+void binary_scalar_channels_xsimd_uint16(BinaryKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::uint16_t* scalar_lanes,
+                                         int channels,
+                                         void* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first)
+{
+    using BatchU16 = xsimd::batch<std::uint16_t>;
+    constexpr size_t kLanesU16 = BatchU16::size;
+    binary_scalar_channels_xsimd_smallint_impl<std::uint16_t, BatchU16, kLanesU16>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
+}
+
+void binary_scalar_channels_xsimd_int8(BinaryKernelOp op,
+                                       const void* src,
+                                       size_t src_outer_stride,
+                                       const std::int8_t* scalar_lanes,
+                                       int channels,
+                                       void* out,
+                                       size_t out_outer_stride,
+                                       size_t outer,
+                                       size_t inner,
+                                       bool scalar_first)
+{
+    binary_scalar_channels_xsimd_smallint_impl<std::int8_t, Batch8, kLanes8>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
+}
+
+void binary_scalar_channels_xsimd_uint8(BinaryKernelOp op,
+                                        const void* src,
+                                        size_t src_outer_stride,
+                                        const std::uint8_t* scalar_lanes,
+                                        int channels,
+                                        void* out,
+                                        size_t out_outer_stride,
+                                        size_t outer,
+                                        size_t inner,
+                                        bool scalar_first)
+{
+    using BatchU8 = xsimd::batch<std::uint8_t>;
+    constexpr size_t kLanesU8 = BatchU8::size;
+    binary_scalar_channels_xsimd_smallint_impl<std::uint8_t, BatchU8, kLanesU8>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
 }
 
 void compare_scalar_channels_xsimd(CompareKernelOp op,
@@ -1026,6 +1719,174 @@ void compare_scalar_channels_xsimd_hfloat(CompareKernelOp op,
             }
         }
     }
+}
+
+template<typename T, typename BatchType, size_t kLanesInt>
+inline void compare_scalar_channels_xsimd_int_impl(CompareKernelOp op,
+                                                   const void* src,
+                                                   size_t src_outer_stride,
+                                                   const T* scalar_lanes,
+                                                   int channels,
+                                                   std::uint8_t* out,
+                                                   size_t out_outer_stride,
+                                                   size_t outer,
+                                                   size_t inner,
+                                                   bool scalar_first)
+{
+    if (channels <= 0 || channels > 4 || outer == 0 || inner == 0)
+    {
+        return;
+    }
+
+    const T* src_ptr = reinterpret_cast<const T*>(src);
+    std::array<BatchType, 4> phase_batches;
+    build_phase_batches_typed<T, BatchType>(scalar_lanes, channels, phase_batches);
+    const size_t phase_count = static_cast<size_t>(channels);
+    const size_t vec_phase_step = kLanesInt % phase_count;
+    const long long outer_ll = static_cast<long long>(outer);
+
+#ifdef _OPENMP
+#pragma omp parallel for if(should_parallelize_1d_loop(outer, inner, 1LL << 15, 2))
+#endif
+    for (long long outer_idx = 0; outer_idx < outer_ll; ++outer_idx)
+    {
+        const size_t outer_i = static_cast<size_t>(outer_idx);
+        const T* src_row = src_ptr + outer_i * src_outer_stride;
+        std::uint8_t* out_row = out + outer_i * out_outer_stride;
+
+        size_t inner_idx = 0;
+        size_t phase = 0;
+        std::array<T, kLanesInt> tmp {};
+        for (; inner_idx + kLanesInt <= inner; inner_idx += kLanesInt)
+        {
+            const BatchType src_vec = BatchType::load_unaligned(src_row + inner_idx);
+            const BatchType& scalar_vec = phase_batches[phase];
+            const auto cmp_mask = scalar_first ? apply_compare_batch_typed(op, scalar_vec, src_vec)
+                                               : apply_compare_batch_typed(op, src_vec, scalar_vec);
+            const BatchType out_vec = xsimd::select(cmp_mask, BatchType(T(255)), BatchType(T(0)));
+            out_vec.store_unaligned(tmp.data());
+            for (size_t lane = 0; lane < kLanesInt; ++lane)
+            {
+                out_row[inner_idx + lane] = static_cast<std::uint8_t>(tmp[lane]);
+            }
+            if (vec_phase_step != 0)
+            {
+                phase += vec_phase_step;
+                if (phase >= phase_count)
+                {
+                    phase -= phase_count;
+                }
+            }
+        }
+
+        for (; inner_idx < inner; ++inner_idx)
+        {
+            const T scalar_val = scalar_lanes[phase];
+            const T src_val = src_row[inner_idx];
+            out_row[inner_idx] = scalar_first
+                ? (apply_compare_scalar_typed(op, scalar_val, src_val) ? 255 : 0)
+                : (apply_compare_scalar_typed(op, src_val, scalar_val) ? 255 : 0);
+            ++phase;
+            if (phase == phase_count)
+            {
+                phase = 0;
+            }
+        }
+    }
+}
+
+void compare_scalar_channels_xsimd_int32(CompareKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::int32_t* scalar_lanes,
+                                         int channels,
+                                         std::uint8_t* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first)
+{
+    compare_scalar_channels_xsimd_int_impl<std::int32_t, Batch32, kLanes32>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
+}
+
+void compare_scalar_channels_xsimd_uint32(CompareKernelOp op,
+                                          const void* src,
+                                          size_t src_outer_stride,
+                                          const std::uint32_t* scalar_lanes,
+                                          int channels,
+                                          std::uint8_t* out,
+                                          size_t out_outer_stride,
+                                          size_t outer,
+                                          size_t inner,
+                                          bool scalar_first)
+{
+    compare_scalar_channels_xsimd_int_impl<std::uint32_t, BatchU32, kLanesU32>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
+}
+
+void compare_scalar_channels_xsimd_int16(CompareKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::int16_t* scalar_lanes,
+                                         int channels,
+                                         std::uint8_t* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first)
+{
+    compare_scalar_channels_xsimd_int_impl<std::int16_t, Batch16, kLanes16>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
+}
+
+void compare_scalar_channels_xsimd_uint16(CompareKernelOp op,
+                                          const void* src,
+                                          size_t src_outer_stride,
+                                          const std::uint16_t* scalar_lanes,
+                                          int channels,
+                                          std::uint8_t* out,
+                                          size_t out_outer_stride,
+                                          size_t outer,
+                                          size_t inner,
+                                          bool scalar_first)
+{
+    using BatchU16 = xsimd::batch<std::uint16_t>;
+    constexpr size_t kLanesU16 = BatchU16::size;
+    compare_scalar_channels_xsimd_int_impl<std::uint16_t, BatchU16, kLanesU16>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
+}
+
+void compare_scalar_channels_xsimd_int8(CompareKernelOp op,
+                                        const void* src,
+                                        size_t src_outer_stride,
+                                        const std::int8_t* scalar_lanes,
+                                        int channels,
+                                        std::uint8_t* out,
+                                        size_t out_outer_stride,
+                                        size_t outer,
+                                        size_t inner,
+                                        bool scalar_first)
+{
+    compare_scalar_channels_xsimd_int_impl<std::int8_t, Batch8, kLanes8>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
+}
+
+void compare_scalar_channels_xsimd_uint8(CompareKernelOp op,
+                                         const void* src,
+                                         size_t src_outer_stride,
+                                         const std::uint8_t* scalar_lanes,
+                                         int channels,
+                                         std::uint8_t* out,
+                                         size_t out_outer_stride,
+                                         size_t outer,
+                                         size_t inner,
+                                         bool scalar_first)
+{
+    using BatchU8 = xsimd::batch<std::uint8_t>;
+    constexpr size_t kLanesU8 = BatchU8::size;
+    compare_scalar_channels_xsimd_int_impl<std::uint8_t, BatchU8, kLanesU8>(
+        op, src, src_outer_stride, scalar_lanes, channels, out, out_outer_stride, outer, inner, scalar_first);
 }
 
 }  // namespace cpu

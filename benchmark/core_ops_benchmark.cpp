@@ -1,4 +1,5 @@
 #include "cvh.h"
+#include "cvh/core/detail/dispatch_control.h"
 
 #include <algorithm>
 #include <chrono>
@@ -45,6 +46,7 @@ struct Args
 {
     std::string profile = "quick";
     std::string benchmark_mode = "matmat";
+    std::string dispatch_mode = "auto";
     std::string scalar_pattern = "both";
     std::string scalar_order = "both";
     int warmup = 2;
@@ -84,6 +86,7 @@ struct ResultRow
 {
     std::string profile;
     std::string op;
+    std::string dispatch;
     std::string depth;
     int channels = 0;
     std::string shape;
@@ -91,6 +94,12 @@ struct ResultRow
     double ms_per_iter = 0.0;
     double melems_per_sec = 0.0;
     double gb_per_sec = 0.0;
+};
+
+struct MeasureResult
+{
+    double ms_per_iter = 0.0;
+    std::string dispatch = "unknown";
 };
 
 volatile double g_sink = 0.0;
@@ -557,7 +566,7 @@ std::vector<int> build_depths(const std::string& profile)
     {
         return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32U, CV_32F, CV_16F, CV_64F};
     }
-    return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32F, CV_16F, CV_64F};
+    return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32U, CV_32F, CV_16F, CV_64F};
 }
 
 std::vector<BenchOp> build_ops(const std::string& profile)
@@ -676,6 +685,10 @@ Args parse_args(int argc, char** argv)
         {
             args.benchmark_mode = next_value("--bench");
         }
+        else if (token == "--dispatch")
+        {
+            args.dispatch_mode = next_value("--dispatch");
+        }
         else if (token == "--scalar-pattern")
         {
             args.scalar_pattern = next_value("--scalar-pattern");
@@ -704,6 +717,7 @@ Args parse_args(int argc, char** argv)
         {
             std::cout
                 << "Usage: cvh_benchmark_core_ops [--profile quick|full] [--bench matmat|matscalar|transpose|all] "
+                   "[--dispatch auto|scalar-only|xsimd-only] "
                    "[--scalar-pattern uniform|nonuniform|both] [--scalar-order mat_first|scalar_first|both] "
                    "[--warmup N] [--iters N] [--repeats N] [--output path]\n";
             std::exit(0);
@@ -747,11 +761,21 @@ Args parse_args(int argc, char** argv)
         std::exit(2);
     }
 
+    if (args.dispatch_mode != "auto" &&
+        args.dispatch_mode != "scalar-only" &&
+        args.dispatch_mode != "xsimd-only")
+    {
+        std::cerr << "Unsupported dispatch mode: " << args.dispatch_mode
+                  << " (expected auto/scalar-only/xsimd-only)\n";
+        std::exit(2);
+    }
+
     return args;
 }
 
-double measure_case(BenchOp op, const cvh::Mat& a, const cvh::Mat& b, cvh::Mat& out, int warmup, int iters, int repeats)
+MeasureResult measure_case(BenchOp op, const cvh::Mat& a, const cvh::Mat& b, cvh::Mat& out, int warmup, int iters, int repeats)
 {
+    cvh::cpu::reset_last_dispatch_tag();
     for (int i = 0; i < warmup; ++i)
     {
         run_one_op(op, a, b, out);
@@ -776,18 +800,19 @@ double measure_case(BenchOp op, const cvh::Mat& a, const cvh::Mat& b, cvh::Mat& 
     std::sort(samples_ms_per_iter.begin(), samples_ms_per_iter.end());
     const double median_ms = samples_ms_per_iter[samples_ms_per_iter.size() / 2];
     g_sink += probe_checksum(out);
-    return median_ms;
+    return {median_ms, cvh::cpu::dispatch_tag_name(cvh::cpu::last_dispatch_tag())};
 }
 
-double measure_scalar_case(ScalarBenchOp op,
-                           const cvh::Mat& src,
-                           const cvh::Scalar& scalar,
-                           cvh::Mat& out,
-                           bool scalar_first,
-                           int warmup,
-                           int iters,
-                           int repeats)
+MeasureResult measure_scalar_case(ScalarBenchOp op,
+                                  const cvh::Mat& src,
+                                  const cvh::Scalar& scalar,
+                                  cvh::Mat& out,
+                                  bool scalar_first,
+                                  int warmup,
+                                  int iters,
+                                  int repeats)
 {
+    cvh::cpu::reset_last_dispatch_tag();
     for (int i = 0; i < warmup; ++i)
     {
         run_one_scalar_op(op, src, scalar, out, scalar_first);
@@ -812,11 +837,12 @@ double measure_scalar_case(ScalarBenchOp op,
     std::sort(samples_ms_per_iter.begin(), samples_ms_per_iter.end());
     const double median_ms = samples_ms_per_iter[samples_ms_per_iter.size() / 2];
     g_sink += probe_checksum(out);
-    return median_ms;
+    return {median_ms, cvh::cpu::dispatch_tag_name(cvh::cpu::last_dispatch_tag())};
 }
 
-double measure_transpose_case(const cvh::Mat& src, cvh::Mat& out, int warmup, int iters, int repeats)
+MeasureResult measure_transpose_case(const cvh::Mat& src, cvh::Mat& out, int warmup, int iters, int repeats)
 {
+    cvh::cpu::reset_last_dispatch_tag();
     for (int i = 0; i < warmup; ++i)
     {
         out = run_one_transpose(src);
@@ -841,17 +867,18 @@ double measure_transpose_case(const cvh::Mat& src, cvh::Mat& out, int warmup, in
     std::sort(samples_ms_per_iter.begin(), samples_ms_per_iter.end());
     const double median_ms = samples_ms_per_iter[samples_ms_per_iter.size() / 2];
     g_sink += probe_checksum(out);
-    return median_ms;
+    return {median_ms, cvh::cpu::dispatch_tag_name(cvh::cpu::last_dispatch_tag())};
 }
 
 void print_csv(const std::vector<ResultRow>& rows, std::ostream& os)
 {
-    os << "profile,op,depth,channels,shape,elements,ms_per_iter,melems_per_sec,gb_per_sec\n";
+    os << "profile,op,dispatch,depth,channels,shape,elements,ms_per_iter,melems_per_sec,gb_per_sec\n";
     os << std::fixed << std::setprecision(6);
     for (const auto& row : rows)
     {
         os << row.profile << ","
            << row.op << ","
+           << row.dispatch << ","
            << row.depth << ","
            << row.channels << ","
            << row.shape << ","
@@ -867,6 +894,19 @@ void print_csv(const std::vector<ResultRow>& rows, std::ostream& os)
 int main(int argc, char** argv)
 {
     const auto args = cvh_bench::parse_args(argc, argv);
+    if (args.dispatch_mode == "scalar-only")
+    {
+        cvh::cpu::set_dispatch_mode(cvh::cpu::DispatchMode::ScalarOnly);
+    }
+    else if (args.dispatch_mode == "xsimd-only")
+    {
+        cvh::cpu::set_dispatch_mode(cvh::cpu::DispatchMode::XSimdOnly);
+    }
+    else
+    {
+        cvh::cpu::set_dispatch_mode(cvh::cpu::DispatchMode::Auto);
+    }
+
     const auto shapes = cvh_bench::build_shapes(args.profile);
     const auto transpose_shapes = cvh_bench::build_transpose_shapes(args.profile);
     const auto channels = cvh_bench::build_channels(args.profile);
@@ -905,26 +945,34 @@ int main(int argc, char** argv)
                         cvh_bench::fill_mat(a, false, op);
                         cvh_bench::fill_mat(b, true, op);
 
-                        const double ms_per_iter =
-                            cvh_bench::measure_case(op, a, b, out, args.warmup, args.iters, args.repeats);
+                        cvh_bench::MeasureResult measure;
+                        try
+                        {
+                            measure = cvh_bench::measure_case(op, a, b, out, args.warmup, args.iters, args.repeats);
+                        }
+                        catch (const cvh::Exception&)
+                        {
+                            continue;
+                        }
                         const std::size_t elements = out.total() * static_cast<std::size_t>(out.channels());
                         const std::size_t in_bytes =
                             elements * static_cast<std::size_t>(CV_ELEM_SIZE1(type)) * 2u;
                         const std::size_t out_bytes =
                             elements * static_cast<std::size_t>(CV_ELEM_SIZE1(out_type));
                         const std::size_t bytes_per_iter = in_bytes + out_bytes;
-                        const double sec = ms_per_iter / 1000.0;
+                        const double sec = measure.ms_per_iter / 1000.0;
                         const double melems_per_sec = elements / sec / 1e6;
                         const double gb_per_sec = bytes_per_iter / sec / 1e9;
 
                         rows.push_back({
                             args.profile,
                             cvh_bench::op_name(op),
+                            measure.dispatch,
                             cvh_bench::depth_to_name(depth),
                             cn,
                             cvh_bench::shape_to_string(shape_case.dims),
                             elements,
-                            ms_per_iter,
+                            measure.ms_per_iter,
                             melems_per_sec,
                             gb_per_sec,
                         });
@@ -966,14 +1014,22 @@ int main(int argc, char** argv)
                                 const int out_type = CV_MAKETYPE(out_depth, cn);
                                 cvh::Mat out(shape_case.dims, out_type);
 
-                                const double ms_per_iter = cvh_bench::measure_scalar_case(op,
-                                                                                          src,
-                                                                                          scalar,
-                                                                                          out,
-                                                                                          order_case.scalar_first,
-                                                                                          args.warmup,
-                                                                                          args.iters,
-                                                                                          args.repeats);
+                                cvh_bench::MeasureResult measure;
+                                try
+                                {
+                                    measure = cvh_bench::measure_scalar_case(op,
+                                                                            src,
+                                                                            scalar,
+                                                                            out,
+                                                                            order_case.scalar_first,
+                                                                            args.warmup,
+                                                                            args.iters,
+                                                                            args.repeats);
+                                }
+                                catch (const cvh::Exception&)
+                                {
+                                    continue;
+                                }
                                 const std::size_t elements = out.total() * static_cast<std::size_t>(out.channels());
                                 const std::size_t src_bytes =
                                     src.total() * static_cast<std::size_t>(src.channels()) *
@@ -982,18 +1038,19 @@ int main(int argc, char** argv)
                                     out.total() * static_cast<std::size_t>(out.channels()) *
                                     static_cast<std::size_t>(CV_ELEM_SIZE1(out_type));
                                 const std::size_t bytes_per_iter = src_bytes + out_bytes;
-                                const double sec = ms_per_iter / 1000.0;
+                                const double sec = measure.ms_per_iter / 1000.0;
                                 const double melems_per_sec = elements / sec / 1e6;
                                 const double gb_per_sec = bytes_per_iter / sec / 1e9;
 
                                 rows.push_back({
                                     args.profile,
                                     cvh_bench::scalar_case_op_label(op, pattern_case, order_case),
+                                    measure.dispatch,
                                     cvh_bench::depth_to_name(depth),
                                     cn,
                                     cvh_bench::shape_to_string(shape_case.dims),
                                     elements,
-                                    ms_per_iter,
+                                    measure.ms_per_iter,
                                     melems_per_sec,
                                     gb_per_sec,
                                 });
@@ -1018,23 +1075,31 @@ int main(int argc, char** argv)
                     cvh_bench::fill_mat(src, false, cvh_bench::BenchOp::Add);
                     cvh::Mat out;
 
-                    const double ms_per_iter =
-                        cvh_bench::measure_transpose_case(src, out, args.warmup, args.iters, args.repeats);
+                    cvh_bench::MeasureResult measure;
+                    try
+                    {
+                        measure = cvh_bench::measure_transpose_case(src, out, args.warmup, args.iters, args.repeats);
+                    }
+                    catch (const cvh::Exception&)
+                    {
+                        continue;
+                    }
                     const std::size_t elements = out.total() * static_cast<std::size_t>(out.channels());
                     const std::size_t bytes_per_iter =
                         elements * static_cast<std::size_t>(CV_ELEM_SIZE1(type)) * 2u;
-                    const double sec = ms_per_iter / 1000.0;
+                    const double sec = measure.ms_per_iter / 1000.0;
                     const double melems_per_sec = elements / sec / 1e6;
                     const double gb_per_sec = bytes_per_iter / sec / 1e9;
 
                     rows.push_back({
                         args.profile,
                         "TRANSPOSE",
+                        measure.dispatch,
                         cvh_bench::depth_to_name(depth),
                         cn,
                         cvh_bench::shape_to_string(shape_case.dims),
                         elements,
-                        ms_per_iter,
+                        measure.ms_per_iter,
                         melems_per_sec,
                         gb_per_sec,
                     });
@@ -1063,3 +1128,8 @@ int main(int argc, char** argv)
 
     return 0;
 }
+struct MeasureResult
+{
+    double ms_per_iter = 0.0;
+    std::string dispatch = "unknown";
+};
