@@ -16,6 +16,19 @@ namespace detail
 namespace
 {
 
+thread_local const char* g_last_boxfilter_dispatch_path = "fallback";
+thread_local const char* g_last_gaussianblur_dispatch_path = "fallback";
+
+inline void set_last_boxfilter_dispatch_path(const char* path)
+{
+    g_last_boxfilter_dispatch_path = path ? path : "fallback";
+}
+
+inline void set_last_gaussianblur_dispatch_path(const char* path)
+{
+    g_last_gaussianblur_dispatch_path = path ? path : "fallback";
+}
+
 inline bool is_u8_fastpath_channels(int cn)
 {
     return cn == 1 || cn == 3 || cn == 4;
@@ -28,6 +41,41 @@ inline bool should_parallelize_resize(int rows, int cols, int channels)
         static_cast<std::size_t>(cols) * static_cast<std::size_t>(channels),
         1LL << 16,
         2);
+}
+
+inline bool is_boxfilter_3x3_candidate(Size ksize, Point anchor, bool normalize)
+{
+    if (!normalize || ksize.width != 3 || ksize.height != 3)
+    {
+        return false;
+    }
+
+    const int anchor_x = anchor.x >= 0 ? anchor.x : (ksize.width / 2);
+    const int anchor_y = anchor.y >= 0 ? anchor.y : (ksize.height / 2);
+    return anchor_x == 1 && anchor_y == 1;
+}
+
+inline bool resolve_gaussian_kernel_size(Size ksize, double sigmaX, double sigmaY, int& kx, int& ky)
+{
+    kx = ksize.width;
+    ky = ksize.height;
+    if (kx <= 0 && sigmaX > 0.0)
+    {
+        kx = auto_gaussian_ksize(sigmaX);
+    }
+    if (ky <= 0 && sigmaY > 0.0)
+    {
+        ky = auto_gaussian_ksize(sigmaY);
+    }
+    if (kx <= 0 && ky > 0)
+    {
+        kx = ky;
+    }
+    if (ky <= 0 && kx > 0)
+    {
+        ky = kx;
+    }
+    return kx > 0 && ky > 0 && (kx & 1) != 0 && (ky & 1) != 0;
 }
 
 std::vector<int> build_x_ofs_nearest(int src_cols, int dst_cols, bool exact)
@@ -2984,6 +3032,16 @@ bool try_gaussian_blur_fastpath_u8(const Mat& src, Mat& dst, Size ksize, double 
 
 } // namespace
 
+const char* last_boxfilter_dispatch_path()
+{
+    return g_last_boxfilter_dispatch_path;
+}
+
+const char* last_gaussianblur_dispatch_path()
+{
+    return g_last_gaussianblur_dispatch_path;
+}
+
 void resize_backend_impl(const Mat& src, Mat& dst, Size dsize, double fx, double fy, int interpolation)
 {
     if (try_resize_fastpath_u8(src, dst, dsize, fx, fy, interpolation))
@@ -3028,8 +3086,17 @@ void boxFilter_backend_impl(const Mat& src,
                             bool normalize,
                             int borderType)
 {
+    set_last_boxfilter_dispatch_path("fallback");
     if (try_boxfilter_fastpath_u8(src, dst, ddepth, ksize, anchor, normalize, borderType))
     {
+        if (is_boxfilter_3x3_candidate(ksize, anchor, normalize))
+        {
+            set_last_boxfilter_dispatch_path("box3x3");
+        }
+        else
+        {
+            set_last_boxfilter_dispatch_path("box_generic");
+        }
         return;
     }
 
@@ -3038,8 +3105,19 @@ void boxFilter_backend_impl(const Mat& src,
 
 void gaussianBlur_backend_impl(const Mat& src, Mat& dst, Size ksize, double sigmaX, double sigmaY, int borderType)
 {
+    set_last_gaussianblur_dispatch_path("fallback");
     if (try_gaussian_blur_fastpath_u8(src, dst, ksize, sigmaX, sigmaY, borderType))
     {
+        int kx = 0;
+        int ky = 0;
+        if (resolve_gaussian_kernel_size(ksize, sigmaX, sigmaY, kx, ky) && kx == 3 && ky == 3)
+        {
+            set_last_gaussianblur_dispatch_path("gauss3x3");
+        }
+        else
+        {
+            set_last_gaussianblur_dispatch_path("gauss_separable");
+        }
         return;
     }
 

@@ -117,6 +117,16 @@ if(CVH_ENABLE_FULL_BACKEND)
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/include
         )
+
+        add_executable(cvh_benchmark_imgproc_filter
+            benchmark/imgproc_filter_benchmark.cpp
+        )
+        target_link_libraries(cvh_benchmark_imgproc_filter PRIVATE cvh::legacy_core)
+        target_compile_features(cvh_benchmark_imgproc_filter PRIVATE cxx_std_17)
+        target_include_directories(cvh_benchmark_imgproc_filter PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+        )
     endif()
 
     add_executable(cvh_example_highgui_imshow
@@ -223,6 +233,7 @@ if(CVH_BUILD_TESTS)
         add_test(NAME cvh_lite_pipeline_smoke COMMAND cvh_lite_pipeline_smoke)
         add_test(NAME cvh_resize_dispatch_lite_smoke COMMAND cvh_resize_dispatch_lite_smoke)
         add_test(NAME cvh_test_imgcodecs COMMAND cvh_test_imgcodecs)
+        add_test(NAME cvh_test_imgproc COMMAND cvh_test_imgproc)
         add_test(NAME cvh_test_highgui COMMAND cvh_test_highgui)
         if(TARGET cvh_legacy_core)
             add_test(NAME cvh_test_highgui_full COMMAND cvh_test_highgui_full)

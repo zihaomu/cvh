@@ -1,5 +1,7 @@
 #include "cvh/cvh.h"
 
+#include <cstring>
+
 int main()
 {
     cvh::Mat src_gray({2, 2}, CV_8UC1);
@@ -104,6 +106,58 @@ int main()
         return 12;
     }
 #endif
+
+    cvh::Mat blur_dst;
+    cvh::blur(src_gray, blur_dst, cvh::Size(3, 3), cvh::Point(-1, -1), cvh::BORDER_REPLICATE);
+    const char* expected_box_path =
+#if defined(CVH_EXPECT_FULL)
+        "box3x3";
+#else
+        "fallback";
+#endif
+    if (std::strcmp(cvh::detail::last_boxfilter_dispatch_path(), expected_box_path) != 0)
+    {
+        return 13;
+    }
+
+    cvh::Mat blur5_dst;
+    cvh::blur(src_gray, blur5_dst, cvh::Size(5, 5), cvh::Point(-1, -1), cvh::BORDER_REPLICATE);
+    const char* expected_box5_path =
+#if defined(CVH_EXPECT_FULL)
+        "box_generic";
+#else
+        "fallback";
+#endif
+    if (std::strcmp(cvh::detail::last_boxfilter_dispatch_path(), expected_box5_path) != 0)
+    {
+        return 14;
+    }
+
+    cvh::Mat gauss_dst;
+    cvh::GaussianBlur(src_gray, gauss_dst, cvh::Size(5, 5), 0.0, 0.0, cvh::BORDER_REPLICATE);
+    const char* expected_gauss_path =
+#if defined(CVH_EXPECT_FULL)
+        "gauss_separable";
+#else
+        "fallback";
+#endif
+    if (std::strcmp(cvh::detail::last_gaussianblur_dispatch_path(), expected_gauss_path) != 0)
+    {
+        return 15;
+    }
+
+    cvh::Mat gauss3_dst;
+    cvh::GaussianBlur(src_gray, gauss3_dst, cvh::Size(3, 3), 0.0, 0.0, cvh::BORDER_REPLICATE);
+    const char* expected_gauss3_path =
+#if defined(CVH_EXPECT_FULL)
+        "gauss3x3";
+#else
+        "fallback";
+#endif
+    if (std::strcmp(cvh::detail::last_gaussianblur_dispatch_path(), expected_gauss3_path) != 0)
+    {
+        return 16;
+    }
 
     return 0;
 }

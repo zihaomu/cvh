@@ -125,6 +125,21 @@ CV_EXPORTS void register_all_backends();
 
 namespace detail {
 
+#if defined(CVH_FULL)
+CV_EXPORTS const char* last_boxfilter_dispatch_path();
+CV_EXPORTS const char* last_gaussianblur_dispatch_path();
+#else
+inline const char* last_boxfilter_dispatch_path()
+{
+    return "fallback";
+}
+
+inline const char* last_gaussianblur_dispatch_path()
+{
+    return "fallback";
+}
+#endif
+
 inline int resolve_resize_dim(int src_dim, int dsize_dim, double scale)
 {
     if (dsize_dim > 0)
