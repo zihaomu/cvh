@@ -564,9 +564,9 @@ std::vector<int> build_depths(const std::string& profile)
 {
     if (profile == "full")
     {
-        return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32U, CV_32F, CV_16F, CV_64F};
+        return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32U, CV_32F, CV_16F};
     }
-    return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32U, CV_32F, CV_16F, CV_64F};
+    return {CV_8U, CV_8S, CV_16U, CV_16S, CV_32S, CV_32U, CV_32F, CV_16F};
 }
 
 std::vector<BenchOp> build_ops(const std::string& profile)

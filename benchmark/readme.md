@@ -45,6 +45,24 @@
   - 支持分桶阈值 `--max-slowdown-by-op-depth`（按 `op+depth` 或单维覆盖）
   - 超过阈值时返回非 0（可用于 CI gate）
 
+- 可执行程序：`cvh_benchmark_imgproc_filter`
+  - 源码：`benchmark/imgproc_filter_benchmark.cpp`
+  - 覆盖：`boxFilter/GaussianBlur`（`CV_8U`，`C1/C3/C4`，continuous/ROI）
+  - 输出字段：`op,kernel,depth,channels,shape,layout,border,dispatch_path,ms_per_iter`
+  - `dispatch_path` 典型值：`fallback / box3x3 / box_generic / gauss3x3 / gauss_separable`
+  - 支持 `--dispatch auto|optimized-only|fallback-only`（用于 A/B 对照）
+
+- 回归检查脚本：`scripts/check_imgproc_filter_benchmark_regression.py`
+  - 对比 baseline/current CSV
+  - 支持全局阈值 `--max-slowdown`
+  - 支持分桶阈值 `--max-slowdown-by-op-kernel`（按 `op+kernel` 或单维覆盖）
+  - 超过阈值时返回非 0（可用于 CI gate）
+
+- 速度对照脚本：`scripts/report_imgproc_filter_speedup.py`
+  - 对比 baseline/candidate CSV（按相同 case）
+  - 输出 `geomean/median/min/max speedup`
+  - 可用 `--fail-below-speedup` 设最低加速门槛
+
 ## 使用示例
 
 0. （可选）启用 OpenMP 构建（对 `compare` 等已并行化 kernel 提升明显）：
@@ -84,6 +102,39 @@ python3 scripts/check_core_benchmark_regression.py \
   --max-slowdown 0.08 \
   --max-slowdown-by-op-depth CV_16F=0.20 \
   --max-slowdown-by-op-depth CMP_GT:CV_16F=0.25
+```
+
+5. 运行 imgproc filter quick 基准并导出结果：
+
+```bash
+./build-full-test/cvh_benchmark_imgproc_filter --profile quick --output benchmark/current_filter_quick.csv
+```
+
+6. 生成一次 filter 基线（例如当前主分支）：
+
+```bash
+cp benchmark/current_filter_quick.csv benchmark/baseline_filter_quick.csv
+```
+
+7. 对比 filter 回归（默认允许最多 8% 变慢）：
+
+```bash
+python3 scripts/check_imgproc_filter_benchmark_regression.py \
+  --baseline benchmark/baseline_filter_quick.csv \
+  --current benchmark/current_filter_quick.csv \
+  --max-slowdown 0.08
+```
+
+8. 量化 filter 加速（A/B 对照：forced fallback vs optimized）：
+
+```bash
+./build-full-test/cvh_benchmark_imgproc_filter --profile quick --dispatch fallback-only --output benchmark/filter_quick_fallback.csv
+./build-full-test/cvh_benchmark_imgproc_filter --profile quick --dispatch optimized-only --output benchmark/filter_quick_optimized.csv
+
+python3 scripts/report_imgproc_filter_speedup.py \
+  --baseline benchmark/filter_quick_fallback.csv \
+  --candidate benchmark/filter_quick_optimized.csv \
+  --fail-below-speedup 1.0
 ```
 
 ## 建议流程
