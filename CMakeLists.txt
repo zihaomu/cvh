@@ -1,8 +1,16 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(opencv_header_only VERSION 0.1.0 LANGUAGES CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION.txt" CVH_PROJECT_VERSION_RAW)
+string(STRIP "${CVH_PROJECT_VERSION_RAW}" CVH_PROJECT_VERSION)
+if(NOT CVH_PROJECT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "VERSION.txt must be semantic version (MAJOR.MINOR.PATCH), got: '${CVH_PROJECT_VERSION}'")
+endif()
+
+project(opencv_header_only VERSION ${CVH_PROJECT_VERSION} LANGUAGES CXX)
 
 include(CTest)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 option(CVH_BUILD_FULL_BACKEND "Build src/ backend library (CVH_FULL mode)" ON)
 option(CVH_BUILD_LEGACY_CORE "Deprecated alias of CVH_BUILD_FULL_BACKEND" ON)
@@ -28,9 +36,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(cvh_headers INTERFACE)
 add_library(cvh::headers ALIAS cvh_headers)
+set_target_properties(cvh_headers PROPERTIES EXPORT_NAME headers)
 target_include_directories(cvh_headers INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_compile_features(cvh_headers INTERFACE cxx_std_17)
 
@@ -74,6 +83,7 @@ if(CVH_ENABLE_FULL_BACKEND)
     add_library(cvh_legacy_core STATIC ${CVH_LEGACY_CORE_SOURCES})
     add_library(cvh::legacy_core ALIAS cvh_legacy_core)
     add_library(cvh::full ALIAS cvh_legacy_core)
+    set_target_properties(cvh_legacy_core PROPERTIES EXPORT_NAME legacy_core)
     target_compile_features(cvh_legacy_core PUBLIC cxx_std_17)
     target_compile_definitions(cvh_legacy_core PUBLIC CVH_FULL=1)
     target_compile_definitions(cvh_legacy_core PRIVATE ${CVH_LEGACY_CORE_PRIVATE_COMPILE_DEFINITIONS})
@@ -274,4 +284,45 @@ if(CVH_BUILD_TESTS)
     endif()
 endif()
 
-install(DIRECTORY include/ DESTINATION include)
+set(CVH_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/opencv_header_only" CACHE STRING "Install path for CMake package config files")
+
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+install(TARGETS cvh_headers
+    EXPORT opencv_header_onlyTargets
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+if(TARGET cvh_legacy_core)
+    install(TARGETS cvh_legacy_core
+        EXPORT opencv_header_onlyTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+endif()
+
+install(EXPORT opencv_header_onlyTargets
+    NAMESPACE cvh::
+    FILE opencv_header_onlyTargets.cmake
+    DESTINATION ${CVH_INSTALL_CMAKEDIR}
+)
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/opencv_header_onlyConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/opencv_header_onlyConfig.cmake"
+    INSTALL_DESTINATION ${CVH_INSTALL_CMAKEDIR}
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/opencv_header_onlyConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/opencv_header_onlyConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/opencv_header_onlyConfigVersion.cmake"
+    DESTINATION ${CVH_INSTALL_CMAKEDIR}
+)
