@@ -56,6 +56,27 @@ Trust gate policy 单一配置源位于 `benchmark/gate_policy.json`。
 - `CVH_BUILD_BACKEND_KERNEL_SOURCES=ON/OFF`：兼容保留开关（默认 `ON`）
 - `CVH_BUILD_TESTS=ON/OFF`：是否构建测试目标（默认 `ON`）
 
+## Install & Package
+
+安装（默认前缀可通过 `CMAKE_INSTALL_PREFIX` 覆盖）：
+
+```bash
+cmake -S . -B build-release -DCVH_BUILD_TESTS=OFF -DCVH_BUILD_BENCHMARKS=OFF
+cmake --build build-release -j
+cmake --install build-release
+```
+
+安装后可通过 CMake package 使用：
+
+```cmake
+find_package(opencv_header_only CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE cvh::headers)
+# 若构建并安装了 Full backend，可链接：
+# target_link_libraries(your_target PRIVATE cvh::legacy_core)
+# 或
+# target_link_libraries(your_target PRIVATE cvh::full)
+```
+
 ## Mode Semantics
 
 - 未显式定义模式宏时，头文件默认进入 `CVH_LITE`
@@ -78,3 +99,9 @@ Trust gate policy 单一配置源位于 `benchmark/gate_policy.json`。
 ## 目前存在的问题
 1. xsimd处理3通道图片的问题
 由于选择的xsimd这种跨平台指令集，其对连续缓冲区的 aligned/unaligned load/store 和 batch 运算有着明显的加速，但是对于3通道图片的滤波算法支持能力有限，因为3通道图片的滤波或者rgb2bgr会有很多interleaved的操作，这种操作是xsimd不擅长的部分，主要原因是各家对于interleaved的支持情况不同导致的。 而3通道图片又是最常用的图片格式，针对这部分问题，目前有待解决。
+
+## Release Docs
+
+- 版本号来源：`VERSION.txt`
+- 变更日志：`CHANGELOG.md`
+- 发布流程：`doc/release.md`

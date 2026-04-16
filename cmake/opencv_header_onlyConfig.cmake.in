@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/opencv_header_onlyTargets.cmake")
+
+# Backward-compatible convenience target. In-tree we use an ALIAS (cvh::full -> cvh::legacy_core);
+# for installed packages we provide an equivalent imported INTERFACE target.
+if(TARGET cvh::legacy_core AND NOT TARGET cvh::full)
+    add_library(cvh::full INTERFACE IMPORTED)
+    set_property(TARGET cvh::full PROPERTY INTERFACE_LINK_LIBRARIES cvh::legacy_core)
+endif()
