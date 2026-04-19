@@ -36,14 +36,25 @@ cmake --build build --target test
 推荐脚本：
 
 ```bash
-./scripts/ci_core_basic.sh
-./scripts/ci_imgproc_quick_gate.sh
+# 模块1：Lite 全量（core-lite + imgproc）
+./scripts/ci_lite_all.sh
+
+# 模块2：Full 全量（core-full + imgproc）
+./scripts/ci_full_all.sh
 ```
 
-可通过环境变量设置 warning 预算（默认 `0`）：
+可选：模块3（CVH/CV 对比，日志输出）
 
 ```bash
-CVH_WARNING_BUDGET=0 ./scripts/ci_core_basic.sh
+# 本地执行（输出 markdown 到 stdout，且产物写入临时目录）
+./scripts/ci_compare_log_only.sh
+```
+
+CI 中模块3默认关闭；PR 中由管理员评论触发：
+
+```bash
+/cvh-compare on
+/cvh-compare off
 ```
 
 Trust gate policy 单一配置源位于 `benchmark/gate_policy.json`。
@@ -91,6 +102,8 @@ target_link_libraries(your_target PRIVATE cvh::headers)
 - `cvh_mode_full_smoke`（仅 Full backend 构建时）
 - `cvh_resize_dispatch_full_smoke`（仅 Full backend 构建时，验证 `resize/cvtColor/threshold` backend 注册生效）
 - `cvh_full_backend_smoke`（仅 Full backend 构建时）
+- `cvh_test_imgproc`
+- `cvh_test_core_lite`（header-only core 套件）
 - `cvh_test_core`（仅 Full backend 构建时）
 
 

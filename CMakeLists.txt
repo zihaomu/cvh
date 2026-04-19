@@ -289,6 +289,45 @@ if(CVH_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/test
     )
 
+    set(CVH_CORE_TEST_LITE_SOURCES
+        test/core/core_ops_test.cpp
+        test/core/mat_channel_contract_test.cpp
+        test/core/mat_layout_semantics_test.cpp
+        test/core/mat_shape_display_test.cpp
+        test/core/mat_opencv_compat_test.cpp
+        test/core/parallel_for_runtime_test.cpp
+        test/core/scalar_contract_test.cpp
+    )
+
+    set(CVH_CORE_TEST_FULL_SOURCES
+        test/core/core_ops_test.cpp
+        test/core/binary_op_contract_test.cpp
+        test/core/mat_channel_contract_test.cpp
+        test/core/mat_layout_semantics_test.cpp
+        test/core/mat_shape_display_test.cpp
+        test/core/mat_expr_scalar_compare_test.cpp
+        test/core/mat_opencv_compat_test.cpp
+        test/core/parallel_for_runtime_test.cpp
+        test/core/mat_scalar_ops_test.cpp
+        test/core/mat_submat_test.cpp
+        test/core/mat_upstream_channel_port_test.cpp
+        test/core/gemm_pack_contract_test.cpp
+        test/core/mat_contract_test.cpp
+        test/core/scalar_contract_test.cpp
+    )
+
+    add_executable(cvh_test_core_lite
+        ${CVH_CORE_TEST_LITE_SOURCES}
+    )
+    target_link_libraries(cvh_test_core_lite PRIVATE cvh::headers gtest_main)
+    target_compile_features(cvh_test_core_lite PRIVATE cxx_std_17)
+    target_compile_definitions(cvh_test_core_lite PRIVATE M_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_include_directories(cvh_test_core_lite PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/test
+    )
+
     if(TARGET cvh_full_backend)
         add_executable(cvh_test_highgui_full
             test/highgui/highgui_full_backend_test.cpp
@@ -323,6 +362,7 @@ if(CVH_BUILD_TESTS)
         add_test(NAME cvh_test_imgcodecs COMMAND cvh_test_imgcodecs)
         add_test(NAME cvh_test_imgproc COMMAND cvh_test_imgproc)
         add_test(NAME cvh_test_highgui COMMAND cvh_test_highgui)
+        add_test(NAME cvh_test_core_lite COMMAND cvh_test_core_lite)
         if(TARGET cvh_full_backend)
             add_test(NAME cvh_test_highgui_full COMMAND cvh_test_highgui_full)
             add_test(NAME cvh_full_backend_smoke COMMAND cvh_full_backend_smoke)
@@ -333,20 +373,7 @@ if(CVH_BUILD_TESTS)
 
     if(TARGET cvh_full_backend)
         add_executable(cvh_test_core
-            test/core/core_ops_test.cpp
-            test/core/binary_op_contract_test.cpp
-            test/core/mat_channel_contract_test.cpp
-            test/core/mat_layout_semantics_test.cpp
-            test/core/mat_shape_display_test.cpp
-            test/core/mat_expr_scalar_compare_test.cpp
-            test/core/mat_opencv_compat_test.cpp
-            test/core/parallel_for_runtime_test.cpp
-            test/core/mat_scalar_ops_test.cpp
-            test/core/mat_submat_test.cpp
-            test/core/mat_upstream_channel_port_test.cpp
-            test/core/gemm_pack_contract_test.cpp
-            test/core/mat_contract_test.cpp
-            test/core/scalar_contract_test.cpp
+            ${CVH_CORE_TEST_FULL_SOURCES}
         )
         target_link_libraries(cvh_test_core PRIVATE cvh::full_backend gtest_main)
         target_compile_features(cvh_test_core PRIVATE cxx_std_17)
