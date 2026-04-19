@@ -3,75 +3,53 @@ name: CI
 on:
   push:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   workflow_dispatch:
     inputs:
-      run_core_basic:
-        description: "Run optional core_basic job"
+      run_opencv_compare:
+        description: "Run optional cvh/cv compare job"
         required: false
         default: false
         type: boolean
-      run_imgproc_quick_gate:
-        description: "Run optional imgproc quick benchmark regression gate"
-        required: false
-        default: false
-        type: boolean
-      run_imgproc_full_gate:
-        description: "Run optional imgproc full benchmark regression gate"
-        required: false
-        default: false
-        type: boolean
+
+permissions:
+  contents: read
 
 jobs:
-  core_basic:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_core_basic }}
+  lite_all:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure Build Test (Core Basic)
-        run: ./scripts/ci_core_basic.sh
+      - name: Run Lite Full Test Suite (core + imgproc)
+        run: ./scripts/ci_lite_all.sh
 
-  imgproc_quick_gate:
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_imgproc_quick_gate) }}
+  full_all:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Run Imgproc Quick Benchmark Gate
+      - name: Run Full Full Test Suite (core + imgproc)
+        run: ./scripts/ci_full_all.sh
+
+  opencv_compare:
+    needs: [lite_all, full_all]
+    if: >
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'ci/run-opencv-compare')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_opencv_compare == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run CVH/CV Compare (log-only)
         env:
-          CVH_IMGPROC_BENCH_THREADS: "1"
-          CVH_IMGPROC_BENCH_OMP_DYNAMIC: "false"
-          CVH_IMGPROC_BENCH_OMP_PROC_BIND: "close"
-          CVH_IMGPROC_BENCH_CPU_LIST: "auto"
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            git fetch --no-tags origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
-            export CVH_IMGPROC_BENCH_BASE_REF="origin/${{ github.base_ref }}"
-          fi
-          ./scripts/ci_imgproc_quick_gate.sh
-
-  imgproc_full_gate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_imgproc_full_gate }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Imgproc Full Benchmark Gate
-        env:
-          CVH_IMGPROC_BENCH_PROFILE: full
-          CVH_IMGPROC_BENCH_BASELINE: benchmark/baseline_imgproc_full.csv
-          CVH_IMGPROC_BENCH_CURRENT: benchmark/current_imgproc_full_ci.csv
-          CVH_IMGPROC_BENCH_WARMUP: "1"
-          CVH_IMGPROC_BENCH_ITERS: "10"
-          CVH_IMGPROC_BENCH_REPEATS: "3"
-          CVH_IMGPROC_BENCH_MAX_SLOWDOWN: "0.15"
-          CVH_IMGPROC_BENCH_THREADS: "1"
-          CVH_IMGPROC_BENCH_OMP_DYNAMIC: "false"
-          CVH_IMGPROC_BENCH_OMP_PROC_BIND: "close"
-          CVH_IMGPROC_BENCH_CPU_LIST: "auto"
-        run: ./scripts/ci_imgproc_quick_gate.sh
+          CVH_COMPARE_PROFILE: quick
+          CVH_COMPARE_IMPLS: full,lite
+          CVH_COMPARE_THREADS: "1"
+          CVH_COMPARE_OMP_DYNAMIC: "false"
+          CVH_COMPARE_OMP_PROC_BIND: "close"
+        run: ./scripts/ci_compare_log_only.sh

@@ -1,0 +1,72 @@
+name: CI Compare Toggle
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  toggle_compare_label:
+    if: ${{ github.event.issue.pull_request != null }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse command and validate actor
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = (context.payload.comment?.body || '').trim().toLowerCase();
+            const assoc = context.payload.comment?.author_association || '';
+            const allowed = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+            core.setOutput('pr_number', String(context.payload.issue.number));
+
+            if (!allowed.has(assoc)) {
+              core.info(`Ignore comment from association=${assoc}`);
+              core.setOutput('action', 'none');
+              return;
+            }
+
+            if (body.includes('/cvh-compare on')) {
+              core.setOutput('action', 'enable');
+              return;
+            }
+
+            if (body.includes('/cvh-compare off')) {
+              core.setOutput('action', 'disable');
+              return;
+            }
+
+            core.setOutput('action', 'none');
+
+      - name: Add compare label
+        if: ${{ steps.parse.outputs.action == 'enable' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number('${{ steps.parse.outputs.pr_number }}'),
+              labels: ['ci/run-opencv-compare']
+            });
+
+      - name: Remove compare label
+        if: ${{ steps.parse.outputs.action == 'disable' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number('${{ steps.parse.outputs.pr_number }}'),
+                name: 'ci/run-opencv-compare'
+              });
+            } catch (err) {
+              core.info(`remove label ignored: ${err.message}`);
+            }
+

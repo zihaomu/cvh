@@ -22,10 +22,12 @@
 
 - 增加通道语义和边界行为测试。
 - 建立与 OpenCV 行为对照的关键 case（选取高频路径）。
-- 已接线 core 聚合测试二进制：`cvh_test_core`（包含 core basic + Mat 合同测试）。
+- 已接线 core 测试二进制：
+  - `cvh_test_core_lite`（Lite/header-only 套件）
+  - `cvh_test_core`（Full 套件，包含 binary/gemm/transpose 等增强路径）
 - 运行示例：
   - `cmake -S . -B build-core -DCVH_BUILD_TESTS=ON`
-  - `cmake --build build-core -j --target cvh_test_core`
+  - `cmake --build build-core -j --target cvh_test_core_lite cvh_test_core`
   - `./build-core/cvh_test_core '--gtest_filter=MatContract_TEST.*'`
 
 ## 文件职责划分（当前）
