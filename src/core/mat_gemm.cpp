@@ -207,7 +207,7 @@ void gemm_impl_naive(const Mat& a, const Mat& b, Mat& c)
         errorInfo += ", but got ";
         errorInfo += std::to_string(K);
         errorInfo += "\n";
-        CV_Error(NULL, errorInfo.c_str());
+        CV_Error(Error::StsBadArg, errorInfo.c_str());
     }
 
     CV_Assert(a.type() == CV_32F && "Currently only FP32 activation mat is supported!");
@@ -304,7 +304,7 @@ void gemm_impl_naive_packed(const Mat& a, const GemmPackedB& packed_b, Mat& c)
         errorInfo += ", but got ";
         errorInfo += std::to_string(K);
         errorInfo += "\n";
-        CV_Error(NULL, errorInfo.c_str());
+        CV_Error(Error::StsBadArg, errorInfo.c_str());
     }
 
     CV_Assert(a.type() == CV_32F && "Currently only FP32 activation mat is supported!");
@@ -405,7 +405,7 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
             }
             else
             {
-                CV_Error(NULL, "Mat shapes on gemm function are miss matching!");
+                CV_Error(Error::StsBadArg, "Mat shapes on gemm function are miss matching!");
             }
             index_a--;
             index_b--;
@@ -421,7 +421,7 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
             index_b--;
         }
         else
-            CV_Error(NULL, "Mat shapes on gemm function are miss matching!");
+            CV_Error(Error::StsBadArg, "Mat shapes on gemm function are miss matching!");
     }
 
     // 如果有一个维度为1维度，说明 出现 MxK x K = M的情况
@@ -457,7 +457,7 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
         errorInfo += shape_to_str(shape_b);
         errorInfo += "\n";
         errorInfo += "Expact gemm K = " + std::to_string(K) + ", but got " + std::to_string(shape_b[shape_b.size() - 1]) + "\n";
-        CV_Error(NULL, errorInfo.c_str());
+        CV_Error(Error::StsBadArg, errorInfo.c_str());
     }
 
     CV_Assert(a.type() == CV_32F && "Currently only FP32 activation mat is supported!");

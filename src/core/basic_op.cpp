@@ -551,7 +551,7 @@ void rope(Mat& q, Mat& k, int start_pos, float freq_base)
 void compare(const Mat& a, const Mat& b, Mat& c, int op)
 {
     // TODO add implementation!
-    CV_Error(NULL, "Un-implemented function at compare!");
+    CV_Error(Error::StsNotImplemented, "Un-implemented function at compare!");
 }
 
 void compare(const Mat& a, const Scalar& b, Mat& c, int op)
