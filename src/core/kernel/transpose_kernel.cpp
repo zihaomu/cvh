@@ -6,8 +6,11 @@
 #include "xsimd/xsimd.hpp"
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 namespace cvh {
 namespace cpu {
@@ -182,6 +185,77 @@ inline void transpose2d_memcpy_fallback(const unsigned char* src,
     });
 }
 
+inline int xsimd_probe_index_from_elem_size(size_t elem_size)
+{
+    switch (elem_size)
+    {
+        case 1: return 0;
+        case 2: return 1;
+        case 4: return 2;
+        case 8: return 3;
+        default: return -1;
+    }
+}
+
+inline bool probe_transpose2d_xsimd_elem_size(size_t elem_size)
+{
+    // Probe on small non-square shape to catch lane/layout issues.
+    constexpr int rows = 11;
+    constexpr int cols = 29;
+    const size_t count = static_cast<size_t>(rows) * static_cast<size_t>(cols) * elem_size;
+
+    std::vector<unsigned char> src(count);
+    std::vector<unsigned char> dst(count);
+    std::vector<unsigned char> ref(count);
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        src[i] = static_cast<unsigned char>((i * 131u + 17u) & 0xFFu);
+    }
+
+    if (!try_transpose2d_xsimd_for_element_size(src.data(), dst.data(), rows, cols, elem_size))
+    {
+        return false;
+    }
+
+    transpose2d_memcpy_fallback(src.data(), ref.data(), rows, cols, elem_size);
+    return std::memcmp(dst.data(), ref.data(), count) == 0;
+}
+
+inline bool xsimd_transpose_allowed_for_elem_size(size_t elem_size)
+{
+    // 0 unknown, 1 pass, 2 fail
+    static std::array<std::atomic<int>, 4> states = {
+        std::atomic<int>{0},
+        std::atomic<int>{0},
+        std::atomic<int>{0},
+        std::atomic<int>{0},
+    };
+
+    const int idx = xsimd_probe_index_from_elem_size(elem_size);
+    if (idx < 0)
+    {
+        return false;
+    }
+
+    const int cached = states[static_cast<size_t>(idx)].load(std::memory_order_acquire);
+    if (cached == 1)
+    {
+        return true;
+    }
+    if (cached == 2)
+    {
+        return false;
+    }
+
+    const bool ok = probe_transpose2d_xsimd_elem_size(elem_size);
+    const int desired = ok ? 1 : 2;
+    int expected = 0;
+    states[static_cast<size_t>(idx)].compare_exchange_strong(
+        expected, desired, std::memory_order_acq_rel);
+    return states[static_cast<size_t>(idx)].load(std::memory_order_acquire) == 1;
+}
+
 }  // namespace
 
 void transpose2d_kernel_blocked(const unsigned char* src,
@@ -198,7 +272,11 @@ void transpose2d_kernel_blocked(const unsigned char* src,
 
     const size_t elem_size = elem_size1 * static_cast<size_t>(channels);
     const DispatchMode mode = dispatch_mode();
-    if (mode != DispatchMode::ScalarOnly &&
+    const bool allow_xsimd_transpose =
+        mode != DispatchMode::ScalarOnly &&
+        xsimd_transpose_allowed_for_elem_size(elem_size);
+
+    if (allow_xsimd_transpose &&
         try_transpose2d_xsimd_for_element_size(src, dst, rows, cols, elem_size))
     {
         set_last_dispatch_tag(DispatchTag::XSimd);

@@ -26,7 +26,6 @@ python3 -m unittest discover -s "${ROOT_DIR}/test/scripts" -p 'test_*.py'
 
 cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
   -DCVH_BUILD_FULL_BACKEND=ON \
-  -DCVH_BUILD_LEGACY_CORE=ON \
   -DCVH_BUILD_BACKEND_KERNEL_SOURCES=ON \
   -DCVH_BUILD_TESTS=ON
 
@@ -41,12 +40,20 @@ if (( warning_count > warning_budget )); then
   exit 1
 fi
 
+if [[ -x "${BUILD_DIR}/cvh_test_core" ]]; then
+  echo "cvh_test_core_all_cases_begin"
+  "${BUILD_DIR}/cvh_test_core" --gtest_list_tests
+  echo "cvh_test_core_all_cases_end"
+fi
+
 if command -v ctest >/dev/null 2>&1; then
-  ctest --test-dir "${BUILD_DIR}" --output-on-failure
+  ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 else
   cmake --build "${BUILD_DIR}" --target test
 fi
 
 if [[ -x "${BUILD_DIR}/cvh_test_core" ]]; then
+  echo "cvh_test_core_contract_cases_begin"
   "${BUILD_DIR}/cvh_test_core" "--gtest_filter=${CORE_CONTRACT_GTEST_FILTER}"
+  echo "cvh_test_core_contract_cases_end"
 fi

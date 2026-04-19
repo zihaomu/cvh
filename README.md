@@ -36,7 +36,6 @@ cmake --build build --target test
 推荐脚本：
 
 ```bash
-./scripts/ci_smoke.sh
 ./scripts/ci_core_basic.sh
 ./scripts/ci_imgproc_quick_gate.sh
 ```
@@ -52,7 +51,6 @@ Trust gate policy 单一配置源位于 `benchmark/gate_policy.json`。
 ## Build Options
 
 - `CVH_BUILD_FULL_BACKEND=ON/OFF`：是否构建 Full backend（默认 `ON`）
-- `CVH_BUILD_LEGACY_CORE=ON/OFF`：`CVH_BUILD_FULL_BACKEND` 的兼容别名（默认 `ON`）
 - `CVH_BUILD_BACKEND_KERNEL_SOURCES=ON/OFF`：兼容保留开关（默认 `ON`）
 - `CVH_BUILD_TESTS=ON/OFF`：是否构建测试目标（默认 `ON`）
 
@@ -72,7 +70,7 @@ cmake --install build-release
 find_package(opencv_header_only CONFIG REQUIRED)
 target_link_libraries(your_target PRIVATE cvh::headers)
 # 若构建并安装了 Full backend，可链接：
-# target_link_libraries(your_target PRIVATE cvh::legacy_core)
+# target_link_libraries(your_target PRIVATE cvh::full_backend)
 # 或
 # target_link_libraries(your_target PRIVATE cvh::full)
 ```
@@ -92,7 +90,7 @@ target_link_libraries(your_target PRIVATE cvh::headers)
 - `cvh_mode_lite_smoke`
 - `cvh_mode_full_smoke`（仅 Full backend 构建时）
 - `cvh_resize_dispatch_full_smoke`（仅 Full backend 构建时，验证 `resize/cvtColor/threshold` backend 注册生效）
-- `cvh_legacy_core_smoke`（仅 Full backend 构建时）
+- `cvh_full_backend_smoke`（仅 Full backend 构建时）
 - `cvh_test_core`（仅 Full backend 构建时）
 
 

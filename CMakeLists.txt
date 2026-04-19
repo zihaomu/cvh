@@ -8,16 +8,22 @@ endif()
 
 project(opencv_header_only VERSION ${CVH_PROJECT_VERSION} LANGUAGES CXX)
 
+# default to Release build
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
 include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 option(CVH_BUILD_FULL_BACKEND "Build src/ backend library (CVH_FULL mode)" ON)
-option(CVH_BUILD_LEGACY_CORE "Deprecated alias of CVH_BUILD_FULL_BACKEND" ON)
-option(CVH_BUILD_BACKEND_KERNEL_SOURCES "Build sources requiring legacy backend kernels" ON)
+option(CVH_BUILD_BACKEND_KERNEL_SOURCES "Build sources requiring full backend kernels" ON)
 option(CVH_BUILD_TESTS "Build all test targets (smoke + core)" ON)
 option(CVH_BUILD_BENCHMARKS "Build benchmark targets" ON)
 option(CVH_USE_OPENMP "Enable OpenMP acceleration in backend kernels when available" ON)
+option(CVH_ENABLE_OPENCV_COMPARE "Build cvh vs OpenCV compare benchmark target" OFF)
+set(CVH_OPENCV_BENCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/opencv_compare/opencv-bench-slim" CACHE PATH "Path to opencv-bench-slim source repository")
 
 if(APPLE)
     enable_language(OBJCXX)
@@ -26,7 +32,7 @@ if(APPLE)
 endif()
 
 set(CVH_ENABLE_FULL_BACKEND OFF)
-if(CVH_BUILD_FULL_BACKEND OR CVH_BUILD_LEGACY_CORE)
+if(CVH_BUILD_FULL_BACKEND)
     set(CVH_ENABLE_FULL_BACKEND ON)
 endif()
 
@@ -43,67 +49,88 @@ target_include_directories(cvh_headers INTERFACE
 )
 target_compile_features(cvh_headers INTERFACE cxx_std_17)
 
-set(CVH_LEGACY_CORE_SOURCES
+set(CVH_FULL_BACKEND_SOURCES
     src/core/basic_op_scalar.cpp
     src/core/kernel/binary_kernel_xsimd.cpp
+    src/core/kernel/gemm_kernel_xsimd.cpp
     src/core/kernel/transpose_kernel.cpp
     src/core/mat.cpp
+    src/core/mat_gemm.cpp
     src/core/mat_expr.cpp
     src/core/mat_convert.cpp
     src/core/system.cpp
     src/core/utils.cpp
-    src/imgproc/resize_backend.cpp
+    src/imgproc/resize.cpp
+    src/imgproc/cvtcolor.cpp
+    src/imgproc/cvtcolor_rgb_gray.cpp
+    src/imgproc/cvtcolor_yuv420.cpp
+    src/imgproc/cvtcolor_yuv422.cpp
+    src/imgproc/cvtcolor_yuv444.cpp
+    src/imgproc/threshold.cpp
+    src/imgproc/lut.cpp
+    src/imgproc/box_filter.cpp
+    src/imgproc/gaussian_blur.cpp
+    src/imgproc/sobel.cpp
+    src/imgproc/canny_image.cpp
+    src/imgproc/canny_deriv.cpp
+    src/imgproc/copy_make_border.cpp
+    src/imgproc/filter2d.cpp
+    src/imgproc/sep_filter2d.cpp
+    src/imgproc/warp_affine.cpp
+    src/imgproc/erode.cpp
+    src/imgproc/dilate.cpp
+    src/imgproc/backend_registry.cpp
     src/highgui/highgui.cpp
 )
 
-set(CVH_LEGACY_CORE_PRIVATE_LIBS)
-set(CVH_LEGACY_CORE_PRIVATE_INCLUDE_DIRS)
-set(CVH_LEGACY_CORE_PRIVATE_COMPILE_DEFINITIONS)
+set(CVH_FULL_BACKEND_PRIVATE_LIBS)
+set(CVH_FULL_BACKEND_PRIVATE_INCLUDE_DIRS)
+set(CVH_FULL_BACKEND_PRIVATE_COMPILE_DEFINITIONS)
 
 if(WIN32)
-    list(APPEND CVH_LEGACY_CORE_SOURCES src/highgui/display_win32.cpp)
+    list(APPEND CVH_FULL_BACKEND_SOURCES src/highgui/display_win32.cpp)
 elseif(APPLE)
     find_library(CVH_COCOA_FRAMEWORK Cocoa REQUIRED)
-    list(APPEND CVH_LEGACY_CORE_SOURCES src/highgui/display_cocoa.mm)
-    list(APPEND CVH_LEGACY_CORE_PRIVATE_LIBS ${CVH_COCOA_FRAMEWORK})
-    list(APPEND CVH_LEGACY_CORE_PRIVATE_COMPILE_DEFINITIONS CVH_HAVE_COCOA=1)
+    list(APPEND CVH_FULL_BACKEND_SOURCES src/highgui/display_cocoa.mm)
+    list(APPEND CVH_FULL_BACKEND_PRIVATE_LIBS ${CVH_COCOA_FRAMEWORK})
+    list(APPEND CVH_FULL_BACKEND_PRIVATE_COMPILE_DEFINITIONS CVH_HAVE_COCOA=1)
 elseif(UNIX AND NOT APPLE AND NOT ANDROID)
-    list(APPEND CVH_LEGACY_CORE_SOURCES src/highgui/display_fb.cpp)
+    list(APPEND CVH_FULL_BACKEND_SOURCES src/highgui/display_fb.cpp)
 
     find_package(X11 QUIET)
     if(X11_FOUND)
-        list(APPEND CVH_LEGACY_CORE_SOURCES src/highgui/display_x11.cpp)
-        list(APPEND CVH_LEGACY_CORE_PRIVATE_LIBS ${X11_LIBRARIES})
-        list(APPEND CVH_LEGACY_CORE_PRIVATE_INCLUDE_DIRS ${X11_INCLUDE_DIR})
-        list(APPEND CVH_LEGACY_CORE_PRIVATE_COMPILE_DEFINITIONS CVH_HAVE_X11=1)
+        list(APPEND CVH_FULL_BACKEND_SOURCES src/highgui/display_x11.cpp)
+        list(APPEND CVH_FULL_BACKEND_PRIVATE_LIBS ${X11_LIBRARIES})
+        list(APPEND CVH_FULL_BACKEND_PRIVATE_INCLUDE_DIRS ${X11_INCLUDE_DIR})
+        list(APPEND CVH_FULL_BACKEND_PRIVATE_COMPILE_DEFINITIONS CVH_HAVE_X11=1)
     endif()
 endif()
 
 if(CVH_ENABLE_FULL_BACKEND)
-    add_library(cvh_legacy_core STATIC ${CVH_LEGACY_CORE_SOURCES})
-    add_library(cvh::legacy_core ALIAS cvh_legacy_core)
-    add_library(cvh::full ALIAS cvh_legacy_core)
-    set_target_properties(cvh_legacy_core PROPERTIES EXPORT_NAME legacy_core)
-    target_compile_features(cvh_legacy_core PUBLIC cxx_std_17)
-    target_compile_definitions(cvh_legacy_core PUBLIC CVH_FULL=1)
-    target_compile_definitions(cvh_legacy_core PRIVATE ${CVH_LEGACY_CORE_PRIVATE_COMPILE_DEFINITIONS})
-    target_link_libraries(cvh_legacy_core PUBLIC cvh::headers PRIVATE ${CVH_LEGACY_CORE_PRIVATE_LIBS})
-    target_include_directories(cvh_legacy_core
+    add_library(cvh_full_backend STATIC ${CVH_FULL_BACKEND_SOURCES})
+    add_library(cvh::full_backend ALIAS cvh_full_backend)
+    add_library(cvh::full ALIAS cvh_full_backend)
+    set_target_properties(cvh_full_backend PROPERTIES EXPORT_NAME full_backend)
+    target_compile_features(cvh_full_backend PUBLIC cxx_std_17)
+    target_compile_definitions(cvh_full_backend PUBLIC CVH_FULL=1)
+    target_compile_definitions(cvh_full_backend PRIVATE ${CVH_FULL_BACKEND_PRIVATE_COMPILE_DEFINITIONS})
+    target_link_libraries(cvh_full_backend PUBLIC cvh::headers PRIVATE ${CVH_FULL_BACKEND_PRIVATE_LIBS})
+    target_include_directories(cvh_full_backend
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src/core
             ${CMAKE_CURRENT_SOURCE_DIR}/src/core/kernel
             ${CMAKE_CURRENT_SOURCE_DIR}/include/cvh/3rdparty/xsimd/include
-            ${CVH_LEGACY_CORE_PRIVATE_INCLUDE_DIRS}
+            ${CVH_FULL_BACKEND_PRIVATE_INCLUDE_DIRS}
     )
 
     if(CVH_USE_OPENMP)
         find_package(OpenMP QUIET)
         if(OpenMP_CXX_FOUND)
-            target_link_libraries(cvh_legacy_core PRIVATE OpenMP::OpenMP_CXX)
-            target_compile_definitions(cvh_legacy_core PRIVATE CVH_WITH_OPENMP=1)
-            message(STATUS "cvh_legacy_core: OpenMP enabled")
+            target_link_libraries(cvh_full_backend PRIVATE OpenMP::OpenMP_CXX)
+            target_compile_definitions(cvh_full_backend PRIVATE CVH_WITH_OPENMP=1)
+            message(STATUS "cvh_full_backend: OpenMP enabled")
         else()
-            message(STATUS "cvh_legacy_core: OpenMP requested but not found; building without OpenMP")
+            message(STATUS "cvh_full_backend: OpenMP requested but not found; building without OpenMP")
         endif()
     endif()
 
@@ -111,7 +138,7 @@ if(CVH_ENABLE_FULL_BACKEND)
         add_executable(cvh_benchmark_core_ops
             benchmark/core_ops_benchmark.cpp
         )
-        target_link_libraries(cvh_benchmark_core_ops PRIVATE cvh::legacy_core)
+        target_link_libraries(cvh_benchmark_core_ops PRIVATE cvh::full_backend)
         target_compile_features(cvh_benchmark_core_ops PRIVATE cxx_std_17)
         target_include_directories(cvh_benchmark_core_ops PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}
@@ -121,7 +148,7 @@ if(CVH_ENABLE_FULL_BACKEND)
         add_executable(cvh_benchmark_imgproc_ops
             benchmark/imgproc_ops_benchmark.cpp
         )
-        target_link_libraries(cvh_benchmark_imgproc_ops PRIVATE cvh::legacy_core)
+        target_link_libraries(cvh_benchmark_imgproc_ops PRIVATE cvh::full_backend)
         target_compile_features(cvh_benchmark_imgproc_ops PRIVATE cxx_std_17)
         target_include_directories(cvh_benchmark_imgproc_ops PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}
@@ -131,12 +158,56 @@ if(CVH_ENABLE_FULL_BACKEND)
         add_executable(cvh_benchmark_imgproc_filter
             benchmark/imgproc_filter_benchmark.cpp
         )
-        target_link_libraries(cvh_benchmark_imgproc_filter PRIVATE cvh::legacy_core)
+        target_link_libraries(cvh_benchmark_imgproc_filter PRIVATE cvh::full_backend)
         target_compile_features(cvh_benchmark_imgproc_filter PRIVATE cxx_std_17)
         target_include_directories(cvh_benchmark_imgproc_filter PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/include
         )
+
+        if(CVH_ENABLE_OPENCV_COMPARE)
+            if(NOT EXISTS "${CVH_OPENCV_BENCH_DIR}")
+                message(FATAL_ERROR "CVH_ENABLE_OPENCV_COMPARE=ON but CVH_OPENCV_BENCH_DIR does not exist: ${CVH_OPENCV_BENCH_DIR}")
+            endif()
+
+            if(NOT OpenCV_DIR)
+                if(EXISTS "${CVH_OPENCV_BENCH_DIR}/build-slim/OpenCVConfig.cmake")
+                    set(OpenCV_DIR "${CVH_OPENCV_BENCH_DIR}/build-slim" CACHE PATH "Path to OpenCVConfig.cmake for compare benchmark" FORCE)
+                endif()
+            endif()
+
+            find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+
+            add_executable(cvh_benchmark_compare
+                benchmark/opencv_compare_benchmark.cpp
+                benchmark/opencv_compare_opencv_backend.cpp
+            )
+            target_link_libraries(cvh_benchmark_compare PRIVATE cvh::full_backend ${OpenCV_LIBS})
+            target_compile_features(cvh_benchmark_compare PRIVATE cxx_std_17)
+            target_include_directories(cvh_benchmark_compare PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}
+                ${CMAKE_CURRENT_SOURCE_DIR}/include
+                ${OpenCV_INCLUDE_DIRS}
+            )
+
+            add_executable(cvh_benchmark_compare_lite
+                benchmark/opencv_compare_benchmark.cpp
+                benchmark/opencv_compare_opencv_backend.cpp
+            )
+            target_link_libraries(cvh_benchmark_compare_lite PRIVATE
+                cvh::headers
+                ${OpenCV_LIBS}
+                $<TARGET_FILE:cvh_full_backend>
+            )
+            add_dependencies(cvh_benchmark_compare_lite cvh_full_backend)
+            target_compile_features(cvh_benchmark_compare_lite PRIVATE cxx_std_17)
+            target_compile_definitions(cvh_benchmark_compare_lite PRIVATE CVH_LITE=1)
+            target_include_directories(cvh_benchmark_compare_lite PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}
+                ${CMAKE_CURRENT_SOURCE_DIR}/include
+                ${OpenCV_INCLUDE_DIRS}
+            )
+        endif()
     endif()
 
     add_executable(cvh_example_highgui_imshow
@@ -188,7 +259,14 @@ if(CVH_BUILD_TESTS)
         test/imgproc/imgproc_cvtcolor_contract_test.cpp
         test/imgproc/imgproc_threshold_contract_test.cpp
         test/imgproc/imgproc_pipeline_regression_test.cpp
+        test/imgproc/imgproc_lut_contract_test.cpp
         test/imgproc/imgproc_filter_contract_test.cpp
+        test/imgproc/imgproc_filter2d_contract_test.cpp
+        test/imgproc/imgproc_sep_filter2d_contract_test.cpp
+        test/imgproc/imgproc_copy_make_border_contract_test.cpp
+        test/imgproc/imgproc_morph_gradient_contract_test.cpp
+        test/imgproc/imgproc_canny_contract_test.cpp
+        test/imgproc/imgproc_warp_affine_contract_test.cpp
     )
     target_link_libraries(cvh_test_imgproc PRIVATE cvh::headers gtest_main)
     target_compile_features(cvh_test_imgproc PRIVATE cxx_std_17)
@@ -211,11 +289,11 @@ if(CVH_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/test
     )
 
-    if(TARGET cvh_legacy_core)
+    if(TARGET cvh_full_backend)
         add_executable(cvh_test_highgui_full
             test/highgui/highgui_full_backend_test.cpp
         )
-        target_link_libraries(cvh_test_highgui_full PRIVATE cvh::legacy_core gtest_main)
+        target_link_libraries(cvh_test_highgui_full PRIVATE cvh::full_backend gtest_main)
         target_compile_features(cvh_test_highgui_full PRIVATE cxx_std_17)
         target_compile_definitions(cvh_test_highgui_full PRIVATE M_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
         target_include_directories(cvh_test_highgui_full PRIVATE
@@ -224,8 +302,8 @@ if(CVH_BUILD_TESTS)
             ${CMAKE_CURRENT_SOURCE_DIR}/test
         )
 
-        add_executable(cvh_legacy_core_smoke test/smoke/cvh_legacy_core_smoke.cpp)
-        target_link_libraries(cvh_legacy_core_smoke PRIVATE cvh::legacy_core)
+        add_executable(cvh_full_backend_smoke test/smoke/cvh_full_backend_smoke.cpp)
+        target_link_libraries(cvh_full_backend_smoke PRIVATE cvh::full_backend)
 
         add_executable(cvh_mode_full_smoke test/smoke/cvh_mode_smoke.cpp)
         target_compile_definitions(cvh_mode_full_smoke PRIVATE CVH_EXPECT_FULL=1)
@@ -245,15 +323,15 @@ if(CVH_BUILD_TESTS)
         add_test(NAME cvh_test_imgcodecs COMMAND cvh_test_imgcodecs)
         add_test(NAME cvh_test_imgproc COMMAND cvh_test_imgproc)
         add_test(NAME cvh_test_highgui COMMAND cvh_test_highgui)
-        if(TARGET cvh_legacy_core)
+        if(TARGET cvh_full_backend)
             add_test(NAME cvh_test_highgui_full COMMAND cvh_test_highgui_full)
-            add_test(NAME cvh_legacy_core_smoke COMMAND cvh_legacy_core_smoke)
+            add_test(NAME cvh_full_backend_smoke COMMAND cvh_full_backend_smoke)
             add_test(NAME cvh_mode_full_smoke COMMAND cvh_mode_full_smoke)
             add_test(NAME cvh_resize_dispatch_full_smoke COMMAND cvh_resize_dispatch_full_smoke)
         endif()
     endif()
 
-    if(TARGET cvh_legacy_core)
+    if(TARGET cvh_full_backend)
         add_executable(cvh_test_core
             test/core/core_ops_test.cpp
             test/core/binary_op_contract_test.cpp
@@ -266,10 +344,11 @@ if(CVH_BUILD_TESTS)
             test/core/mat_scalar_ops_test.cpp
             test/core/mat_submat_test.cpp
             test/core/mat_upstream_channel_port_test.cpp
+            test/core/gemm_pack_contract_test.cpp
             test/core/mat_contract_test.cpp
             test/core/scalar_contract_test.cpp
         )
-        target_link_libraries(cvh_test_core PRIVATE cvh::legacy_core gtest_main)
+        target_link_libraries(cvh_test_core PRIVATE cvh::full_backend gtest_main)
         target_compile_features(cvh_test_core PRIVATE cxx_std_17)
         target_compile_definitions(cvh_test_core PRIVATE M_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
         target_include_directories(cvh_test_core PRIVATE
@@ -293,8 +372,8 @@ install(TARGETS cvh_headers
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-if(TARGET cvh_legacy_core)
-    install(TARGETS cvh_legacy_core
+if(TARGET cvh_full_backend)
+    install(TARGETS cvh_full_backend
         EXPORT opencv_header_onlyTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

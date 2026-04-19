@@ -132,6 +132,26 @@ static inline int cvh_fb_get_test_dim(const char* key, int fallback_value)
     return static_cast<int>(v);
 }
 
+static inline bool cvh_fb_write_all(int fd, const char* data, size_t size)
+{
+    size_t total_written = 0;
+    while (total_written < size)
+    {
+        const ssize_t n = ::write(fd, data + total_written, size - total_written);
+        if (n > 0)
+        {
+            total_written += static_cast<size_t>(n);
+            continue;
+        }
+        if (n < 0 && errno == EINTR)
+        {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
 display_fb_impl::display_fb_impl()
 {
     ttyfd = -1;
@@ -231,8 +251,7 @@ int display_fb_impl::open()
         // disable tty blinking cursor
         {
             const char buf[] = "\033[9;0]\033[?33l\033[?25l\033[?1c";
-            const ssize_t n = ::write(ttyfd, buf, sizeof(buf));
-            if (n == static_cast<ssize_t>(sizeof(buf)))
+            if (cvh_fb_write_all(ttyfd, buf, sizeof(buf) - 1))
             {
                 tty_cursor_hidden = true;
             }
@@ -929,7 +948,10 @@ int display_fb_impl::close()
         {
             // enable tty blinking cursor
             const char buf[] = "\033[9;15]\033[?33h\033[?25h\033[?0c";
-            (void)::write(ttyfd, buf, sizeof(buf));
+            if (!cvh_fb_write_all(ttyfd, buf, sizeof(buf) - 1))
+            {
+                fprintf(stderr, "restore tty cursor sequence write failed %d %s\n", errno, strerror(errno));
+            }
         }
 
         ::close(ttyfd);
