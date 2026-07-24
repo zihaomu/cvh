@@ -5,6 +5,7 @@
 #include "../saturate.h"
 
 #include <cmath>
+#include <climits>
 #include <cstring>
 #include <type_traits>
 
@@ -67,6 +68,7 @@ template<typename Op>
 void dispatch_float_unary(const Mat& src, Mat& dst, Op op, const char* fn_name)
 {
     prepare_dst(src, dst, src.type(), fn_name);
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     switch (src.depth())
     {
         case CV_32F: apply_unary_same_type<float>(src, dst, op); break;
@@ -75,6 +77,112 @@ void dispatch_float_unary(const Mat& src, Mat& dst, Op op, const char* fn_name)
             CV_Error_(Error::StsUnsupportedFormat,
                       ("%s supports CV_32F and CV_64F, depth=%d", fn_name, src.depth()));
     }
+}
+
+inline void unary_layout(const Mat& src,
+                         const Mat& dst,
+                         size_t& outer,
+                         size_t& scalar_count,
+                         size_t& src_step,
+                         size_t& dst_step)
+{
+    const bool continuous = src.isContinuous() && dst.isContinuous();
+    outer = continuous
+        ? 1
+        : (src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1);
+    const size_t pixels_per_outer =
+        continuous
+            ? src.total()
+            : (src.dims > 1 ? src.total(1, src.dims) : src.total());
+    scalar_count = pixels_per_outer * static_cast<size_t>(src.channels());
+    src_step = src.dims > 1
+        ? src.step(0)
+        : scalar_count * static_cast<size_t>(src.elemSize1());
+    dst_step = dst.dims > 1
+        ? dst.step(0)
+        : scalar_count * static_cast<size_t>(dst.elemSize1());
+}
+
+inline bool integer_power_value(double power, int& integer_power)
+{
+    if (!std::isfinite(power) ||
+        power < static_cast<double>(INT_MIN) ||
+        power > static_cast<double>(INT_MAX))
+    {
+        return false;
+    }
+    const double integral = std::trunc(power);
+    if (integral != power)
+    {
+        return false;
+    }
+    integer_power = static_cast<int>(integral);
+    return true;
+}
+
+inline bool try_ui_exp_f32(const Mat& src, Mat& dst)
+{
+    if (src.depth() != CV_32F || !ui::enabled())
+    {
+        return false;
+    }
+    size_t outer = 0;
+    size_t scalar_count = 0;
+    size_t src_step = 0;
+    size_t dst_step = 0;
+    unary_layout(src, dst, outer, scalar_count, src_step, dst_step);
+    return ui::apply_exp_f32(
+        reinterpret_cast<const float*>(src.data),
+        src_step,
+        reinterpret_cast<float*>(dst.data),
+        dst_step,
+        scalar_count,
+        outer);
+}
+
+inline bool try_ui_log_f32(const Mat& src, Mat& dst)
+{
+    if (src.depth() != CV_32F || !ui::enabled())
+    {
+        return false;
+    }
+    size_t outer = 0;
+    size_t scalar_count = 0;
+    size_t src_step = 0;
+    size_t dst_step = 0;
+    unary_layout(src, dst, outer, scalar_count, src_step, dst_step);
+    return ui::apply_log_f32(
+        reinterpret_cast<const float*>(src.data),
+        src_step,
+        reinterpret_cast<float*>(dst.data),
+        dst_step,
+        scalar_count,
+        outer);
+}
+
+inline bool try_ui_pow_f32(const Mat& src, Mat& dst, double power)
+{
+    if (src.depth() != CV_32F || !ui::enabled() || !std::isfinite(power))
+    {
+        return false;
+    }
+    int integer_power = 0;
+    const bool is_integer_power = integer_power_value(power, integer_power);
+    size_t outer = 0;
+    size_t scalar_count = 0;
+    size_t src_step = 0;
+    size_t dst_step = 0;
+    unary_layout(src, dst, outer, scalar_count, src_step, dst_step);
+    return ui::apply_pow_f32(
+        reinterpret_cast<const float*>(src.data),
+        src_step,
+        reinterpret_cast<float*>(dst.data),
+        dst_step,
+        scalar_count,
+        outer,
+        power,
+        is_integer_power,
+        integer_power);
 }
 
 template<typename T>
@@ -514,29 +622,38 @@ inline void sqrt(const Mat& src, Mat& dst)
 
 inline void pow(const Mat& src, double power, Mat& dst)
 {
+    math_detail::prepare_dst(src, dst, src.type(), "pow");
+    if (math_detail::try_ui_pow_f32(src, dst, power))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
     math_detail::dispatch_float_unary(
-        src,
-        dst,
-        [power](const auto value) { return std::pow(value, power); },
-        "pow");
+        src, dst, [power](const auto value) { return std::pow(value, power); }, "pow");
 }
 
 inline void exp(const Mat& src, Mat& dst)
 {
+    math_detail::prepare_dst(src, dst, src.type(), "exp");
+    if (math_detail::try_ui_exp_f32(src, dst))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
     math_detail::dispatch_float_unary(
-        src,
-        dst,
-        [](const auto value) { return std::exp(value); },
-        "exp");
+        src, dst, [](const auto value) { return std::exp(value); }, "exp");
 }
 
 inline void log(const Mat& src, Mat& dst)
 {
+    math_detail::prepare_dst(src, dst, src.type(), "log");
+    if (math_detail::try_ui_log_f32(src, dst))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
     math_detail::dispatch_float_unary(
-        src,
-        dst,
-        [](const auto value) { return std::log(value); },
-        "log");
+        src, dst, [](const auto value) { return std::log(value); }, "log");
 }
 
 inline bool checkRange(const Mat& src,
@@ -595,6 +712,28 @@ inline void patchNaNs(Mat& src, double value)
                   ("patchNaNs follows the local OpenCV CPU path and supports CV_32F only, depth=%d",
                    src.depth()));
     }
+    const bool continuous = src.isContinuous();
+    const size_t outer = continuous
+        ? 1
+        : (src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1);
+    const size_t pixels_per_outer =
+        continuous
+            ? src.total()
+            : (src.dims > 1 ? src.total(1, src.dims) : src.total());
+    const size_t scalar_count =
+        pixels_per_outer * static_cast<size_t>(src.channels());
+    if (math_detail::ui::enabled() &&
+        math_detail::ui::apply_patch_nans_f32(
+            reinterpret_cast<float*>(src.data),
+            src.dims > 1 ? src.step(0) : scalar_count * sizeof(float),
+            scalar_count,
+            outer,
+            static_cast<float>(value)))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     math_detail::patch_nans_impl<float>(src, static_cast<float>(value));
 }
 

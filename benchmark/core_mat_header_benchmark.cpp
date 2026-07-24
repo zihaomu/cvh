@@ -765,6 +765,12 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
 
     cvh::Mat rhs(dims, shape.type);
     fill_mat(rhs, static_cast<std::uint32_t>(shape.rows * 211 + shape.cols * 29 + shape.type));
+    const cvh::Scalar scalar_value(3.0, 5.0, 7.0, 11.0);
+    cvh::Mat binary_mask(dims, CV_8UC1);
+    fill_mat(
+        binary_mask,
+        static_cast<std::uint32_t>(
+            shape.rows * 307 + shape.cols * 43 + shape.type));
 
     {
         cvh::Mat dst(dims, shape.type);
@@ -776,6 +782,19 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             bytes * 3,
             dst,
             [&]() { cvh::scaleAdd(src, 0.75, rhs, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "ADD",
+            "mat_scalar",
+            bytes * 2,
+            dst,
+            [&]() { cvh::add(src, scalar_value, dst); },
             rows);
     }
 
@@ -798,10 +817,36 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             args,
             shape,
             "SUBTRACT",
+            "scalar_mat",
+            bytes * 2,
+            dst,
+            [&]() { cvh::subtract(scalar_value, src, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "SUBTRACT",
             "mat_mat",
             bytes * 3,
             dst,
             [&]() { cvh::subtract(src, rhs, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "MULTIPLY",
+            "mat_scalar",
+            bytes * 2,
+            dst,
+            [&]() { cvh::multiply(src, scalar_value, dst); },
             rows);
     }
 
@@ -824,6 +869,19 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             args,
             shape,
             "DIVIDE",
+            "scalar_mat",
+            bytes * 2,
+            dst,
+            [&]() { cvh::divide(scalar_value, src, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "DIVIDE",
             "mat_mat",
             bytes * 3,
             dst,
@@ -837,10 +895,53 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             args,
             shape,
             "ABSDIFF",
+            "mat_scalar",
+            bytes * 2,
+            dst,
+            [&]() { cvh::absdiff(src, scalar_value, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "ABSDIFF",
             "mat_mat",
             bytes * 3,
             dst,
             [&]() { cvh::absdiff(src, rhs, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        dst.setTo(cvh::Scalar::all(0xA5));
+        append_array_op_row(
+            args,
+            shape,
+            "BITWISE_AND",
+            "mat_mat_masked",
+            bytes * 3 + binary_mask.total(),
+            dst,
+            [&]() { cvh::bitwise_and(src, rhs, dst, binary_mask); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        dst.setTo(cvh::Scalar::all(0xA5));
+        append_array_op_row(
+            args,
+            shape,
+            "BITWISE_XOR",
+            "mat_scalar_masked",
+            bytes * 2 + binary_mask.total(),
+            dst,
+            [&]() {
+                cvh::bitwise_xor(src, scalar_value, dst, binary_mask);
+            },
             rows);
     }
 
@@ -875,6 +976,26 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
     }
 
     {
+        cvh::Mat lower(dims, shape.type);
+        cvh::Mat upper(dims, shape.type);
+        lower.setTo(cvh::Scalar::all(-2.5));
+        upper.setTo(cvh::Scalar::all(127.5));
+        cvh::Mat dst(dims, CV_8UC1);
+        const std::size_t mask_bytes =
+            static_cast<std::size_t>(shape.rows) *
+            static_cast<std::size_t>(shape.cols);
+        append_array_op_row(
+            args,
+            shape,
+            "IN_RANGE",
+            "mat_bounds",
+            bytes * 3 + mask_bytes,
+            dst,
+            [&]() { cvh::inRange(src, lower, upper, dst); },
+            rows);
+    }
+
+    {
         cvh::Mat dst(dims, shape.type);
         append_array_op_row(
             args,
@@ -892,11 +1013,37 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
         append_array_op_row(
             args,
             shape,
+            "MIN",
+            "mat_scalar",
+            bytes * 2,
+            dst,
+            [&]() { cvh::min(src, scalar_value, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
             "MAX",
             "mat_mat",
             bytes * 3,
             dst,
             [&]() { cvh::max(src, rhs, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "MAX",
+            "mat_scalar",
+            bytes * 2,
+            dst,
+            [&]() { cvh::max(src, scalar_value, dst); },
             rows);
     }
 
@@ -981,7 +1128,50 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
                 bytes * 2,
                 dst,
                 [&]() { cvh::log(positive_src, dst); },
-            rows);
+                rows);
+        }
+
+        {
+            cvh::Mat dst(dims, shape.type);
+            append_array_op_row(
+                args,
+                shape,
+                "POW",
+                "power_1_75_f32",
+                bytes * 2,
+                dst,
+                [&]() { cvh::pow(positive_src, 1.75, dst); },
+                rows);
+        }
+
+        {
+            cvh::Mat dst(dims, shape.type);
+            append_array_op_row(
+                args,
+                shape,
+                "POW",
+                "power_3_f32",
+                bytes * 2,
+                dst,
+                [&]() { cvh::pow(src, 3.0, dst); },
+                rows);
+        }
+
+        {
+            cvh::Mat patched = src.clone();
+            append_array_op_row(
+                args,
+                shape,
+                "PATCH_NANS",
+                "one_nan_f32",
+                bytes * 2,
+                patched,
+                [&]() {
+                    patched.at<float>(0, 0) =
+                        std::numeric_limits<float>::quiet_NaN();
+                    cvh::patchNaNs(patched, 0.0);
+                },
+                rows);
         }
     }
 

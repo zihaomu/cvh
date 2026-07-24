@@ -103,6 +103,15 @@ cmake --build build-bench -j --target cvh_benchmark_core_mat_header
 `dispatch_path` 记录公共 API 最终命中的 `scalar` 或 `opencv_ui`，不以 target
 名称推测实际执行路径。
 
+`core_mat` 的逐元素矩阵同时包含 Mat-Mat、Mat-Scalar/Scalar-Mat、`inRange` 的
+Mat/Scalar bounds，以及 masked Mat-Mat/Mat-Scalar bitwise 变体；这些 variant 使用相同
+输入分别运行 `--dispatch scalar` 和 `--dispatch auto`，用于独立判断 broadcast、
+compare/reduce 和 mask/select 的收益。
+
+F32 数学 case 包含 `EXP`、`LOG`、`POW(power=1.75)`、`POW(power=3)` 和
+`PATCH_NANS`。它们同样支持 `--dispatch scalar|auto`；通用幂与整数幂分开记录，避免
+`exp(log(x) * power)` 的成本掩盖整数 exponentiation-by-squaring fast-path。
+
 runner 已支持通过 `git worktree` 拉起旧版本，例如：
 
 ```text

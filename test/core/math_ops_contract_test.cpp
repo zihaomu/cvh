@@ -3,6 +3,7 @@
 #include "cvh/core/detail/math_ui.hpp"
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -47,6 +48,47 @@ void expect_mat_bytes_equal(const Mat& actual, const Mat& expected)
         {
             ASSERT_EQ(actual_row[byte], expected_row[byte])
                 << "row=" << row << ", byte=" << byte;
+        }
+    }
+}
+
+void expect_float_mat_near(const Mat& actual,
+                           const Mat& expected,
+                           float relative_tolerance)
+{
+    ASSERT_EQ(actual.type(), expected.type());
+    ASSERT_EQ(actual.shape(), expected.shape());
+    ASSERT_EQ(actual.depth(), CV_32F);
+    const size_t row_scalars =
+        static_cast<size_t>(actual.size[1]) *
+        static_cast<size_t>(actual.channels());
+    for (int row = 0; row < actual.size[0]; ++row)
+    {
+        const float* actual_row = reinterpret_cast<const float*>(
+            actual.data + static_cast<size_t>(row) * actual.step(0));
+        const float* expected_row = reinterpret_cast<const float*>(
+            expected.data + static_cast<size_t>(row) * expected.step(0));
+        for (size_t index = 0; index < row_scalars; ++index)
+        {
+            const float actual_value = actual_row[index];
+            const float expected_value = expected_row[index];
+            if (std::isnan(expected_value))
+            {
+                EXPECT_TRUE(std::isnan(actual_value))
+                    << "row=" << row << ", index=" << index;
+            }
+            else if (std::isinf(expected_value))
+            {
+                EXPECT_EQ(actual_value, expected_value)
+                    << "row=" << row << ", index=" << index;
+            }
+            else
+            {
+                const float tolerance =
+                    relative_tolerance * std::max(1.0f, std::fabs(expected_value));
+                EXPECT_NEAR(actual_value, expected_value, tolerance)
+                    << "row=" << row << ", index=" << index;
+            }
         }
     }
 }
@@ -238,6 +280,237 @@ TEST(MathOpsContract_TEST, ui_math_kernels_keep_uncovered_types_and_short_rows_s
 
     out.release();
     convertScaleAbs(wide_u8, out, 1.25, 3.0);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+
+    exp(short_f32, out);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+    log(short_f32, out);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+    pow(short_f32, 1.75, out);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+    patchNaNs(short_f32);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+}
+
+TEST(MathOpsContract_TEST, ui_patch_nans_preserves_non_nan_bits_on_roi_and_tail)
+{
+    if (!math_detail::ui::enabled())
+        GTEST_SKIP() << "OpenCV UI math kernels require NEON or SSE/AVX";
+
+    Mat parent({3, 23}, CV_32FC3);
+    for (int row = 0; row < parent.size[0]; ++row)
+    {
+        for (int col = 0; col < parent.size[1]; ++col)
+        {
+            for (int ch = 0; ch < parent.channels(); ++ch)
+            {
+                parent.at<float>(row, col, ch) =
+                    static_cast<float>((row * 23 + col) * 3 + ch - 50) / 7.0f;
+            }
+        }
+    }
+    Mat src = parent.colRange(2, 21);
+    ASSERT_FALSE(src.isContinuous());
+    src.at<float>(0, 0, 0) = std::numeric_limits<float>::infinity();
+    src.at<float>(0, 1, 1) = -std::numeric_limits<float>::infinity();
+    src.at<float>(0, 2, 2) = -0.0f;
+    const std::uint32_t nan_patterns[] = {
+        0x7fc01234U,
+        0xffc05678U,
+        0x7f800001U,
+    };
+    for (int index = 0; index < 3; ++index)
+    {
+        std::memcpy(
+            &src.at<float>(1, 3 + index, index),
+            &nan_patterns[index],
+            sizeof(nan_patterns[index]));
+    }
+
+    Mat scalar_expected = src.clone();
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+        patchNaNs(scalar_expected, -7.25);
+    }
+
+    DispatchModeGuard guard(cpu::DispatchMode::Auto);
+    patchNaNs(src, -7.25);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    expect_mat_bytes_equal(src, scalar_expected);
+}
+
+TEST(MathOpsContract_TEST, ui_exp_and_log_match_scalar_on_roi_alias_and_special_values)
+{
+    if (!math_detail::ui::enabled())
+        GTEST_SKIP() << "OpenCV UI math kernels require NEON or SSE/AVX";
+
+    Mat exp_parent({3, 23}, CV_32FC3);
+    for (int row = 0; row < exp_parent.size[0]; ++row)
+    {
+        for (int col = 0; col < exp_parent.size[1]; ++col)
+        {
+            for (int ch = 0; ch < exp_parent.channels(); ++ch)
+            {
+                const int index = (row * 23 + col) * 3 + ch;
+                exp_parent.at<float>(row, col, ch) =
+                    static_cast<float>((index % 97) - 48) / 8.0f;
+            }
+        }
+    }
+    Mat exp_src = exp_parent.colRange(2, 21);
+    ASSERT_FALSE(exp_src.isContinuous());
+    exp_src.at<float>(0, 0, 0) = -std::numeric_limits<float>::infinity();
+    exp_src.at<float>(0, 1, 1) = std::numeric_limits<float>::infinity();
+    exp_src.at<float>(0, 2, 2) = std::numeric_limits<float>::quiet_NaN();
+    exp_src.at<float>(0, 3, 0) = -104.0f;
+    exp_src.at<float>(0, 4, 1) = 90.0f;
+
+    Mat scalar_exp;
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+        exp(exp_src, scalar_exp);
+    }
+    Mat actual_exp;
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::Auto);
+        exp(exp_src, actual_exp);
+        EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    }
+    expect_float_mat_near(actual_exp, scalar_exp, 2e-6f);
+
+    Mat exp_alias = exp_src.clone();
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::Auto);
+        exp(exp_alias, exp_alias);
+        EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    }
+    expect_float_mat_near(exp_alias, scalar_exp, 2e-6f);
+
+    Mat log_src = exp_src.clone();
+    for (int row = 0; row < log_src.size[0]; ++row)
+    {
+        for (int col = 0; col < log_src.size[1]; ++col)
+        {
+            for (int ch = 0; ch < log_src.channels(); ++ch)
+            {
+                log_src.at<float>(row, col, ch) =
+                    std::fabs(log_src.at<float>(row, col, ch)) + 0.125f;
+            }
+        }
+    }
+    log_src.at<float>(0, 0, 0) = 0.0f;
+    log_src.at<float>(0, 1, 1) = -1.0f;
+    log_src.at<float>(0, 2, 2) = std::numeric_limits<float>::infinity();
+    log_src.at<float>(0, 3, 0) = std::numeric_limits<float>::quiet_NaN();
+    log_src.at<float>(0, 4, 1) = std::numeric_limits<float>::denorm_min();
+
+    Mat scalar_log;
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+        log(log_src, scalar_log);
+    }
+    Mat actual_log;
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::Auto);
+        log(log_src, actual_log);
+        EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    }
+    expect_float_mat_near(actual_log, scalar_log, 2e-6f);
+
+    Mat log_alias = log_src.clone();
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::Auto);
+        log(log_alias, log_alias);
+        EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    }
+    expect_float_mat_near(log_alias, scalar_log, 2e-6f);
+}
+
+TEST(MathOpsContract_TEST, ui_pow_splits_integer_and_generic_f32_paths)
+{
+    if (!math_detail::ui::enabled())
+        GTEST_SKIP() << "OpenCV UI math kernels require NEON or SSE/AVX";
+
+    Mat parent({3, 23}, CV_32FC3);
+    for (int row = 0; row < parent.size[0]; ++row)
+    {
+        for (int col = 0; col < parent.size[1]; ++col)
+        {
+            for (int ch = 0; ch < parent.channels(); ++ch)
+            {
+                const int index = (row * 23 + col) * 3 + ch;
+                parent.at<float>(row, col, ch) =
+                    static_cast<float>((index % 41) - 20) / 8.0f;
+            }
+        }
+    }
+    Mat src = parent.colRange(2, 21);
+    ASSERT_FALSE(src.isContinuous());
+    src.at<float>(0, 0, 0) = 0.0f;
+    src.at<float>(0, 1, 1) = -0.0f;
+    src.at<float>(0, 2, 2) = std::numeric_limits<float>::infinity();
+    src.at<float>(0, 3, 0) = -std::numeric_limits<float>::infinity();
+    src.at<float>(0, 4, 1) = std::numeric_limits<float>::quiet_NaN();
+
+    for (const double exponent : {3.0, -3.0})
+    {
+        Mat scalar_expected;
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+            pow(src, exponent, scalar_expected);
+        }
+        Mat actual;
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::Auto);
+            pow(src, exponent, actual);
+            EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+        }
+        expect_float_mat_near(actual, scalar_expected, 2e-6f);
+    }
+
+    Mat positive = src.clone();
+    for (int row = 0; row < positive.size[0]; ++row)
+    {
+        for (int col = 0; col < positive.size[1]; ++col)
+        {
+            for (int ch = 0; ch < positive.channels(); ++ch)
+            {
+                positive.at<float>(row, col, ch) =
+                    std::fabs(positive.at<float>(row, col, ch)) + 0.25f;
+            }
+        }
+    }
+    positive.at<float>(0, 0, 0) = -1.0f;
+    positive.at<float>(0, 1, 1) = 0.0f;
+    positive.at<float>(0, 2, 2) = std::numeric_limits<float>::infinity();
+    positive.at<float>(0, 3, 0) = std::numeric_limits<float>::quiet_NaN();
+    positive.at<float>(0, 4, 1) = std::numeric_limits<float>::denorm_min();
+
+    Mat scalar_generic;
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+        pow(positive, 1.75, scalar_generic);
+    }
+    Mat actual_generic;
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::Auto);
+        pow(positive, 1.75, actual_generic);
+        EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    }
+    expect_float_mat_near(actual_generic, scalar_generic, 4e-6f);
+
+    Mat alias = positive.clone();
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::Auto);
+        pow(alias, 1.75, alias);
+        EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    }
+    expect_float_mat_near(alias, scalar_generic, 4e-6f);
+
+    Mat f64({2, 19}, CV_64FC1);
+    f64.setTo(Scalar::all(1.25));
+    Mat f64_out;
+    pow(f64, 1.75, f64_out);
     EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
 }
 

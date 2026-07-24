@@ -20,6 +20,9 @@ This directory keeps only current project documents.
 - [core-cpp-cleanup-plan.md](core-cpp-cleanup-plan.md): cleanup and
   header-only migration plan for core arithmetic, transpose, GEMM, and
   overlapping legacy `.cpp` implementations.
+- [core-imgproc-test-refactor-plan.md](core-imgproc-test-refactor-plan.md):
+  source-of-truth, naming, layout, fixture, and validation plan for
+  reorganizing the `core` and `imgproc` tests.
 - [opencv-ui-kernel-migration-checklist.md](opencv-ui-kernel-migration-checklist.md):
   checklist for porting OpenCV Universal Intrinsics kernel fragments.
 - [opencv-universal-intrinsics-adapter-plan.md](opencv-universal-intrinsics-adapter-plan.md):

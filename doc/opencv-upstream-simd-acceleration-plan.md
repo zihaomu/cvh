@@ -1,6 +1,6 @@
 # OpenCV Upstream SIMD 算子加速计划
 
-> - 状态：实施中，P-ACC-1 第三组已完成 Apple ARM 实现与测量，真实 x86 运行待验证
+> - 状态：实施中，P-ACC-1 第五组 Apple ARM 已完成，真实 x86 运行待验证
 > - 日期：2026-07-24
 > - 性能基线：`benchmark/opencv_compare/results/2026-07-24-opencv-upstream-performance.md`
 > - OpenCV 参考树：`/Users/zmu/work/my_project/ocvh/opencv`
@@ -11,8 +11,9 @@
 | 阶段 | 状态 | 当前范围 |
 | --- | --- | --- |
 | P-ACC-0 | Apple ARM 已完成，x86 运行待验证 | dispatch tag、scalar 强制模式、tail/ROI/多 TU 门禁、Mode A 路径标识 |
-| P-ACC-1 | 第三组 Apple ARM 已完成，x86 运行待验证 | `convertScaleAbs`、FP16 已进入 UI；`scaleAdd` 未通过性能 gate，保留 scalar |
-| P-ACC-2 至 P-ACC-7 | 未开始 | 等待前置共享内核和门禁完成 |
+| P-ACC-1 | 第五组 Apple ARM 已完成，x86 运行待验证 | `PATCH_NANS/EXP/LOG/POW` 的 F32 UI fast-path 已进入公共路径 |
+| P-ACC-2 | 未开始，下一阶段 | Core 归约、统计与 early-exit |
+| P-ACC-3 至 P-ACC-7 | 未开始 | 按跨算子依赖顺序推进 |
 
 P-ACC-1 首组实施边界：
 
@@ -193,6 +194,154 @@ Mode B 已用 `full` profile 重跑全部 `321` 个 case：
 
 Apple ARM Release 全量 CTest `16/16` 通过。Apple Clang x86_64 的 SSE2、AVX2 和
 AVX2+F16C 编译实例化均通过；真实 x86 correctness 与 Mode A 仍是未关闭 gate。
+
+### 0.5 P-ACC-1 第四组结果
+
+实施前基线：
+
+| 范围 | Mode A Apple ARM 基线 | Mode B 基线 | 当前 dispatch |
+| --- | ---: | ---: | --- |
+| `IN_RANGE`，VGA `CV_8UC3` scalar bounds | 1.927677 ms | OpenCV 领先 13.26x | `scalar` |
+| Mat-Scalar/Scalar-Mat 算术 | 尚无独立 case | 尚无独立 case | `scalar` |
+| masked bitwise | 尚无独立 case | 尚无独立 case | `scalar` |
+
+本组边界：
+
+- `IN_RANGE` 复用 upstream 的 compare、mask pack 和多通道 reduce 结构。UI 先覆盖
+  `CV_8U/8S/16U/16S/32S/32U/32F` 的 Mat bounds 和 Scalar bounds；`CV_16F/64F`
+  保留 scalar。
+- Scalar bounds 必须保持当前契约：整数边界按原始 double 做闭区间判断，不能简单
+  `saturate_cast` 后改变非整数、越界或反向区间结果。
+- Mat-Scalar/Scalar-Mat 建立按 channel 周期生成 UI 常量向量的共享 row helper。
+  `add/subtract/multiply` 覆盖与 Mat-Mat 相同的整数和浮点类型；浮点 `divide`、
+  整数 `absdiff/min/max` 按前三组已验证范围接入。整数 `divide`、FP16 和存在 NaN
+  语义差异的浮点 `absdiff/min/max` 保留 scalar。
+- masked bitwise 使用单通道 pixel mask 和 `v_select` 合并计算结果与旧 `dst`。覆盖
+  Mat-Mat、Mat-Scalar、Scalar-Mat 和 `bitwise_not`；新分配 `dst` 的未选中位置仍必须
+  为零，预分配 `dst` 的未选中位置必须保持不变。
+- Mode A 增加 Mat-Scalar/Scalar-Mat、masked Mat-Mat/Mat-Scalar 和 `IN_RANGE`
+  Mat/Scalar bounds 变体。每条路径必须报告实际 `opencv_ui` 或 `scalar`。
+
+验收 gate：
+
+- correctness 覆盖 C1/C3/C4、连续 Mat、非连续 ROI、非向量 tail、短行、in-place、
+  新分配/预分配 `dst`、非零 mask 值、整数越界/非整数 bounds、NaN/Inf。
+- UI 与强制 scalar 的输出逐字节一致；浮点算术仅允许既有契约中已经接受的数值容差。
+- 每个新增 fast-path 的 VGA 代表 case 相对 scalar 必须稳定提升超过 `5%`，否则撤销该
+  路径并记录为性能 gate 拒绝。
+- Apple ARM 全量 CTest、Mode A/Mode B 和 SSE2/AVX2 交叉编译必须通过；真实 x86 运行
+  继续作为跨平台未关闭 gate。
+
+已完成：
+
+- `core/detail/arithm_ui.hpp` 新增按 channel 周期预计算常量向量的 broadcast row helper，
+  Mat-Scalar/Scalar-Mat 不再在逐元素循环中执行 channel 取模和 double 运算。
+- `IN_RANGE` 迁移 upstream 的 8 位直接 store、16 位 pack、32 位/F32 两级 pack，并对
+  多通道逐元素 mask 做单通道归约。整数 Scalar bounds 使用 `ceil(lower)` /
+  `floor(upper)` 与越界区间判定，保持原有 double 闭区间语义。
+- masked bitwise 的首个“展开完整 byte mask”原型在 VGA 上只有 scalar 的
+  `0.58x-0.70x`，已被性能 gate 拒绝。最终实现对 1/2/3/4 byte 像素使用
+  `v_load_deinterleave`、单个 pixel mask 和 `v_select`，更大像素继续走 scalar。
+- correctness 覆盖六种整数 broadcast depth、F32 双向 divide、C3 ROI/tail/alias、
+  Mat/Scalar bounds、NaN/Inf、mask 值 `0/1/255`、新分配/预分配目标以及 raw F32 bits。
+
+Mode A 使用同一 Release 二进制、`quick` profile、`warmup=2`、`iters=20`、
+`repeats=5`，checksum 全部一致；下表为 VGA 代表 case：
+
+| 类型 | 算子/变体 | Scalar ms | OpenCV UI ms | UI/Scalar 加速 | dispatch |
+| --- | --- | ---: | ---: | ---: | --- |
+| `CV_8UC3` | `IN_RANGE` Scalar bounds | 1.967183 | 0.177840 | 11.06x | `opencv_ui` |
+| `CV_8UC3` | `IN_RANGE` Mat bounds | 1.540800 | 0.125346 | 12.29x | `opencv_ui` |
+| `CV_8UC3` | `ADD` Mat-Scalar | 0.171794 | 0.029329 | 5.86x | `opencv_ui` |
+| `CV_8UC3` | `SUBTRACT` Scalar-Mat | 0.151350 | 0.027569 | 5.49x | `opencv_ui` |
+| `CV_8UC3` | `MULTIPLY` Mat-Scalar | 0.172327 | 0.027146 | 6.35x | `opencv_ui` |
+| `CV_8UC3` | `ABSDIFF` Mat-Scalar | 0.233763 | 0.028142 | 8.31x | `opencv_ui` |
+| `CV_8UC3` | `MIN` Mat-Scalar | 0.215554 | 0.027469 | 7.85x | `opencv_ui` |
+| `CV_8UC3` | `MAX` Mat-Scalar | 0.248552 | 0.028602 | 8.69x | `opencv_ui` |
+| `CV_8UC3` | masked Mat-Mat `BITWISE_AND` | 0.295129 | 0.027856 | 10.59x | `opencv_ui` |
+| `CV_8UC3` | masked Mat-Scalar `BITWISE_XOR` | 0.302054 | 0.027160 | 11.12x | `opencv_ui` |
+| `CV_32FC1` | `DIVIDE` Scalar-Mat | 0.084604 | 0.036852 | 2.30x | `opencv_ui` |
+| `CV_32FC1` | masked Mat-Mat `BITWISE_AND` | 0.381275 | 0.046721 | 8.16x | `opencv_ui` |
+
+整数 Mat-Scalar `divide`、FP16、浮点 `absdiff/min/max`、短行和 masked
+`elemSize() > 4` 均继续报告 `scalar`。
+
+Mode B 已用 `full` profile 重跑全部 `321` 个 case，结果仍为 `320 OK + 1 UNSUPPORTED`：
+
+| 算子 | 实施前差距 | 当前差距 | 当前 dispatch |
+| --- | ---: | ---: | --- |
+| `IN_RANGE` | OpenCV 领先 13.26x | OpenCV 领先 1.63x | `opencv_ui` |
+
+Apple ARM Release 全量 CTest `16/16` 通过。UI-disabled、Apple Clang x86_64 SSE2 和 AVX2
+编译实例化均通过；真实 x86 correctness 与 Mode A 仍是未关闭 gate。
+
+### 0.6 P-ACC-1 第五组结果
+
+实施前 Mode B 基线：
+
+| 算子 | CVH ms | OpenCV ms | OpenCV 领先 | 当前 dispatch |
+| --- | ---: | ---: | ---: | --- |
+| `PATCH_NANS` | 0.042508 | 0.019933 | 2.13x | `public_header_baseline` |
+| `EXP` | 0.350429 | 0.081871 | 4.28x | `public_header_baseline` |
+| `LOG` | 0.482554 | 0.139317 | 3.46x | `public_header_baseline` |
+| `POW`，`power=1.75` | 1.519492 | 0.324700 | 4.68x | `public_header_baseline` |
+
+本组边界：
+
+- `PATCH_NANS` 只覆盖公共 API 已支持的 `CV_32F`。按 IEEE-754 bit pattern 判断 NaN，
+  保留正负 Inf 和所有非 NaN bit，replacement 只做一次 `double -> float` 转换。
+- `EXP/LOG` 先覆盖 `CV_32F`，直接使用 vendored UI 的 `cv::v_exp/cv::v_log`；
+  `CV_64F` 暂时保留现有 `std::exp/std::log`，避免在未建立双精度误差预算前改变精度。
+- `POW` 的 F32 整数指数使用 exponentiation by squaring；非整数指数仅对正有限值使用
+  `v_exp(v_log(x) * power)`。含零、负数、NaN 或 Inf 的 vector block 回落到
+  `std::pow`，以保持当前公共 API 的符号零和特殊值语义。`CV_64F` 保留 scalar。
+- 所有 UI row kernel 支持连续 Mat 合并、非连续 ROI、in-place、非向量 tail 和短行
+  fallback，并报告实际 `opencv_ui` 或 `scalar` dispatch。
+
+实施步骤：
+
+| Step | 状态 | 验收标准 |
+| --- | --- | --- |
+| P-ACC-1.5.0 语义与基线审计 | 已完成 | 记录四项 Mode B 基线；定位 upstream 和 vendored UI 入口；明确特殊值规则 |
+| P-ACC-1.5.1 `PATCH_NANS` | 已完成 | bit-exact 保留非 NaN；ROI/tail/short-row；代表 case 相对 scalar 提升超过 5% |
+| P-ACC-1.5.2 `EXP/LOG` | 已完成 | 有限值误差、零/负数/NaN/Inf、ROI/alias；两项均通过性能 gate |
+| P-ACC-1.5.3 `POW` | 已完成 | 正负整数指数、通用指数、负数/零/NaN/Inf、ROI/alias；通过性能 gate |
+| P-ACC-1.5.4 全量 gate 与报告 | 已完成 | CTest、Mode A、Mode B、UI-disabled、SSE2/AVX2 编译全部通过并更新报告 |
+
+已完成：
+
+- `math_ui.hpp` 直接使用 vendored `cv::v_exp/cv::v_log`，没有增加项目自定义 SIMD adapter
+  或外部数学库。普通 F32 block 进入 UI，超出受控范围或包含特殊值的 block 回落到
+  `std::exp/std::log/std::pow`。
+- `PATCH_NANS` 迁移 upstream 的 IEEE-754 exponent/mantissa bit mask 与 `v_select` 结构；
+  无 NaN block 避免写回，非 NaN bit pattern 保持不变。
+- `POW` 对 F32 整数指数使用 exponentiation by squaring，对正有限 F32 通用指数使用
+  `v_exp(v_log(x) * power)`；F64、非有限指数和短行继续使用 scalar。
+- correctness 新增强制 scalar 对照，覆盖正负零、subnormal、NaN payload、Inf、负输入、
+  正负整数指数、通用指数、C3 非连续 ROI、tail、in-place 和短行 fallback。
+
+Mode A 使用同一 Release 二进制、`quick` profile、`warmup=2`、`iters=20`、
+`repeats=5`；下表为 VGA `CV_32FC1` 中位数：
+
+| 算子/变体 | Scalar ms | OpenCV UI ms | UI/Scalar 加速 | dispatch |
+| --- | ---: | ---: | ---: | --- |
+| `PATCH_NANS`，one NaN | 0.036017 | 0.018642 | 1.93x | `opencv_ui` |
+| `EXP` | 0.304302 | 0.153010 | 1.99x | `opencv_ui` |
+| `LOG`，positive F32 | 0.442140 | 0.212171 | 2.08x | `opencv_ui` |
+| `POW`，`power=1.75` | 1.328683 | 0.487423 | 2.73x | `opencv_ui` |
+| `POW`，`power=3` | 2.197325 | 0.035754 | 61.46x | `opencv_ui` |
+
+Mode B 已用 `full` profile 重跑全部 `321` 个 case，结果为 `320 OK + 1 UNSUPPORTED`：
+
+| 算子 | 实施前 OpenCV 领先 | 当前 OpenCV 领先 | 当前 dispatch |
+| --- | ---: | ---: | --- |
+| `PATCH_NANS` | 2.13x | 1.24x | `opencv_ui` |
+| `EXP` | 4.28x | 2.09x | `opencv_ui` |
+| `LOG` | 3.46x | 1.72x | `opencv_ui` |
+| `POW`，`power=1.75` | 4.68x | 1.63x | `opencv_ui` |
+
+Apple ARM Release 全量 CTest `16/16` 通过。UI-disabled、Apple Clang x86_64 SSE2 和 AVX2
+编译实例化均通过；真实 x86 correctness 与 Mode A 仍是未关闭 gate。
 
 ## 1. 目标
 
@@ -589,17 +738,13 @@ map coordinate/weight preparation
 
 ## 9. 下一组入口
 
-P-ACC-1 的前三组已经完成 Apple ARM 实现与测量。第四组按共享依赖顺序处理 compare、
-broadcast、select 和 mask：
+P-ACC-1 的五组 Apple ARM 实现与测量已经完成，下一步进入 P-ACC-2。按共享依赖先拆：
 
-1. `IN_RANGE`：优先建立双边 compare、逐通道 reduce 和 U8 mask store，当前 OpenCV 领先
-   约 `13.25x`。
-2. Mat-Scalar 与 Scalar-Mat：建立按 depth/channel 广播常量的 UI row helper，再扩展
-   `add/subtract/multiply/divide/absdiff/min/max`，避免每个 API 各自实现广播。
-3. masked bitwise：复用 mask load、`v_select` 和旧值合并路径，保持未命中 mask 的目标
-   像素语义以及 in-place 行为。
-4. 只有共享 helper 的 correctness、短行 fallback 和 Mode A gate 关闭后，才进入
-   `POW/EXP/LOG/PATCH_NANS` 数学函数组。
+1. `COUNT_NON_ZERO/HAS_NON_ZERO`：先建立 compare、widen/count 和块级 early-exit，
+   当前 OpenCV 分别领先约 `33.40x` 和 `25641.03x`。
+2. `SUM/MEAN/MEAN_STD_DEV`：建立可复用的 widening 与分段累加底座，避免三套独立遍历。
+3. `MIN_MAX_IDX/MIN_MAX_LOC/REDUCE_ARG_*`：复用值与索引同步归约。
+4. `NORM/NORMALIZE/REDUCE/FIND_NON_ZERO`：在基础归约稳定后接入，输出压缩路径单独 gate。
 
-前三组的真实 x86 SSE/AVX correctness 与 Mode A 仍是未关闭 gate；Apple Clang
+前五组的真实 x86 SSE/AVX correctness 与 Mode A 仍是未关闭 gate；Apple Clang
 x86_64 交叉编译只用于模板实例化检查，不能替代该运行验证。

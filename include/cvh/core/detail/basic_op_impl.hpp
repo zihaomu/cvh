@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <type_traits>
 #include <vector>
 
@@ -708,6 +709,381 @@ void apply_mat_scalar_binary_impl(const Mat& src,
     }
 }
 
+template<typename T, typename ScalarOp>
+bool apply_mat_scalar_add_sub_mul_ui(const Mat& src,
+                                     const Scalar& scalar,
+                                     Mat& dst,
+                                     UiArithmeticOperation operation,
+                                     bool scalar_first,
+                                     ScalarOp scalar_op)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    T scalar_values[4] = {};
+    for (int channel = 0; channel < src.channels(); ++channel)
+    {
+        scalar_values[channel] = saturate_cast<T>(scalar[channel]);
+    }
+
+    size_t rows =
+        src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    size_t pixels =
+        src.dims > 1 ? src.total(1, src.dims) : src.total();
+    size_t src_step =
+        src.dims > 1 ? src.step(0) : pixels * src.elemSize();
+    size_t dst_step =
+        dst.dims > 1 ? dst.step(0) : pixels * dst.elemSize();
+    if (src.isContinuous() && dst.isContinuous())
+    {
+        rows = 1;
+        pixels = src.total();
+        src_step = pixels * src.elemSize();
+        dst_step = pixels * dst.elemSize();
+    }
+    const size_t row_scalars =
+        pixels * static_cast<size_t>(src.channels());
+
+    switch (operation)
+    {
+        case UiArithmeticOperation::Add:
+            return detail::arithm_ui::apply_binary_scalar_rows(
+                reinterpret_cast<const T*>(src.data),
+                src_step,
+                scalar_values,
+                src.channels(),
+                reinterpret_cast<T*>(dst.data),
+                dst_step,
+                row_scalars,
+                rows,
+                scalar_first,
+                [](const auto& lhs, const auto& rhs) {
+                    return cv::v_add(lhs, rhs);
+                },
+                scalar_op);
+        case UiArithmeticOperation::Subtract:
+            return detail::arithm_ui::apply_binary_scalar_rows(
+                reinterpret_cast<const T*>(src.data),
+                src_step,
+                scalar_values,
+                src.channels(),
+                reinterpret_cast<T*>(dst.data),
+                dst_step,
+                row_scalars,
+                rows,
+                scalar_first,
+                [](const auto& lhs, const auto& rhs) {
+                    return cv::v_sub(lhs, rhs);
+                },
+                scalar_op);
+        case UiArithmeticOperation::Multiply:
+            return detail::arithm_ui::apply_binary_scalar_rows(
+                reinterpret_cast<const T*>(src.data),
+                src_step,
+                scalar_values,
+                src.channels(),
+                reinterpret_cast<T*>(dst.data),
+                dst_step,
+                row_scalars,
+                rows,
+                scalar_first,
+                [](const auto& lhs, const auto& rhs) {
+                    return cv::v_mul(lhs, rhs);
+                },
+                scalar_op);
+        default:
+            return false;
+    }
+#else
+    (void)src;
+    (void)scalar;
+    (void)dst;
+    (void)operation;
+    (void)scalar_first;
+    (void)scalar_op;
+    return false;
+#endif
+}
+
+template<typename T, typename ScalarOp>
+bool apply_mat_scalar_divide_ui(const Mat& src,
+                                const Scalar& scalar,
+                                Mat& dst,
+                                bool scalar_first,
+                                ScalarOp scalar_op)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    T scalar_values[4] = {};
+    for (int channel = 0; channel < src.channels(); ++channel)
+    {
+        scalar_values[channel] = saturate_cast<T>(scalar[channel]);
+    }
+
+    size_t rows =
+        src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    size_t pixels =
+        src.dims > 1 ? src.total(1, src.dims) : src.total();
+    size_t src_step =
+        src.dims > 1 ? src.step(0) : pixels * src.elemSize();
+    size_t dst_step =
+        dst.dims > 1 ? dst.step(0) : pixels * dst.elemSize();
+    if (src.isContinuous() && dst.isContinuous())
+    {
+        rows = 1;
+        pixels = src.total();
+        src_step = pixels * src.elemSize();
+        dst_step = pixels * dst.elemSize();
+    }
+
+    return detail::arithm_ui::apply_binary_scalar_rows(
+        reinterpret_cast<const T*>(src.data),
+        src_step,
+        scalar_values,
+        src.channels(),
+        reinterpret_cast<T*>(dst.data),
+        dst_step,
+        pixels * static_cast<size_t>(src.channels()),
+        rows,
+        scalar_first,
+        [](const auto& lhs, const auto& rhs) {
+            return cv::v_div(lhs, rhs);
+        },
+        scalar_op);
+#else
+    (void)src;
+    (void)scalar;
+    (void)dst;
+    (void)scalar_first;
+    (void)scalar_op;
+    return false;
+#endif
+}
+
+template<typename T, typename ScalarOp>
+bool apply_mat_scalar_integer_ui(const Mat& src,
+                                 const Scalar& scalar,
+                                 Mat& dst,
+                                 UiArithmeticOperation operation,
+                                 bool scalar_first,
+                                 ScalarOp scalar_op)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    T scalar_values[4] = {};
+    for (int channel = 0; channel < src.channels(); ++channel)
+    {
+        scalar_values[channel] = saturate_cast<T>(scalar[channel]);
+    }
+
+    size_t rows =
+        src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    size_t pixels =
+        src.dims > 1 ? src.total(1, src.dims) : src.total();
+    size_t src_step =
+        src.dims > 1 ? src.step(0) : pixels * src.elemSize();
+    size_t dst_step =
+        dst.dims > 1 ? dst.step(0) : pixels * dst.elemSize();
+    if (src.isContinuous() && dst.isContinuous())
+    {
+        rows = 1;
+        pixels = src.total();
+        src_step = pixels * src.elemSize();
+        dst_step = pixels * dst.elemSize();
+    }
+    const size_t row_scalars =
+        pixels * static_cast<size_t>(src.channels());
+
+    switch (operation)
+    {
+        case UiArithmeticOperation::AbsDiff:
+            return detail::arithm_ui::apply_binary_scalar_rows(
+                reinterpret_cast<const T*>(src.data),
+                src_step,
+                scalar_values,
+                src.channels(),
+                reinterpret_cast<T*>(dst.data),
+                dst_step,
+                row_scalars,
+                rows,
+                scalar_first,
+                [](const auto& lhs, const auto& rhs) {
+                    using Vec = typename std::decay<decltype(lhs)>::type;
+                    if constexpr (std::is_same<Vec, cv::v_int8>::value ||
+                                  std::is_same<Vec, cv::v_int16>::value)
+                    {
+                        return cv::v_absdiffs(lhs, rhs);
+                    }
+                    else if constexpr (std::is_same<Vec, cv::v_int32>::value)
+                    {
+                        return cv::v_reinterpret_as_s32(
+                            cv::v_absdiff(lhs, rhs));
+                    }
+                    else
+                    {
+                        return cv::v_absdiff(lhs, rhs);
+                    }
+                },
+                scalar_op);
+        case UiArithmeticOperation::Min:
+            return detail::arithm_ui::apply_binary_scalar_rows(
+                reinterpret_cast<const T*>(src.data),
+                src_step,
+                scalar_values,
+                src.channels(),
+                reinterpret_cast<T*>(dst.data),
+                dst_step,
+                row_scalars,
+                rows,
+                scalar_first,
+                [](const auto& lhs, const auto& rhs) {
+                    return cv::v_min(lhs, rhs);
+                },
+                scalar_op);
+        case UiArithmeticOperation::Max:
+            return detail::arithm_ui::apply_binary_scalar_rows(
+                reinterpret_cast<const T*>(src.data),
+                src_step,
+                scalar_values,
+                src.channels(),
+                reinterpret_cast<T*>(dst.data),
+                dst_step,
+                row_scalars,
+                rows,
+                scalar_first,
+                [](const auto& lhs, const auto& rhs) {
+                    return cv::v_max(lhs, rhs);
+                },
+                scalar_op);
+        default:
+            return false;
+    }
+#else
+    (void)src;
+    (void)scalar;
+    (void)dst;
+    (void)operation;
+    (void)scalar_first;
+    (void)scalar_op;
+    return false;
+#endif
+}
+
+template<typename ScalarOp>
+bool try_apply_mat_scalar_arithmetic_ui(const Mat& src,
+                                        const Scalar& scalar,
+                                        Mat& dst,
+                                        UiArithmeticOperation operation,
+                                        bool scalar_first,
+                                        ScalarOp scalar_op)
+{
+    if (!detail::arithm_ui::enabled())
+    {
+        return false;
+    }
+
+    bool applied = false;
+    if (operation == UiArithmeticOperation::Add ||
+        operation == UiArithmeticOperation::Subtract ||
+        operation == UiArithmeticOperation::Multiply)
+    {
+        switch (src.depth())
+        {
+            case CV_8U:
+                applied = apply_mat_scalar_add_sub_mul_ui<uchar>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_8S:
+                applied = apply_mat_scalar_add_sub_mul_ui<schar>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_16U:
+                applied = apply_mat_scalar_add_sub_mul_ui<ushort>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_16S:
+                applied = apply_mat_scalar_add_sub_mul_ui<short>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_32S:
+                applied = apply_mat_scalar_add_sub_mul_ui<int>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_32U:
+                applied = apply_mat_scalar_add_sub_mul_ui<uint>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_32F:
+                applied = apply_mat_scalar_add_sub_mul_ui<float>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+#if CV_SIMD_64F
+            case CV_64F:
+                applied = apply_mat_scalar_add_sub_mul_ui<double>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+#endif
+            default:
+                return false;
+        }
+    }
+    else if (operation == UiArithmeticOperation::Divide)
+    {
+        switch (src.depth())
+        {
+            case CV_32F:
+                applied = apply_mat_scalar_divide_ui<float>(
+                    src, scalar, dst, scalar_first, scalar_op);
+                break;
+#if CV_SIMD_64F
+            case CV_64F:
+                applied = apply_mat_scalar_divide_ui<double>(
+                    src, scalar, dst, scalar_first, scalar_op);
+                break;
+#endif
+            default:
+                return false;
+        }
+    }
+    else
+    {
+        switch (src.depth())
+        {
+            case CV_8U:
+                applied = apply_mat_scalar_integer_ui<uchar>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_8S:
+                applied = apply_mat_scalar_integer_ui<schar>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_16U:
+                applied = apply_mat_scalar_integer_ui<ushort>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_16S:
+                applied = apply_mat_scalar_integer_ui<short>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_32S:
+                applied = apply_mat_scalar_integer_ui<int>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            case CV_32U:
+                applied = apply_mat_scalar_integer_ui<uint>(
+                    src, scalar, dst, operation, scalar_first, scalar_op);
+                break;
+            default:
+                return false;
+        }
+    }
+
+    if (applied)
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+    }
+    return applied;
+}
+
 template<typename Op>
 void dispatch_mat_scalar_binary_by_depth(const Mat& src,
                                          const Scalar& scalar,
@@ -769,11 +1145,18 @@ void dispatch_mat_scalar_binary_arith(const Mat& src,
                                       const Scalar& scalar,
                                       Mat& dst,
                                       Op op,
+                                      UiArithmeticOperation ui_operation,
                                       bool scalar_first,
                                       const char* fn_name)
 {
     check_scalar_channel_bound(src, fn_name);
     ensure_binary_dst_like_src(src, dst, fn_name);
+
+    if (try_apply_mat_scalar_arithmetic_ui(
+            src, scalar, dst, ui_operation, scalar_first, op))
+    {
+        return;
+    }
 
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     dispatch_mat_scalar_binary_by_depth(src, scalar, dst, op, scalar_first, fn_name);
@@ -1399,7 +1782,7 @@ bool try_apply_raw_mat_mat_bitwise_ui(const Mat& a,
 {
 #if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    if (!mask.empty() || !detail::arithm_ui::enabled())
+    if (!detail::arithm_ui::enabled())
     {
         return false;
     }
@@ -1410,48 +1793,110 @@ bool try_apply_raw_mat_mat_bitwise_ui(const Mat& a,
     const size_t a_step0 = a.dims > 1 ? a.step(0) : row_bytes;
     const size_t b_step0 = b.dims > 1 ? b.step(0) : row_bytes;
     const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_bytes;
+    const size_t mask_step0 =
+        mask.empty() ? 0 : (mask.dims > 1 ? mask.step(0) : pixels_per_outer);
 
     bool applied = false;
     switch (operation)
     {
         case UiBitwiseOperation::And:
-            applied = detail::arithm_ui::apply_binary_byte_rows(
-                a.data,
-                a_step0,
-                b.data,
-                b_step0,
-                dst.data,
-                dst_step0,
-                row_bytes,
-                outer,
-                [](const auto& lhs, const auto& rhs) { return cv::v_and(lhs, rhs); },
-                scalar_op);
+            if (mask.empty())
+            {
+                applied = detail::arithm_ui::apply_binary_byte_rows(
+                    a.data,
+                    a_step0,
+                    b.data,
+                    b_step0,
+                    dst.data,
+                    dst_step0,
+                    row_bytes,
+                    outer,
+                    [](const auto& lhs, const auto& rhs) { return cv::v_and(lhs, rhs); },
+                    scalar_op);
+            }
+            else
+            {
+                applied = detail::arithm_ui::apply_masked_binary_byte_rows(
+                    a.data,
+                    a_step0,
+                    b.data,
+                    b_step0,
+                    dst.data,
+                    dst_step0,
+                    mask.data,
+                    mask_step0,
+                    pixels_per_outer,
+                    a.elemSize(),
+                    outer,
+                    [](const auto& lhs, const auto& rhs) { return cv::v_and(lhs, rhs); },
+                    scalar_op);
+            }
             break;
         case UiBitwiseOperation::Or:
-            applied = detail::arithm_ui::apply_binary_byte_rows(
-                a.data,
-                a_step0,
-                b.data,
-                b_step0,
-                dst.data,
-                dst_step0,
-                row_bytes,
-                outer,
-                [](const auto& lhs, const auto& rhs) { return cv::v_or(lhs, rhs); },
-                scalar_op);
+            if (mask.empty())
+            {
+                applied = detail::arithm_ui::apply_binary_byte_rows(
+                    a.data,
+                    a_step0,
+                    b.data,
+                    b_step0,
+                    dst.data,
+                    dst_step0,
+                    row_bytes,
+                    outer,
+                    [](const auto& lhs, const auto& rhs) { return cv::v_or(lhs, rhs); },
+                    scalar_op);
+            }
+            else
+            {
+                applied = detail::arithm_ui::apply_masked_binary_byte_rows(
+                    a.data,
+                    a_step0,
+                    b.data,
+                    b_step0,
+                    dst.data,
+                    dst_step0,
+                    mask.data,
+                    mask_step0,
+                    pixels_per_outer,
+                    a.elemSize(),
+                    outer,
+                    [](const auto& lhs, const auto& rhs) { return cv::v_or(lhs, rhs); },
+                    scalar_op);
+            }
             break;
         case UiBitwiseOperation::Xor:
-            applied = detail::arithm_ui::apply_binary_byte_rows(
-                a.data,
-                a_step0,
-                b.data,
-                b_step0,
-                dst.data,
-                dst_step0,
-                row_bytes,
-                outer,
-                [](const auto& lhs, const auto& rhs) { return cv::v_xor(lhs, rhs); },
-                scalar_op);
+            if (mask.empty())
+            {
+                applied = detail::arithm_ui::apply_binary_byte_rows(
+                    a.data,
+                    a_step0,
+                    b.data,
+                    b_step0,
+                    dst.data,
+                    dst_step0,
+                    row_bytes,
+                    outer,
+                    [](const auto& lhs, const auto& rhs) { return cv::v_xor(lhs, rhs); },
+                    scalar_op);
+            }
+            else
+            {
+                applied = detail::arithm_ui::apply_masked_binary_byte_rows(
+                    a.data,
+                    a_step0,
+                    b.data,
+                    b_step0,
+                    dst.data,
+                    dst_step0,
+                    mask.data,
+                    mask_step0,
+                    pixels_per_outer,
+                    a.elemSize(),
+                    outer,
+                    [](const auto& lhs, const auto& rhs) { return cv::v_xor(lhs, rhs); },
+                    scalar_op);
+            }
             break;
     }
 
@@ -1477,7 +1922,7 @@ inline bool try_apply_raw_bitwise_not_ui(const Mat& src,
 {
 #if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    if (!mask.empty() || !detail::arithm_ui::enabled())
+    if (!detail::arithm_ui::enabled())
     {
         return false;
     }
@@ -1487,16 +1932,32 @@ inline bool try_apply_raw_bitwise_not_ui(const Mat& src,
     const size_t row_bytes = pixels_per_outer * src.elemSize();
     const size_t src_step0 = src.dims > 1 ? src.step(0) : row_bytes;
     const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_bytes;
+    const size_t mask_step0 =
+        mask.empty() ? 0 : (mask.dims > 1 ? mask.step(0) : pixels_per_outer);
 
-    const bool applied = detail::arithm_ui::apply_unary_byte_rows(
-        src.data,
-        src_step0,
-        dst.data,
-        dst_step0,
-        row_bytes,
-        outer,
-        [](const auto& value) { return cv::v_not(value); },
-        [](uchar value) { return static_cast<uchar>(~value); });
+    const bool applied =
+        mask.empty()
+            ? detail::arithm_ui::apply_unary_byte_rows(
+                  src.data,
+                  src_step0,
+                  dst.data,
+                  dst_step0,
+                  row_bytes,
+                  outer,
+                  [](const auto& value) { return cv::v_not(value); },
+                  [](uchar value) { return static_cast<uchar>(~value); })
+            : detail::arithm_ui::apply_masked_unary_byte_rows(
+                  src.data,
+                  src_step0,
+                  dst.data,
+                  dst_step0,
+                  mask.data,
+                  mask_step0,
+                  pixels_per_outer,
+                  src.elemSize(),
+                  outer,
+                  [](const auto& value) { return cv::v_not(value); },
+                  [](uchar value) { return static_cast<uchar>(~value); });
     if (applied)
     {
         cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
@@ -1506,6 +1967,110 @@ inline bool try_apply_raw_bitwise_not_ui(const Mat& src,
     (void)src;
     (void)dst;
     (void)mask;
+    return false;
+#endif
+}
+
+template<typename Op>
+bool try_apply_raw_mat_scalar_bitwise_ui(const Mat& src,
+                                         const std::vector<uchar>& scalar_pixel,
+                                         Mat& dst,
+                                         const Mat& mask,
+                                         UiBitwiseOperation operation,
+                                         Op scalar_op,
+                                         bool scalar_first)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    if (!detail::arithm_ui::enabled())
+    {
+        return false;
+    }
+
+    const size_t outer =
+        src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixels =
+        src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_bytes = pixels * src.elemSize();
+    const size_t src_step =
+        src.dims > 1 ? src.step(0) : row_bytes;
+    const size_t dst_step =
+        dst.dims > 1 ? dst.step(0) : row_bytes;
+    const size_t mask_step =
+        mask.empty() ? 0 : (mask.dims > 1 ? mask.step(0) : pixels);
+
+    bool applied = false;
+    switch (operation)
+    {
+        case UiBitwiseOperation::And:
+            applied = detail::arithm_ui::apply_binary_scalar_byte_rows(
+                src.data,
+                src_step,
+                scalar_pixel.data(),
+                src.elemSize(),
+                dst.data,
+                dst_step,
+                mask.empty() ? nullptr : mask.data,
+                mask_step,
+                pixels,
+                outer,
+                scalar_first,
+                [](const auto& lhs, const auto& rhs) {
+                    return cv::v_and(lhs, rhs);
+                },
+                scalar_op);
+            break;
+        case UiBitwiseOperation::Or:
+            applied = detail::arithm_ui::apply_binary_scalar_byte_rows(
+                src.data,
+                src_step,
+                scalar_pixel.data(),
+                src.elemSize(),
+                dst.data,
+                dst_step,
+                mask.empty() ? nullptr : mask.data,
+                mask_step,
+                pixels,
+                outer,
+                scalar_first,
+                [](const auto& lhs, const auto& rhs) {
+                    return cv::v_or(lhs, rhs);
+                },
+                scalar_op);
+            break;
+        case UiBitwiseOperation::Xor:
+            applied = detail::arithm_ui::apply_binary_scalar_byte_rows(
+                src.data,
+                src_step,
+                scalar_pixel.data(),
+                src.elemSize(),
+                dst.data,
+                dst_step,
+                mask.empty() ? nullptr : mask.data,
+                mask_step,
+                pixels,
+                outer,
+                scalar_first,
+                [](const auto& lhs, const auto& rhs) {
+                    return cv::v_xor(lhs, rhs);
+                },
+                scalar_op);
+            break;
+    }
+
+    if (applied)
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+    }
+    return applied;
+#else
+    (void)src;
+    (void)scalar_pixel;
+    (void)dst;
+    (void)mask;
+    (void)operation;
+    (void)scalar_op;
+    (void)scalar_first;
     return false;
 #endif
 }
@@ -1535,11 +2100,23 @@ void dispatch_raw_mat_scalar_bitwise(const Mat& src,
                                      Mat& dst,
                                      const Mat& mask,
                                      Op op,
+                                     UiBitwiseOperation ui_operation,
                                      bool scalar_first,
                                      const char* fn_name)
 {
     const std::vector<uchar> scalar_pixel = make_scalar_pixel(src, scalar, fn_name);
     prepare_bitwise_dst(src, dst, mask, fn_name);
+    if (try_apply_raw_mat_scalar_bitwise_ui(
+            src,
+            scalar_pixel,
+            dst,
+            mask,
+            ui_operation,
+            op,
+            scalar_first))
+    {
+        return;
+    }
     apply_raw_mat_scalar_bitwise(src, scalar_pixel, dst, mask, op, scalar_first);
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
 }
@@ -1613,6 +2190,139 @@ inline bool scalar_range_contains(T value, double lower, double upper)
 }
 
 template<typename T>
+void prepare_scalar_inrange_bounds(const Scalar& lower,
+                                   const Scalar& upper,
+                                   int channels,
+                                   T* typed_lower,
+                                   T* typed_upper)
+{
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        if constexpr (std::is_integral<T>::value)
+        {
+            const double min_value =
+                static_cast<double>(std::numeric_limits<T>::lowest());
+            const double max_value =
+                static_cast<double>(std::numeric_limits<T>::max());
+            const double low = lower[channel];
+            const double high = upper[channel];
+            const bool invalid =
+                std::isnan(low) || std::isnan(high) || low > high ||
+                low > max_value || high < min_value;
+            if (invalid)
+            {
+                typed_lower[channel] = std::numeric_limits<T>::max();
+                typed_upper[channel] = std::numeric_limits<T>::lowest();
+                continue;
+            }
+
+            typed_lower[channel] = saturate_cast<T>(
+                std::ceil(std::max(low, min_value)));
+            typed_upper[channel] = saturate_cast<T>(
+                std::floor(std::min(high, max_value)));
+        }
+        else
+        {
+            typed_lower[channel] = saturate_cast<T>(lower[channel]);
+            typed_upper[channel] = saturate_cast<T>(upper[channel]);
+        }
+    }
+}
+
+template<typename T>
+bool try_apply_inrange_mat_ui(const Mat& src,
+                              const Mat& lower,
+                              const Mat& upper,
+                              Mat& dst)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    if (!detail::arithm_ui::enabled())
+    {
+        return false;
+    }
+
+    const size_t rows =
+        src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixels =
+        src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t src_step =
+        src.dims > 1 ? src.step(0) : pixels * src.elemSize();
+    const size_t lower_step =
+        lower.dims > 1 ? lower.step(0) : pixels * lower.elemSize();
+    const size_t upper_step =
+        upper.dims > 1 ? upper.step(0) : pixels * upper.elemSize();
+    const size_t dst_step =
+        dst.dims > 1 ? dst.step(0) : pixels;
+
+    return detail::arithm_ui::apply_inrange_rows(
+        reinterpret_cast<const T*>(src.data),
+        src_step,
+        reinterpret_cast<const T*>(lower.data),
+        lower_step,
+        reinterpret_cast<const T*>(upper.data),
+        upper_step,
+        dst.data,
+        dst_step,
+        pixels,
+        src.channels(),
+        rows);
+#else
+    (void)src;
+    (void)lower;
+    (void)upper;
+    (void)dst;
+    return false;
+#endif
+}
+
+template<typename T>
+bool try_apply_inrange_scalar_ui(const Mat& src,
+                                 const Scalar& lower,
+                                 const Scalar& upper,
+                                 Mat& dst)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    if (!detail::arithm_ui::enabled())
+    {
+        return false;
+    }
+
+    T typed_lower[4] = {};
+    T typed_upper[4] = {};
+    prepare_scalar_inrange_bounds(
+        lower, upper, src.channels(), typed_lower, typed_upper);
+
+    const size_t rows =
+        src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixels =
+        src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t src_step =
+        src.dims > 1 ? src.step(0) : pixels * src.elemSize();
+    const size_t dst_step =
+        dst.dims > 1 ? dst.step(0) : pixels;
+
+    return detail::arithm_ui::apply_inrange_scalar_rows(
+        reinterpret_cast<const T*>(src.data),
+        src_step,
+        typed_lower,
+        typed_upper,
+        dst.data,
+        dst_step,
+        pixels,
+        src.channels(),
+        rows);
+#else
+    (void)src;
+    (void)lower;
+    (void)upper;
+    (void)dst;
+    return false;
+#endif
+}
+
+template<typename T>
 void apply_inrange_scalar_impl(const Mat& src,
                                const Scalar& lower,
                                const Scalar& upper,
@@ -1648,6 +2358,29 @@ inline void dispatch_inrange_mat(const Mat& src,
                                  Mat& dst,
                                  const char* fn_name)
 {
+    bool applied = false;
+    switch (src.depth())
+    {
+        case CV_8U: applied = try_apply_inrange_mat_ui<uchar>(src, lower, upper, dst); break;
+        case CV_8S: applied = try_apply_inrange_mat_ui<schar>(src, lower, upper, dst); break;
+        case CV_16U: applied = try_apply_inrange_mat_ui<ushort>(src, lower, upper, dst); break;
+        case CV_16S: applied = try_apply_inrange_mat_ui<short>(src, lower, upper, dst); break;
+        case CV_32S: applied = try_apply_inrange_mat_ui<int>(src, lower, upper, dst); break;
+        case CV_32U: applied = try_apply_inrange_mat_ui<uint>(src, lower, upper, dst); break;
+        case CV_32F: applied = try_apply_inrange_mat_ui<float>(src, lower, upper, dst); break;
+        case CV_16F: break;
+        case CV_64F: break;
+        default:
+            CV_Error_(Error::StsNotImplemented,
+                      ("%s does not support depth=%d", fn_name, src.depth()));
+    }
+    if (applied)
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     switch (src.depth())
     {
         case CV_8U: apply_inrange_mat_impl<uchar>(src, lower, upper, dst); break;
@@ -1659,9 +2392,7 @@ inline void dispatch_inrange_mat(const Mat& src,
         case CV_32F: apply_inrange_mat_impl<float>(src, lower, upper, dst); break;
         case CV_16F: apply_inrange_mat_impl<hfloat>(src, lower, upper, dst); break;
         case CV_64F: apply_inrange_mat_impl<double>(src, lower, upper, dst); break;
-        default:
-            CV_Error_(Error::StsNotImplemented,
-                      ("%s does not support depth=%d", fn_name, src.depth()));
+        default: break;
     }
 }
 
@@ -1671,6 +2402,29 @@ inline void dispatch_inrange_scalar(const Mat& src,
                                     Mat& dst,
                                     const char* fn_name)
 {
+    bool applied = false;
+    switch (src.depth())
+    {
+        case CV_8U: applied = try_apply_inrange_scalar_ui<uchar>(src, lower, upper, dst); break;
+        case CV_8S: applied = try_apply_inrange_scalar_ui<schar>(src, lower, upper, dst); break;
+        case CV_16U: applied = try_apply_inrange_scalar_ui<ushort>(src, lower, upper, dst); break;
+        case CV_16S: applied = try_apply_inrange_scalar_ui<short>(src, lower, upper, dst); break;
+        case CV_32S: applied = try_apply_inrange_scalar_ui<int>(src, lower, upper, dst); break;
+        case CV_32U: applied = try_apply_inrange_scalar_ui<uint>(src, lower, upper, dst); break;
+        case CV_32F: applied = try_apply_inrange_scalar_ui<float>(src, lower, upper, dst); break;
+        case CV_16F: break;
+        case CV_64F: break;
+        default:
+            CV_Error_(Error::StsNotImplemented,
+                      ("%s does not support depth=%d", fn_name, src.depth()));
+    }
+    if (applied)
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     switch (src.depth())
     {
         case CV_8U: apply_inrange_scalar_impl<uchar>(src, lower, upper, dst); break;
@@ -1682,9 +2436,7 @@ inline void dispatch_inrange_scalar(const Mat& src,
         case CV_32F: apply_inrange_scalar_impl<float>(src, lower, upper, dst); break;
         case CV_16F: apply_inrange_scalar_impl<hfloat>(src, lower, upper, dst); break;
         case CV_64F: apply_inrange_scalar_impl<double>(src, lower, upper, dst); break;
-        default:
-            CV_Error_(Error::StsNotImplemented,
-                      ("%s does not support depth=%d", fn_name, src.depth()));
+        default: break;
     }
 }
 
@@ -1851,6 +2603,7 @@ inline void add(const Mat& a, const Scalar& b, Mat& c)
                                      b,
                                      c,
                                      [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
+                                     UiArithmeticOperation::Add,
                                      false,
                                      "add(Mat,Scalar)");
 }
@@ -1861,6 +2614,7 @@ inline void add(const Scalar& a, const Mat& b, Mat& c)
                                      a,
                                      c,
                                      [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
+                                     UiArithmeticOperation::Add,
                                      true,
                                      "add(Scalar,Mat)");
 }
@@ -1892,6 +2646,7 @@ inline void subtract(const Mat& a, const Scalar& b, Mat& c)
                                      b,
                                      c,
                                      [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
+                                     UiArithmeticOperation::Subtract,
                                      false,
                                      "subtract(Mat,Scalar)");
 }
@@ -1902,6 +2657,7 @@ inline void subtract(const Scalar& a, const Mat& b, Mat& c)
                                      a,
                                      c,
                                      [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
+                                     UiArithmeticOperation::Subtract,
                                      true,
                                      "subtract(Scalar,Mat)");
 }
@@ -1933,6 +2689,7 @@ inline void multiply(const Mat& a, const Scalar& b, Mat& c)
                                      b,
                                      c,
                                      [](const auto& lhs, const auto& rhs) { return lhs * rhs; },
+                                     UiArithmeticOperation::Multiply,
                                      false,
                                      "multiply(Mat,Scalar)");
 }
@@ -1943,6 +2700,7 @@ inline void multiply(const Scalar& a, const Mat& b, Mat& c)
                                      a,
                                      c,
                                      [](const auto& lhs, const auto& rhs) { return lhs * rhs; },
+                                     UiArithmeticOperation::Multiply,
                                      true,
                                      "multiply(Scalar,Mat)");
 }
@@ -1964,6 +2722,7 @@ inline void divide(const Mat& a, const Scalar& b, Mat& c)
                                      b,
                                      c,
                                      [](const auto& lhs, const auto& rhs) { return safe_div_value(lhs, rhs); },
+                                     UiArithmeticOperation::Divide,
                                      false,
                                      "divide(Mat,Scalar)");
 }
@@ -1974,6 +2733,7 @@ inline void divide(const Scalar& a, const Mat& b, Mat& c)
                                      a,
                                      c,
                                      [](const auto& lhs, const auto& rhs) { return safe_div_value(lhs, rhs); },
+                                     UiArithmeticOperation::Divide,
                                      true,
                                      "divide(Scalar,Mat)");
 }
@@ -2124,6 +2884,7 @@ inline void absdiff(const Mat& a, const Scalar& b, Mat& c)
         b,
         c,
         [](const auto& lhs, const auto& rhs) { return absdiff_value(lhs, rhs); },
+        UiArithmeticOperation::AbsDiff,
         false,
         "absdiff(Mat,Scalar)");
 }
@@ -2145,14 +2906,14 @@ inline void bitwise_and(const Mat& a, const Scalar& b, Mat& c, const Mat& mask)
 {
     dispatch_raw_mat_scalar_bitwise(
         a, b, c, mask, [](uchar lhs, uchar rhs) { return static_cast<uchar>(lhs & rhs); },
-        false, "bitwise_and(Mat,Scalar)");
+        UiBitwiseOperation::And, false, "bitwise_and(Mat,Scalar)");
 }
 
 inline void bitwise_and(const Scalar& a, const Mat& b, Mat& c, const Mat& mask)
 {
     dispatch_raw_mat_scalar_bitwise(
         b, a, c, mask, [](uchar lhs, uchar rhs) { return static_cast<uchar>(lhs & rhs); },
-        true, "bitwise_and(Scalar,Mat)");
+        UiBitwiseOperation::And, true, "bitwise_and(Scalar,Mat)");
 }
 
 inline void bitwise_or(const Mat& a, const Mat& b, Mat& c, const Mat& mask)
@@ -2167,14 +2928,14 @@ inline void bitwise_or(const Mat& a, const Scalar& b, Mat& c, const Mat& mask)
 {
     dispatch_raw_mat_scalar_bitwise(
         a, b, c, mask, [](uchar lhs, uchar rhs) { return static_cast<uchar>(lhs | rhs); },
-        false, "bitwise_or(Mat,Scalar)");
+        UiBitwiseOperation::Or, false, "bitwise_or(Mat,Scalar)");
 }
 
 inline void bitwise_or(const Scalar& a, const Mat& b, Mat& c, const Mat& mask)
 {
     dispatch_raw_mat_scalar_bitwise(
         b, a, c, mask, [](uchar lhs, uchar rhs) { return static_cast<uchar>(lhs | rhs); },
-        true, "bitwise_or(Scalar,Mat)");
+        UiBitwiseOperation::Or, true, "bitwise_or(Scalar,Mat)");
 }
 
 inline void bitwise_xor(const Mat& a, const Mat& b, Mat& c, const Mat& mask)
@@ -2189,14 +2950,14 @@ inline void bitwise_xor(const Mat& a, const Scalar& b, Mat& c, const Mat& mask)
 {
     dispatch_raw_mat_scalar_bitwise(
         a, b, c, mask, [](uchar lhs, uchar rhs) { return static_cast<uchar>(lhs ^ rhs); },
-        false, "bitwise_xor(Mat,Scalar)");
+        UiBitwiseOperation::Xor, false, "bitwise_xor(Mat,Scalar)");
 }
 
 inline void bitwise_xor(const Scalar& a, const Mat& b, Mat& c, const Mat& mask)
 {
     dispatch_raw_mat_scalar_bitwise(
         b, a, c, mask, [](uchar lhs, uchar rhs) { return static_cast<uchar>(lhs ^ rhs); },
-        true, "bitwise_xor(Scalar,Mat)");
+        UiBitwiseOperation::Xor, true, "bitwise_xor(Scalar,Mat)");
 }
 
 inline void bitwise_not(const Mat& src, Mat& dst, const Mat& mask)
@@ -2223,7 +2984,6 @@ inline void inRange(const Mat& src, const Mat& lower, const Mat& upper, Mat& dst
     ensure_same_type_and_shape(src, upper, "inRange(Mat,Mat,Mat)");
     ensure_inrange_dst(src, dst, "inRange(Mat,Mat,Mat)");
     dispatch_inrange_mat(src, lower, upper, dst, "inRange(Mat,Mat,Mat)");
-    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
 }
 
 inline void inRange(const Mat& src, const Scalar& lower, const Scalar& upper, Mat& dst)
@@ -2231,7 +2991,6 @@ inline void inRange(const Mat& src, const Scalar& lower, const Scalar& upper, Ma
     check_scalar_channel_bound(src, "inRange(Mat,Scalar,Scalar)");
     ensure_inrange_dst(src, dst, "inRange(Mat,Scalar,Scalar)");
     dispatch_inrange_scalar(src, lower, upper, dst, "inRange(Mat,Scalar,Scalar)");
-    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
 }
 
 inline void min(const Mat& a, const Mat& b, Mat& c)
@@ -2252,6 +3011,7 @@ inline void min(const Mat& a, const Scalar& b, Mat& c)
         b,
         c,
         [](const auto& lhs, const auto& rhs) { return min_value(lhs, rhs); },
+        UiArithmeticOperation::Min,
         false,
         "min(Mat,Scalar)");
 }
@@ -2274,6 +3034,7 @@ inline void max(const Mat& a, const Scalar& b, Mat& c)
         b,
         c,
         [](const auto& lhs, const auto& rhs) { return max_value(lhs, rhs); },
+        UiArithmeticOperation::Max,
         false,
         "max(Mat,Scalar)");
 }
