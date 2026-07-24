@@ -1,6 +1,7 @@
 #ifndef CVH_CORE_DETAIL_MATH_IMPL_HPP
 #define CVH_CORE_DETAIL_MATH_IMPL_HPP
 
+#include "math_ui.hpp"
 #include "../saturate.h"
 
 #include <cmath>
@@ -109,6 +110,7 @@ inline void dispatch_scale_add(const Mat& src1,
 {
     ensure_same_input(src1, src2, fn_name);
     prepare_dst(src1, dst, src1.type(), fn_name);
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     switch (src1.depth())
     {
         case CV_8U: apply_scale_add<uchar>(src1, alpha, src2, dst); break;
@@ -173,6 +175,34 @@ inline void dispatch_convert_scale_abs(const Mat& src,
                                        const char* fn_name)
 {
     prepare_dst(src, dst, CV_8U, fn_name);
+    if (src.depth() == CV_32F && ui::enabled())
+    {
+        const bool continuous = src.isContinuous() && dst.isContinuous();
+        const size_t outer = continuous
+            ? 1
+            : (src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1);
+        const size_t pixels_per_outer =
+            continuous
+                ? src.total()
+                : (src.dims > 1 ? src.total(1, src.dims) : src.total());
+        const size_t scalar_count =
+            pixels_per_outer * static_cast<size_t>(src.channels());
+        if (ui::apply_convert_scale_abs_f32(
+                reinterpret_cast<const float*>(src.data),
+                src.dims > 1 ? src.step(0) : scalar_count * sizeof(float),
+                dst.data,
+                dst.dims > 1 ? dst.step(0) : scalar_count,
+                scalar_count,
+                outer,
+                static_cast<float>(alpha),
+                static_cast<float>(beta)))
+        {
+            cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+            return;
+        }
+    }
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     switch (src.depth())
     {
         case CV_8U: apply_convert_scale_abs<uchar>(src, dst, alpha, beta); break;
@@ -385,18 +415,87 @@ inline void convertFp16(const Mat& src, Mat& dst)
     if (src.depth() == CV_32F)
     {
         math_detail::prepare_dst(src, dst, CV_16S, "convertFp16");
+        const bool continuous = src.isContinuous() && dst.isContinuous();
+        const size_t outer = continuous
+            ? 1
+            : (src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1);
+        const size_t pixels_per_outer =
+            continuous
+                ? src.total()
+                : (src.dims > 1 ? src.total(1, src.dims) : src.total());
+        const size_t scalar_count =
+            pixels_per_outer * static_cast<size_t>(src.channels());
+        if (math_detail::ui::enabled() &&
+            math_detail::ui::apply_f32_to_fp16(
+                reinterpret_cast<const float*>(src.data),
+                src.dims > 1 ? src.step(0) : scalar_count * sizeof(float),
+                reinterpret_cast<short*>(dst.data),
+                dst.dims > 1 ? dst.step(0) : scalar_count * sizeof(short),
+                scalar_count,
+                outer))
+        {
+            cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+            return;
+        }
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
         math_detail::convert_f32_to_fp16_bits(src, dst);
         return;
     }
     if (src.depth() == CV_16S)
     {
         math_detail::prepare_dst(src, dst, CV_32F, "convertFp16");
+        const bool continuous = src.isContinuous() && dst.isContinuous();
+        const size_t outer = continuous
+            ? 1
+            : (src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1);
+        const size_t pixels_per_outer =
+            continuous
+                ? src.total()
+                : (src.dims > 1 ? src.total(1, src.dims) : src.total());
+        const size_t scalar_count =
+            pixels_per_outer * static_cast<size_t>(src.channels());
+        if (math_detail::ui::enabled() &&
+            math_detail::ui::apply_fp16_to_f32(
+                reinterpret_cast<const short*>(src.data),
+                src.dims > 1 ? src.step(0) : scalar_count * sizeof(short),
+                reinterpret_cast<float*>(dst.data),
+                dst.dims > 1 ? dst.step(0) : scalar_count * sizeof(float),
+                scalar_count,
+                outer))
+        {
+            cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+            return;
+        }
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
         math_detail::convert_fp16_bits_to_f32(src, dst);
         return;
     }
     if (src.depth() == CV_16F)
     {
         math_detail::prepare_dst(src, dst, CV_32F, "convertFp16");
+        const bool continuous = src.isContinuous() && dst.isContinuous();
+        const size_t outer = continuous
+            ? 1
+            : (src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1);
+        const size_t pixels_per_outer =
+            continuous
+                ? src.total()
+                : (src.dims > 1 ? src.total(1, src.dims) : src.total());
+        const size_t scalar_count =
+            pixels_per_outer * static_cast<size_t>(src.channels());
+        if (math_detail::ui::enabled() &&
+            math_detail::ui::apply_fp16_to_f32(
+                reinterpret_cast<const short*>(src.data),
+                src.dims > 1 ? src.step(0) : scalar_count * sizeof(short),
+                reinterpret_cast<float*>(dst.data),
+                dst.dims > 1 ? dst.step(0) : scalar_count * sizeof(float),
+                scalar_count,
+                outer))
+        {
+            cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+            return;
+        }
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
         math_detail::convert_native_f16_to_f32(src, dst);
         return;
     }

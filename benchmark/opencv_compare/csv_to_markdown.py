@@ -222,7 +222,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("| --- | --- | --- |")
     lines.append("| 公共 API | OpenCV-compatible header API | 所有 case 均从 `cvh::headers_fast` 公共入口调用 |")
     lines.append("| SIMD 方言 | OpenCV Universal Intrinsics | 在 Apple ARM 上映射到 NEON |")
-    lines.append("| 专用 kernel | `cvtColor`、特定 `resize` UI kernel | 记录为 `dispatch_path=opencv_ui`；core 计算当前仍为 baseline |")
+    lines.append("| 专用 kernel | `cvtColor`、特定 `resize`、已验证的 core 逐元素 UI kernel | 实际命中时记录为 `dispatch_path=opencv_ui` |")
     lines.append("| Header fast-path | 行并行 filter、LUT、border、Sobel、Canny、morphology | 记录为 `dispatch_path=header_fastpath` |")
     lines.append("| 通用实现 | `cvh::headers` 中的 header baseline | 无专用 fast-path 时自动继承，记录为 `headers_baseline` 或 `public_header_scalar` |")
     lines.append("| 对照实现 | upstream OpenCV `core` / `imgproc` | 相同输入、尺寸、border 和线程配置 |")

@@ -1,6 +1,7 @@
 #ifndef CVH_CORE_DETAIL_BASIC_OP_IMPL_HPP
 #define CVH_CORE_DETAIL_BASIC_OP_IMPL_HPP
 
+#include "arithm_ui.hpp"
 #include "dispatch_control.h"
 #include "transpose_kernel.hpp"
 #include "../saturate.h"
@@ -16,6 +17,24 @@ namespace cvh
 
 namespace
 {
+
+enum class UiArithmeticOperation
+{
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    AbsDiff,
+    Min,
+    Max,
+};
+
+enum class UiBitwiseOperation
+{
+    And,
+    Or,
+    Xor,
+};
 
 inline void ensure_non_empty(const Mat& src, const char* fn_name)
 {
@@ -139,6 +158,297 @@ void apply_mat_mat_binary_impl(const Mat& a, const Mat& b, Mat& dst, Op op)
     }
 }
 
+template<typename T, typename ScalarOp>
+bool apply_mat_mat_integer_ui(const Mat& a,
+                              const Mat& b,
+                              Mat& dst,
+                              UiArithmeticOperation operation,
+                              ScalarOp scalar_op)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
+    const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
+    const size_t row_scalars = pixel_per_outer * static_cast<size_t>(a.channels());
+    const size_t a_step0 = a.dims > 1 ? a.step(0) : row_scalars * sizeof(T);
+    const size_t b_step0 = b.dims > 1 ? b.step(0) : row_scalars * sizeof(T);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_scalars * sizeof(T);
+
+    const T* a_data = reinterpret_cast<const T*>(a.data);
+    const T* b_data = reinterpret_cast<const T*>(b.data);
+    T* dst_data = reinterpret_cast<T*>(dst.data);
+
+    switch (operation)
+    {
+        case UiArithmeticOperation::AbsDiff:
+            return detail::arithm_ui::apply_binary_rows(
+                a_data,
+                a_step0,
+                b_data,
+                b_step0,
+                dst_data,
+                dst_step0,
+                row_scalars,
+                outer,
+                [](const auto& lhs, const auto& rhs) {
+                    using Vec = typename std::decay<decltype(lhs)>::type;
+                    if constexpr (std::is_same<Vec, cv::v_int8>::value ||
+                                  std::is_same<Vec, cv::v_int16>::value)
+                    {
+                        return cv::v_absdiffs(lhs, rhs);
+                    }
+                    else if constexpr (std::is_same<Vec, cv::v_int32>::value)
+                    {
+                        return cv::v_reinterpret_as_s32(cv::v_absdiff(lhs, rhs));
+                    }
+                    else
+                    {
+                        return cv::v_absdiff(lhs, rhs);
+                    }
+                },
+                scalar_op);
+        case UiArithmeticOperation::Min:
+            return detail::arithm_ui::apply_binary_rows(
+                a_data,
+                a_step0,
+                b_data,
+                b_step0,
+                dst_data,
+                dst_step0,
+                row_scalars,
+                outer,
+                [](const auto& lhs, const auto& rhs) { return cv::v_min(lhs, rhs); },
+                scalar_op);
+        case UiArithmeticOperation::Max:
+            return detail::arithm_ui::apply_binary_rows(
+                a_data,
+                a_step0,
+                b_data,
+                b_step0,
+                dst_data,
+                dst_step0,
+                row_scalars,
+                outer,
+                [](const auto& lhs, const auto& rhs) { return cv::v_max(lhs, rhs); },
+                scalar_op);
+        default:
+            return false;
+    }
+#else
+    (void)a;
+    (void)b;
+    (void)dst;
+    (void)operation;
+    (void)scalar_op;
+#endif
+    return false;
+}
+
+template<typename T, typename ScalarOp>
+bool apply_mat_mat_add_sub_mul_ui(const Mat& a,
+                                  const Mat& b,
+                                  Mat& dst,
+                                  UiArithmeticOperation operation,
+                                  ScalarOp scalar_op)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
+    const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
+    const size_t row_scalars = pixel_per_outer * static_cast<size_t>(a.channels());
+    const size_t a_step0 = a.dims > 1 ? a.step(0) : row_scalars * sizeof(T);
+    const size_t b_step0 = b.dims > 1 ? b.step(0) : row_scalars * sizeof(T);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_scalars * sizeof(T);
+
+    const T* a_data = reinterpret_cast<const T*>(a.data);
+    const T* b_data = reinterpret_cast<const T*>(b.data);
+    T* dst_data = reinterpret_cast<T*>(dst.data);
+
+    switch (operation)
+    {
+        case UiArithmeticOperation::Add:
+            return detail::arithm_ui::apply_binary_rows(
+                a_data,
+                a_step0,
+                b_data,
+                b_step0,
+                dst_data,
+                dst_step0,
+                row_scalars,
+                outer,
+                [](const auto& lhs, const auto& rhs) { return cv::v_add(lhs, rhs); },
+                scalar_op);
+        case UiArithmeticOperation::Subtract:
+            return detail::arithm_ui::apply_binary_rows(
+                a_data,
+                a_step0,
+                b_data,
+                b_step0,
+                dst_data,
+                dst_step0,
+                row_scalars,
+                outer,
+                [](const auto& lhs, const auto& rhs) { return cv::v_sub(lhs, rhs); },
+                scalar_op);
+        case UiArithmeticOperation::Multiply:
+            return detail::arithm_ui::apply_binary_rows(
+                a_data,
+                a_step0,
+                b_data,
+                b_step0,
+                dst_data,
+                dst_step0,
+                row_scalars,
+                outer,
+                [](const auto& lhs, const auto& rhs) { return cv::v_mul(lhs, rhs); },
+                scalar_op);
+        default:
+            return false;
+    }
+#else
+    (void)a;
+    (void)b;
+    (void)dst;
+    (void)operation;
+    (void)scalar_op;
+    return false;
+#endif
+}
+
+template<typename T, typename ScalarOp>
+bool apply_mat_mat_divide_ui(const Mat& a,
+                             const Mat& b,
+                             Mat& dst,
+                             ScalarOp scalar_op)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
+    const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
+    const size_t row_scalars = pixel_per_outer * static_cast<size_t>(a.channels());
+    const size_t a_step0 = a.dims > 1 ? a.step(0) : row_scalars * sizeof(T);
+    const size_t b_step0 = b.dims > 1 ? b.step(0) : row_scalars * sizeof(T);
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_scalars * sizeof(T);
+
+    return detail::arithm_ui::apply_binary_rows(
+        reinterpret_cast<const T*>(a.data),
+        a_step0,
+        reinterpret_cast<const T*>(b.data),
+        b_step0,
+        reinterpret_cast<T*>(dst.data),
+        dst_step0,
+        row_scalars,
+        outer,
+        [](const auto& lhs, const auto& rhs) { return cv::v_div(lhs, rhs); },
+        scalar_op);
+#else
+    (void)a;
+    (void)b;
+    (void)dst;
+    (void)scalar_op;
+    return false;
+#endif
+}
+
+template<typename ScalarOp>
+bool try_apply_mat_mat_arithmetic_ui(const Mat& a,
+                                     const Mat& b,
+                                     Mat& dst,
+                                     UiArithmeticOperation operation,
+                                     ScalarOp scalar_op)
+{
+    if (!detail::arithm_ui::enabled())
+    {
+        return false;
+    }
+
+    bool applied = false;
+    if (operation == UiArithmeticOperation::Add ||
+        operation == UiArithmeticOperation::Subtract ||
+        operation == UiArithmeticOperation::Multiply)
+    {
+        switch (a.depth())
+        {
+            case CV_8U:
+                applied = apply_mat_mat_add_sub_mul_ui<uchar>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_8S:
+                applied = apply_mat_mat_add_sub_mul_ui<schar>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_16U:
+                applied = apply_mat_mat_add_sub_mul_ui<ushort>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_16S:
+                applied = apply_mat_mat_add_sub_mul_ui<short>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_32S:
+                applied = apply_mat_mat_add_sub_mul_ui<int>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_32U:
+                applied = apply_mat_mat_add_sub_mul_ui<uint>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_32F:
+                applied = apply_mat_mat_add_sub_mul_ui<float>(a, b, dst, operation, scalar_op);
+                break;
+#if CV_SIMD_64F
+            case CV_64F:
+                applied = apply_mat_mat_add_sub_mul_ui<double>(a, b, dst, operation, scalar_op);
+                break;
+#endif
+            default:
+                return false;
+        }
+    }
+    else if (operation == UiArithmeticOperation::Divide)
+    {
+        switch (a.depth())
+        {
+            case CV_32F:
+                applied = apply_mat_mat_divide_ui<float>(a, b, dst, scalar_op);
+                break;
+#if CV_SIMD_64F
+            case CV_64F:
+                applied = apply_mat_mat_divide_ui<double>(a, b, dst, scalar_op);
+                break;
+#endif
+            default:
+                return false;
+        }
+    }
+    else
+    {
+        switch (a.depth())
+        {
+            case CV_8U:
+                applied = apply_mat_mat_integer_ui<uchar>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_8S:
+                applied = apply_mat_mat_integer_ui<schar>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_16U:
+                applied = apply_mat_mat_integer_ui<ushort>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_16S:
+                applied = apply_mat_mat_integer_ui<short>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_32S:
+                applied = apply_mat_mat_integer_ui<int>(a, b, dst, operation, scalar_op);
+                break;
+            case CV_32U:
+                applied = apply_mat_mat_integer_ui<uint>(a, b, dst, operation, scalar_op);
+                break;
+            default:
+                return false;
+        }
+    }
+
+    if (applied)
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+    }
+    return applied;
+}
+
 template<typename Op>
 void dispatch_mat_mat_binary_impl_by_depth(const Mat& a, const Mat& b, Mat& dst, Op op, const char* fn_name)
 {
@@ -186,6 +496,26 @@ void dispatch_mat_mat_binary_arith(const Mat& a,
 {
     ensure_same_type_and_shape(a, b, fn_name);
     ensure_binary_dst_like_src(a, dst, fn_name);
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    dispatch_mat_mat_binary_impl_by_depth(a, b, dst, op, fn_name);
+}
+
+template<typename Op>
+void dispatch_mat_mat_binary_arith_ui(const Mat& a,
+                                      const Mat& b,
+                                      Mat& dst,
+                                      Op op,
+                                      UiArithmeticOperation ui_operation,
+                                      const char* fn_name)
+{
+    ensure_same_type_and_shape(a, b, fn_name);
+    ensure_binary_dst_like_src(a, dst, fn_name);
+
+    if (try_apply_mat_mat_arithmetic_ui(a, b, dst, ui_operation, op))
+    {
+        return;
+    }
 
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     dispatch_mat_mat_binary_impl_by_depth(a, b, dst, op, fn_name);
@@ -1060,15 +1390,141 @@ void apply_raw_mat_scalar_bitwise(const Mat& src,
 }
 
 template<typename Op>
+bool try_apply_raw_mat_mat_bitwise_ui(const Mat& a,
+                                      const Mat& b,
+                                      Mat& dst,
+                                      const Mat& mask,
+                                      UiBitwiseOperation operation,
+                                      Op scalar_op)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    if (!mask.empty() || !detail::arithm_ui::enabled())
+    {
+        return false;
+    }
+
+    const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
+    const size_t pixels_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
+    const size_t row_bytes = pixels_per_outer * a.elemSize();
+    const size_t a_step0 = a.dims > 1 ? a.step(0) : row_bytes;
+    const size_t b_step0 = b.dims > 1 ? b.step(0) : row_bytes;
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_bytes;
+
+    bool applied = false;
+    switch (operation)
+    {
+        case UiBitwiseOperation::And:
+            applied = detail::arithm_ui::apply_binary_byte_rows(
+                a.data,
+                a_step0,
+                b.data,
+                b_step0,
+                dst.data,
+                dst_step0,
+                row_bytes,
+                outer,
+                [](const auto& lhs, const auto& rhs) { return cv::v_and(lhs, rhs); },
+                scalar_op);
+            break;
+        case UiBitwiseOperation::Or:
+            applied = detail::arithm_ui::apply_binary_byte_rows(
+                a.data,
+                a_step0,
+                b.data,
+                b_step0,
+                dst.data,
+                dst_step0,
+                row_bytes,
+                outer,
+                [](const auto& lhs, const auto& rhs) { return cv::v_or(lhs, rhs); },
+                scalar_op);
+            break;
+        case UiBitwiseOperation::Xor:
+            applied = detail::arithm_ui::apply_binary_byte_rows(
+                a.data,
+                a_step0,
+                b.data,
+                b_step0,
+                dst.data,
+                dst_step0,
+                row_bytes,
+                outer,
+                [](const auto& lhs, const auto& rhs) { return cv::v_xor(lhs, rhs); },
+                scalar_op);
+            break;
+    }
+
+    if (applied)
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+    }
+    return applied;
+#else
+    (void)a;
+    (void)b;
+    (void)dst;
+    (void)mask;
+    (void)operation;
+    (void)scalar_op;
+    return false;
+#endif
+}
+
+inline bool try_apply_raw_bitwise_not_ui(const Mat& src,
+                                         Mat& dst,
+                                         const Mat& mask)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    if (!mask.empty() || !detail::arithm_ui::enabled())
+    {
+        return false;
+    }
+
+    const size_t outer = src.dims > 1 ? static_cast<size_t>(src.size.p[0]) : 1;
+    const size_t pixels_per_outer = src.dims > 1 ? src.total(1, src.dims) : src.total();
+    const size_t row_bytes = pixels_per_outer * src.elemSize();
+    const size_t src_step0 = src.dims > 1 ? src.step(0) : row_bytes;
+    const size_t dst_step0 = dst.dims > 1 ? dst.step(0) : row_bytes;
+
+    const bool applied = detail::arithm_ui::apply_unary_byte_rows(
+        src.data,
+        src_step0,
+        dst.data,
+        dst_step0,
+        row_bytes,
+        outer,
+        [](const auto& value) { return cv::v_not(value); },
+        [](uchar value) { return static_cast<uchar>(~value); });
+    if (applied)
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+    }
+    return applied;
+#else
+    (void)src;
+    (void)dst;
+    (void)mask;
+    return false;
+#endif
+}
+
+template<typename Op>
 void dispatch_raw_mat_mat_bitwise(const Mat& a,
                                   const Mat& b,
                                   Mat& dst,
                                   const Mat& mask,
                                   Op op,
+                                  UiBitwiseOperation ui_operation,
                                   const char* fn_name)
 {
     ensure_same_type_and_shape(a, b, fn_name);
     prepare_bitwise_dst(a, dst, mask, fn_name);
+    if (try_apply_raw_mat_mat_bitwise_ui(a, b, dst, mask, ui_operation, op))
+    {
+        return;
+    }
     apply_raw_mat_mat_bitwise(a, b, dst, mask, op);
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
 }
@@ -1380,11 +1836,13 @@ inline void binaryFunc(BinaryOp op, const Mat& a, const Mat& b, Mat& c)
 
 inline void add(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary_arith(a,
-                                  b,
-                                  c,
-                                  [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
-                                  "add(Mat,Mat)");
+    dispatch_mat_mat_binary_arith_ui(
+        a,
+        b,
+        c,
+        [](const auto& lhs, const auto& rhs) { return lhs + rhs; },
+        UiArithmeticOperation::Add,
+        "add(Mat,Mat)");
 }
 
 inline void add(const Mat& a, const Scalar& b, Mat& c)
@@ -1419,11 +1877,13 @@ inline void subtract(const Mat& a, Mat& c)
 
 inline void subtract(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary_arith(a,
-                                  b,
-                                  c,
-                                  [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
-                                  "subtract(Mat,Mat)");
+    dispatch_mat_mat_binary_arith_ui(
+        a,
+        b,
+        c,
+        [](const auto& lhs, const auto& rhs) { return lhs - rhs; },
+        UiArithmeticOperation::Subtract,
+        "subtract(Mat,Mat)");
 }
 
 inline void subtract(const Mat& a, const Scalar& b, Mat& c)
@@ -1458,11 +1918,13 @@ inline void subtract(double a, const Mat& b, Mat& c)
 
 inline void multiply(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary_arith(a,
-                                  b,
-                                  c,
-                                  [](const auto& lhs, const auto& rhs) { return lhs * rhs; },
-                                  "multiply(Mat,Mat)");
+    dispatch_mat_mat_binary_arith_ui(
+        a,
+        b,
+        c,
+        [](const auto& lhs, const auto& rhs) { return lhs * rhs; },
+        UiArithmeticOperation::Multiply,
+        "multiply(Mat,Mat)");
 }
 
 inline void multiply(const Mat& a, const Scalar& b, Mat& c)
@@ -1487,11 +1949,13 @@ inline void multiply(const Scalar& a, const Mat& b, Mat& c)
 
 inline void divide(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary_arith(a,
-                                  b,
-                                  c,
-                                  [](const auto& lhs, const auto& rhs) { return safe_div_value(lhs, rhs); },
-                                  "divide(Mat,Mat)");
+    dispatch_mat_mat_binary_arith_ui(
+        a,
+        b,
+        c,
+        [](const auto& lhs, const auto& rhs) { return safe_div_value(lhs, rhs); },
+        UiArithmeticOperation::Divide,
+        "divide(Mat,Mat)");
 }
 
 inline void divide(const Mat& a, const Scalar& b, Mat& c)
@@ -1644,11 +2108,12 @@ inline T max_value(T lhs, T rhs)
 
 inline void absdiff(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary_arith(
+    dispatch_mat_mat_binary_arith_ui(
         a,
         b,
         c,
         [](const auto& lhs, const auto& rhs) { return absdiff_value(lhs, rhs); },
+        UiArithmeticOperation::AbsDiff,
         "absdiff(Mat,Mat)");
 }
 
@@ -1672,6 +2137,7 @@ inline void bitwise_and(const Mat& a, const Mat& b, Mat& c, const Mat& mask)
 {
     dispatch_raw_mat_mat_bitwise(
         a, b, c, mask, [](uchar lhs, uchar rhs) { return static_cast<uchar>(lhs & rhs); },
+        UiBitwiseOperation::And,
         "bitwise_and(Mat,Mat)");
 }
 
@@ -1693,6 +2159,7 @@ inline void bitwise_or(const Mat& a, const Mat& b, Mat& c, const Mat& mask)
 {
     dispatch_raw_mat_mat_bitwise(
         a, b, c, mask, [](uchar lhs, uchar rhs) { return static_cast<uchar>(lhs | rhs); },
+        UiBitwiseOperation::Or,
         "bitwise_or(Mat,Mat)");
 }
 
@@ -1714,6 +2181,7 @@ inline void bitwise_xor(const Mat& a, const Mat& b, Mat& c, const Mat& mask)
 {
     dispatch_raw_mat_mat_bitwise(
         a, b, c, mask, [](uchar lhs, uchar rhs) { return static_cast<uchar>(lhs ^ rhs); },
+        UiBitwiseOperation::Xor,
         "bitwise_xor(Mat,Mat)");
 }
 
@@ -1734,6 +2202,10 @@ inline void bitwise_xor(const Scalar& a, const Mat& b, Mat& c, const Mat& mask)
 inline void bitwise_not(const Mat& src, Mat& dst, const Mat& mask)
 {
     prepare_bitwise_dst(src, dst, mask, "bitwise_not");
+    if (try_apply_raw_bitwise_not_ui(src, dst, mask))
+    {
+        return;
+    }
     const std::vector<uchar> zero_pixel(src.elemSize(), static_cast<uchar>(0));
     apply_raw_mat_scalar_bitwise(
         src,
@@ -1764,11 +2236,12 @@ inline void inRange(const Mat& src, const Scalar& lower, const Scalar& upper, Ma
 
 inline void min(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary_arith(
+    dispatch_mat_mat_binary_arith_ui(
         a,
         b,
         c,
         [](const auto& lhs, const auto& rhs) { return min_value(lhs, rhs); },
+        UiArithmeticOperation::Min,
         "min(Mat,Mat)");
 }
 
@@ -1785,11 +2258,12 @@ inline void min(const Mat& a, const Scalar& b, Mat& c)
 
 inline void max(const Mat& a, const Mat& b, Mat& c)
 {
-    dispatch_mat_mat_binary_arith(
+    dispatch_mat_mat_binary_arith_ui(
         a,
         b,
         c,
         [](const auto& lhs, const auto& rhs) { return max_value(lhs, rhs); },
+        UiArithmeticOperation::Max,
         "max(Mat,Mat)");
 }
 

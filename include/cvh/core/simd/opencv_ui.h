@@ -2,6 +2,7 @@
 #define CVH_CORE_SIMD_OPENCV_UI_H
 
 #include "cvh/detail/config.h"
+#include "cvh/core/define.h"
 
 #ifdef CVH_ENABLE_XSIMD
 #error "CVH_ENABLE_XSIMD has been removed; use OpenCV Universal Intrinsics"

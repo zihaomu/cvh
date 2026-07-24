@@ -16,6 +16,7 @@ enum class DispatchTag
 {
     Unknown = 0,
     Scalar,
+    OpenCVUI,
 };
 
 inline std::atomic<DispatchMode> g_dispatch_mode {DispatchMode::Auto};
@@ -52,6 +53,8 @@ inline const char* dispatch_tag_name(DispatchTag tag)
     {
         case DispatchTag::Scalar:
             return "scalar";
+        case DispatchTag::OpenCVUI:
+            return "opencv_ui";
         case DispatchTag::Unknown:
         default:
             return "unknown";

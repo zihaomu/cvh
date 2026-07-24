@@ -104,7 +104,11 @@ typedef std::uint64_t uint64;
 #endif
 
 #ifndef CV_FP16
+#if (CV_NEON && (defined(__aarch64__) || defined(_M_ARM64))) || defined(__F16C__)
+#define CV_FP16 1
+#else
 #define CV_FP16 0
+#endif
 #endif
 #ifndef CV_VSX
 #define CV_VSX 0
@@ -150,6 +154,10 @@ typedef std::uint64_t uint64;
 
 namespace cv {
 
+#ifdef CVH_DEFINE_H
+using hfloat = ::hfloat;
+static_assert(sizeof(hfloat) == 2, "OpenCV UI hfloat must use the cvh 16-bit layout");
+#else
 class hfloat
 {
 public:
@@ -160,6 +168,7 @@ public:
 private:
     float value_;
 };
+#endif
 
 }  // namespace cv
 

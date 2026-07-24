@@ -86,6 +86,23 @@ mkdir -p benchmark/results/internal/imgproc/quick
   --output benchmark/results/internal/imgproc/quick/resize_current.csv
 ```
 
+Core 逐元素算子还支持在同一二进制内强制 scalar，用于排除编译器和机器差异：
+
+```bash
+cmake --build build-bench -j --target cvh_benchmark_core_mat_header
+
+./build-bench/cvh_benchmark_core_mat_header \
+  --profile quick --dispatch scalar \
+  --output benchmark/results/internal/core_mat/quick/scalar.csv
+
+./build-bench/cvh_benchmark_core_mat_header \
+  --profile quick --dispatch auto \
+  --output benchmark/results/internal/core_mat/quick/opencv_ui.csv
+```
+
+`dispatch_path` 记录公共 API 最终命中的 `scalar` 或 `opencv_ui`，不以 target
+名称推测实际执行路径。
+
 runner 已支持通过 `git worktree` 拉起旧版本，例如：
 
 ```text

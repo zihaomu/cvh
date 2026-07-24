@@ -1,5 +1,6 @@
 #include "common/benchmark_common.h"
 #include "cvh.h"
+#include "cvh/core/detail/dispatch_control.h"
 #include "opencv_compare_phase1_benchmark.h"
 
 #include <algorithm>
@@ -244,8 +245,11 @@ std::vector<Phase1BenchmarkResult> run_phase1_benchmarks(
             warmup = std::max(20, config.warmup * 20);
             iters = std::max(1000, config.iters * 1000);
         }
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = bench_cvh_phase1(
             spec.id, rows, cols, warmup, iters, config.repeats, seed);
+        const cvh::cpu::DispatchTag cvh_dispatch_tag =
+            cvh::cpu::last_dispatch_tag();
         const double opencv_ms = bench_opencv_phase1(
             spec.id, rows, cols, warmup, iters, config.repeats, seed);
         if (cvh_ms <= 0.0 || opencv_ms <= 0.0)
@@ -259,7 +263,10 @@ std::vector<Phase1BenchmarkResult> run_phase1_benchmarks(
             std::string(spec.suite) == "core" ? "core_mat" : spec.suite;
         result.op = spec.op;
         result.variant = spec.variant;
-        result.dispatch_path = "public_header_baseline";
+        result.dispatch_path =
+            cvh_dispatch_tag == cvh::cpu::DispatchTag::Unknown
+                ? "public_header_baseline"
+                : cvh::cpu::dispatch_tag_name(cvh_dispatch_tag);
         result.depth = spec.depth;
         result.channels = spec.channels;
         result.shape =

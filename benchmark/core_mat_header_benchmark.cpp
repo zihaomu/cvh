@@ -20,6 +20,7 @@ constexpr int kBenchmarkSchemaVersion = 2;
 struct Args
 {
     std::string profile = "quick";
+    std::string dispatch = "auto";
     int warmup = 3;
     int iters = 10;
     int repeats = 7;
@@ -70,18 +71,73 @@ void usage()
 {
     std::cout
         << "Usage: cvh_benchmark_core_mat_header "
-        << "[--profile quick|stable|full] [--warmup N] [--iters N] [--repeats N] [--output path]\n";
+        << "[--profile quick|stable|full] [--dispatch auto|scalar] "
+        << "[--warmup N] [--iters N] [--repeats N] [--output path]\n";
 }
 
 Args parse_args(int argc, char** argv)
 {
-    const auto parsed = common::parse_basic_args(
-        argc,
-        argv,
-        common::BasicArgs {"quick", 3, 10, 7, ""},
-        {"quick", "stable", "full"},
-        usage);
-    return Args {parsed.profile, parsed.warmup, parsed.iters, parsed.repeats, parsed.output_csv};
+    Args args;
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string token = argv[i];
+        auto next_value = [&](const char* name) -> std::string {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "Missing value for " << name << "\n";
+                std::exit(2);
+            }
+            return std::string(argv[++i]);
+        };
+
+        if (token == "--profile")
+        {
+            args.profile = next_value("--profile");
+        }
+        else if (token == "--dispatch")
+        {
+            args.dispatch = next_value("--dispatch");
+        }
+        else if (token == "--warmup")
+        {
+            args.warmup = std::max(0, std::stoi(next_value("--warmup")));
+        }
+        else if (token == "--iters")
+        {
+            args.iters = std::max(1, std::stoi(next_value("--iters")));
+        }
+        else if (token == "--repeats")
+        {
+            args.repeats = std::max(1, std::stoi(next_value("--repeats")));
+        }
+        else if (token == "--output")
+        {
+            args.output_csv = next_value("--output");
+        }
+        else if (token == "--help")
+        {
+            usage();
+            std::exit(0);
+        }
+        else
+        {
+            std::cerr << "Unknown arg: " << token << "\n";
+            std::exit(2);
+        }
+    }
+
+    if (!common::profile_is_allowed(args.profile, {"quick", "stable", "full"}))
+    {
+        std::cerr << "Unsupported profile: " << args.profile << "\n";
+        std::exit(2);
+    }
+    if (args.dispatch != "auto" && args.dispatch != "scalar")
+    {
+        std::cerr << "Unsupported dispatch: " << args.dispatch
+                  << " (expected auto/scalar)\n";
+        std::exit(2);
+    }
+    return args;
 }
 
 std::string depth_name(int depth)
@@ -206,11 +262,12 @@ void append_array_op_row(const Args& args,
                          RunFn&& run,
                          std::vector<ResultRow>& rows)
 {
+    cvh::cpu::reset_last_dispatch_tag();
     const auto result = measure(
         std::forward<RunFn>(run),
         [&]() { return common::checksum_mat_bytes(dst); },
         args);
-    rows.push_back(make_row(
+    ResultRow row = make_row(
         args,
         shape,
         op,
@@ -218,7 +275,13 @@ void append_array_op_row(const Args& args,
         "continuous",
         "reuse",
         bytes_touched,
-        result));
+        result);
+    const cvh::cpu::DispatchTag dispatch_tag = cvh::cpu::last_dispatch_tag();
+    if (dispatch_tag != cvh::cpu::DispatchTag::Unknown)
+    {
+        row.dispatch_path = cvh::cpu::dispatch_tag_name(dispatch_tag);
+    }
+    rows.push_back(std::move(row));
 }
 
 std::uint64_t checksum_doubles(const double* values, std::size_t count)
@@ -708,6 +771,71 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
         append_array_op_row(
             args,
             shape,
+            "SCALE_ADD",
+            "alpha_0_75",
+            bytes * 3,
+            dst,
+            [&]() { cvh::scaleAdd(src, 0.75, rhs, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "ADD",
+            "mat_mat",
+            bytes * 3,
+            dst,
+            [&]() { cvh::add(src, rhs, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "SUBTRACT",
+            "mat_mat",
+            bytes * 3,
+            dst,
+            [&]() { cvh::subtract(src, rhs, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "MULTIPLY",
+            "mat_mat",
+            bytes * 3,
+            dst,
+            [&]() { cvh::multiply(src, rhs, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
+            "DIVIDE",
+            "mat_mat",
+            bytes * 3,
+            dst,
+            [&]() { cvh::divide(src, rhs, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst(dims, shape.type);
+        append_array_op_row(
+            args,
+            shape,
             "ABSDIFF",
             "mat_mat",
             bytes * 3,
@@ -790,6 +918,24 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
 
     if (CV_MAT_DEPTH(shape.type) == CV_32F)
     {
+        {
+            cvh::Mat dst(dims, CV_MAKETYPE(CV_16S, CV_MAT_CN(shape.type)));
+            const std::size_t output_bytes =
+                static_cast<std::size_t>(shape.rows) *
+                static_cast<std::size_t>(shape.cols) *
+                static_cast<std::size_t>(CV_MAT_CN(shape.type)) *
+                sizeof(short);
+            append_array_op_row(
+                args,
+                shape,
+                "CONVERT_FP16",
+                "f32_to_fp16",
+                bytes + output_bytes,
+                dst,
+                [&]() { cvh::convertFp16(src, dst); },
+                rows);
+        }
+
         cvh::Mat positive_src = src.clone();
         float* values = reinterpret_cast<float*>(positive_src.data);
         const size_t scalar_count =
@@ -848,6 +994,10 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
 int main(int argc, char** argv)
 {
     const auto args = cvh_bench::parse_args(argc, argv);
+    cvh::cpu::set_dispatch_mode(
+        args.dispatch == "scalar"
+            ? cvh::cpu::DispatchMode::ScalarOnly
+            : cvh::cpu::DispatchMode::Auto);
     const auto shapes = cvh_bench::build_shapes(args.profile);
     std::vector<cvh_bench::ResultRow> rows;
     rows.reserve(shapes.size() * 36);

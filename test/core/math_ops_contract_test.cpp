@@ -1,4 +1,6 @@
 #include "cvh.h"
+#include "cvh/core/detail/dispatch_control.h"
+#include "cvh/core/detail/math_ui.hpp"
 #include "gtest/gtest.h"
 
 #include <cmath>
@@ -11,6 +13,44 @@ using namespace cvh;
 namespace
 {
 
+class DispatchModeGuard
+{
+public:
+    explicit DispatchModeGuard(cpu::DispatchMode mode)
+        : previous_(cpu::dispatch_mode())
+    {
+        cpu::set_dispatch_mode(mode);
+    }
+
+    ~DispatchModeGuard()
+    {
+        cpu::set_dispatch_mode(previous_);
+    }
+
+private:
+    cpu::DispatchMode previous_;
+};
+
+void expect_mat_bytes_equal(const Mat& actual, const Mat& expected)
+{
+    ASSERT_EQ(actual.type(), expected.type());
+    ASSERT_EQ(actual.shape(), expected.shape());
+    const size_t row_bytes =
+        static_cast<size_t>(actual.size[1]) * actual.elemSize();
+    for (int row = 0; row < actual.size[0]; ++row)
+    {
+        const uchar* actual_row =
+            actual.data + static_cast<size_t>(row) * actual.step(0);
+        const uchar* expected_row =
+            expected.data + static_cast<size_t>(row) * expected.step(0);
+        for (size_t byte = 0; byte < row_bytes; ++byte)
+        {
+            ASSERT_EQ(actual_row[byte], expected_row[byte])
+                << "row=" << row << ", byte=" << byte;
+        }
+    }
+}
+
 std::uint16_t read_half_bits(const Mat& mat, int x)
 {
     std::uint16_t bits = 0;
@@ -19,6 +59,187 @@ std::uint16_t read_half_bits(const Mat& mat, int x)
 }
 
 }  // namespace
+
+TEST(MathOpsContract_TEST, scale_add_stays_scalar_after_ui_performance_gate)
+{
+    Mat a_parent({4, 23}, CV_32FC3);
+    Mat b_parent({4, 23}, CV_32FC3);
+    for (int row = 0; row < 4; ++row)
+    {
+        for (int col = 0; col < 23; ++col)
+        {
+            for (int ch = 0; ch < 3; ++ch)
+            {
+                const int index = (row * 23 + col) * 3 + ch;
+                a_parent.at<float>(row, col, ch) =
+                    static_cast<float>(index - 100) / 13.0f;
+                b_parent.at<float>(row, col, ch) =
+                    static_cast<float>((index * 7) % 83 - 41) / 9.0f;
+            }
+        }
+    }
+
+    Mat a = a_parent.colRange(2, 21);
+    Mat b = b_parent.colRange(2, 21);
+    ASSERT_FALSE(a.isContinuous());
+    ASSERT_FALSE(b.isContinuous());
+
+    DispatchModeGuard guard(cpu::DispatchMode::Auto);
+    Mat expected;
+    scaleAdd(a, 0.75, b, expected);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+
+    Mat src1_alias = a.clone();
+    scaleAdd(src1_alias, 0.75, b, src1_alias);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+    expect_mat_bytes_equal(src1_alias, expected);
+
+    Mat src2_alias = b.clone();
+    scaleAdd(a, 0.75, src2_alias, src2_alias);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+    expect_mat_bytes_equal(src2_alias, expected);
+
+    Mat a64({2, 19}, CV_64FC1);
+    Mat b64({2, 19}, CV_64FC1);
+    for (int row = 0; row < 2; ++row)
+    {
+        for (int col = 0; col < 19; ++col)
+        {
+            a64.at<double>(row, col) = (row * 19 + col - 15) / 7.0;
+            b64.at<double>(row, col) = (row * 19 + col + 3) / 11.0;
+        }
+    }
+    Mat actual64;
+    scaleAdd(a64, 0.125, b64, actual64);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+}
+
+TEST(MathOpsContract_TEST, ui_convert_scale_abs_matches_scalar_on_roi_tail_and_edges)
+{
+    if (!math_detail::ui::enabled())
+        GTEST_SKIP() << "OpenCV UI math kernels require NEON or SSE/AVX";
+
+    Mat parent({3, 23}, CV_32FC3);
+    for (int row = 0; row < 3; ++row)
+    {
+        for (int col = 0; col < 23; ++col)
+        {
+            for (int ch = 0; ch < 3; ++ch)
+            {
+                const int index = (row * 23 + col) * 3 + ch;
+                parent.at<float>(row, col, ch) =
+                    static_cast<float>((index * 11) % 401 - 200) * 0.25f;
+            }
+        }
+    }
+    Mat src = parent.colRange(2, 21);
+    ASSERT_FALSE(src.isContinuous());
+    src.at<float>(0, 2, 0) = std::numeric_limits<float>::infinity();
+    src.at<float>(0, 3, 1) = -std::numeric_limits<float>::infinity();
+    src.at<float>(0, 4, 2) = std::numeric_limits<float>::quiet_NaN();
+
+    Mat scalar_expected;
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+        convertScaleAbs(src, scalar_expected, -1.25, 2.0);
+    }
+
+    DispatchModeGuard guard(cpu::DispatchMode::Auto);
+    Mat actual;
+    convertScaleAbs(src, actual, -1.25, 2.0);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    expect_mat_bytes_equal(actual, scalar_expected);
+
+    Mat alias = src.clone();
+    convertScaleAbs(alias, alias, -1.25, 2.0);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    expect_mat_bytes_equal(alias, scalar_expected);
+}
+
+TEST(MathOpsContract_TEST, ui_convert_fp16_matches_scalar_in_both_directions)
+{
+    if (!math_detail::ui::enabled())
+        GTEST_SKIP() << "OpenCV UI math kernels require NEON or SSE/AVX";
+
+    static_assert(sizeof(cv::hfloat) == 2, "UI half layout must remain 16-bit");
+    Mat parent({3, 23}, CV_32FC3);
+    for (int row = 0; row < 3; ++row)
+    {
+        for (int col = 0; col < 23; ++col)
+        {
+            for (int ch = 0; ch < 3; ++ch)
+            {
+                const int index = (row * 23 + col) * 3 + ch;
+                parent.at<float>(row, col, ch) =
+                    static_cast<float>((index * 17) % 2001 - 1000) / 16.0f;
+            }
+        }
+    }
+    Mat src = parent.colRange(2, 21);
+    ASSERT_FALSE(src.isContinuous());
+    src.at<float>(0, 0, 0) = 0.0f;
+    src.at<float>(0, 0, 1) = -0.0f;
+    src.at<float>(0, 1, 0) = std::ldexp(1.0f, -24);
+    src.at<float>(0, 1, 1) = 65504.0f;
+    src.at<float>(0, 2, 0) = std::numeric_limits<float>::infinity();
+    src.at<float>(0, 2, 1) = std::numeric_limits<float>::quiet_NaN();
+
+    Mat scalar_half;
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+        convertFp16(src, scalar_half);
+    }
+
+    DispatchModeGuard guard(cpu::DispatchMode::Auto);
+    Mat ui_half;
+    convertFp16(src, ui_half);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    expect_mat_bytes_equal(ui_half, scalar_half);
+
+    Mat scalar_roundtrip;
+    {
+        DispatchModeGuard scalar_guard(cpu::DispatchMode::ScalarOnly);
+        convertFp16(scalar_half, scalar_roundtrip);
+    }
+    Mat ui_roundtrip;
+    convertFp16(ui_half, ui_roundtrip);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    expect_mat_bytes_equal(ui_roundtrip, scalar_roundtrip);
+
+    Mat alias = src.clone();
+    convertFp16(alias, alias);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    expect_mat_bytes_equal(alias, scalar_half);
+}
+
+TEST(MathOpsContract_TEST, ui_math_kernels_keep_uncovered_types_and_short_rows_scalar)
+{
+    DispatchModeGuard guard(cpu::DispatchMode::Auto);
+    Mat out;
+
+    Mat short_f32({1, 3}, CV_32FC1);
+    short_f32.setTo(Scalar::all(1.5));
+    convertFp16(short_f32, out);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+
+    Mat short_f32_b({1, 3}, CV_32FC1);
+    short_f32_b.setTo(Scalar::all(2.0));
+    out.release();
+    scaleAdd(short_f32, 0.75, short_f32_b, out);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+
+    Mat wide_u8({2, 37}, CV_8UC3);
+    Mat wide_u8_b({2, 37}, CV_8UC3);
+    wide_u8.setTo(Scalar(1, 2, 3));
+    wide_u8_b.setTo(Scalar(4, 5, 6));
+    out.release();
+    scaleAdd(wide_u8, 2.0, wide_u8_b, out);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+
+    out.release();
+    convertScaleAbs(wide_u8, out, 1.25, 3.0);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+}
 
 TEST(MathOpsContract_TEST, scale_add_supports_multichannel_and_in_place)
 {

@@ -1,4 +1,5 @@
 #include "cvh.h"
+#include "cvh/core/detail/dispatch_control.h"
 #include "common/benchmark_common.h"
 #include "opencv_compare_backend.h"
 #include "opencv_compare_phase1_benchmark.h"
@@ -539,10 +540,13 @@ void append_core_compute_cases(const Args& args, std::vector<CompareRow>& rows)
                             output_bytes),
                         op_case.second + "/" + depth_case.second + "C" + std::to_string(channels) + "/" + shape_name);
 
+                    cvh::cpu::reset_last_dispatch_tag();
                     const double cvh_ms = measure_cvh_mat_ms(
                         [&]() { run_cvh_binary(op_case.first, a, b, dst); },
                         dst,
                         args);
+                    const cvh::cpu::DispatchTag cvh_dispatch_tag =
+                        cvh::cpu::last_dispatch_tag();
                     const double opencv_ms = bench_opencv_binary(
                         op_case.first,
                         shape.rows,
@@ -560,7 +564,9 @@ void append_core_compute_cases(const Args& args, std::vector<CompareRow>& rows)
                         "core_mat",
                         op_case.second,
                         "mat_mat_continuous",
-                        "headers_baseline",
+                        cvh_dispatch_tag == cvh::cpu::DispatchTag::Unknown
+                            ? "headers_baseline"
+                            : cvh::cpu::dispatch_tag_name(cvh_dispatch_tag),
                         depth_case.second,
                         channels,
                         shape_name,

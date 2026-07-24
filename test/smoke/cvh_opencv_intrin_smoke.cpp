@@ -6,6 +6,8 @@
 #error "cvh_opencv_intrin_smoke must be compiled with CVH_ENABLE_OPENCV_INTRIN=1"
 #endif
 
+static_assert(sizeof(cv::hfloat) == 2, "OpenCV UI half must use 16-bit storage");
+
 int main()
 {
     if (std::strcmp(cvh::detail::opencv_ui_backend_name(), "opencv_intrin") != 0)
