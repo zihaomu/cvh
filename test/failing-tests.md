@@ -1,7 +1,10 @@
 # 测试状态台账
 
 - 更新时间：2026-07-25
-- 当前状态：`cvh_test_core` 和 `cvh_test_imgproc` 均无失败、无 skip。
+- 当前状态：默认 UI-enabled 配置下，`cvh_test_core` 和
+  `cvh_test_imgproc` 均无失败、无 skip。UI-disabled CI 配置的 13 个 Core
+  架构条件 skip 由 `test/ci/header_gate_expectations.json` 显式固定；
+  Imgproc 在该配置下仍为 0 skip，并断言 scalar fallback。
 
 ## Core upstream 边界
 

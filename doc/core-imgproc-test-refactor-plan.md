@@ -6,10 +6,12 @@
 
 ## 0. 实施结果
 
-2026-07-25 已完成 T0～T6：
+2026-07-25 已完成 T0～T6，并完成后续设计 review 的 TDR-1～TDR-5：
 
-- `cvh_test_core`：204 个有效 GTest，204 pass，0 fail，0 skip。
-- `cvh_test_imgproc`：183 个有效 GTest，183 pass，0 fail，0 skip。
+- UI-enabled `cvh_test_core`：209 个有效 GTest，209 pass，0 fail，0 skip。
+- UI-enabled `cvh_test_imgproc`：186 个有效 GTest，186 pass，0 fail，0 skip。
+- UI-disabled 配置运行相同的 209/186 个 GTest；Core 的 13 个既有 UI
+  架构条件用例按清单 skip，Imgproc 0 skip 并显式断言 scalar dispatch。
 - 原来的 1 个无行为断言 header GTest 已删除；35 个
   `include/cvh/imgproc/*.h` 改为独立翻译单元 compile smoke。
 - core 从三个未接线 legacy 文件中收编 6 个有独立观察点的用例；inference
@@ -19,7 +21,12 @@
   `test/core/data/generators/generate_fixtures.py` 生成；重复生成 hash 不变。
 - CMake 配置期审计 core/imgproc 的 `*_test.cpp` 注册完整性，规范 target 和
   CTest 入口各只有一个。
-- 全新临时构建目录完成默认全量构建，16/16 个 CTest 入口通过。
+- 全新构建目录完成默认 `all` 构建：UI-enabled 17/17 个 CTest 入口通过，
+  UI-disabled 14/14 个 CTest 入口通过。
+- Core 的 13 个顶层公共头和 Imgproc 的 35 个顶层公共头均由独立翻译单元
+  compile smoke 保护，配置期校验 header/source inventory。
+- Core/Imgproc GTest XML、完整 CTest 名单和 executed/failed/skipped 数量由
+  按配置和架构维护的 CI expectation 自动校验。
 - public contract 与 internal dispatch、upstream port、integration 分层完成；
   `test/core` 和 `test/imgproc` 文件名中不再出现 `phase1` 或 `_contract_test`。
 - core/imgproc fixture 与 upstream manifest 已移除本机绝对路径，并增加 consumer
@@ -444,14 +451,14 @@ UI/scalar 或 dispatch 语义验证。这些 case 有价值，不能在整理时
 | generated binary cases | 与当前 arithmetic/array 测试比较，独有边界迁入 `operations/arithmetic_test.cpp` |
 | transpose fixture cases | 独有排列迁入 `operations/transpose_test.cpp` |
 | GEMM generated/FP16/INT8 cases | 修复 oracle 后迁入 `operations/gemm_test.cpp` |
-| softmax/SiLU/RMSNorm/RoPE | 作为非 OpenCV 扩展明确放入 `operations/inference_test.cpp` |
+| softmax/SiLU/RMSNorm/RoPE | 产品边界决定为非目标；删除无实现的公共声明，不建立伪合同测试 |
 | `loadNpy` | 测试的是 test support，不是 Mat；若保留，迁到共享 support 的独立测试 |
 | 打印、空调用、重复用例 | 删除，并记录替代用例或无观察点原因 |
 | `system_test.cpp` 空用例 | 删除；如需系统层测试，新增验证异常 code/message 的 `runtime/error_test.cpp` |
 
-`softmax/SiLU/RMSNorm/RoPE` 是否仍属于项目公开产品范围，需要与
-`include/cvh/core/readme.md` 的非主线说明保持一致；测试目录不能用含糊的
-`kernel_op` 掩盖这个边界。
+`softmax/SiLU/RMSNorm/RoPE` 已决定不属于项目公开产品范围，与
+`include/cvh/core/readme.md` 的非主线说明保持一致；声明已从安装头移除，
+测试目录不再用含糊的 `kernel_op` 掩盖这个边界。
 
 ## 7. Imgproc 文件迁移建议
 
@@ -593,8 +600,9 @@ int main() { return 0; }
 - 整数和 bit-exact API 优先 `EXPECT_EQ`/逐元素精确比较。
 - 浮点必须写清 absolute/relative tolerance，不能统一使用一个拍脑袋 epsilon。
 - NaN、Inf、signed zero、饱和、舍入模式单独覆盖。
-- 比较 helper 在失败时输出 case、shape、type、最大 absolute/relative error
-  和首个错误位置。
+- 比较 helper 对每个 scalar 独立应用 absolute-or-relative 规则，显式处理
+  NaN/Inf/signed zero，并在失败时输出 case、首个错误位置、实际/期望值及
+  absolute/relative error。
 
 ### 9.3 Skip 规则
 
@@ -716,7 +724,7 @@ README 和 failing-tests 文档由 manifest 生成或只链接 manifest，不再
 - 将 GEMM、reduction、layout 新增的 UI/scalar 与 dispatch tag case 迁入
   `internal/`，保持原有输入矩阵和 oracle 不变。
 - 合并两个已有 GEMM 来源并去重。
-- 明确 inference 扩展算子的产品边界。
+- inference 扩展算子的产品边界已明确为非目标，并删除声明-only API。
 
 门槛：
 
@@ -810,18 +818,18 @@ ownership/ROI、in-place、border、remap 和 filter 路径。
 
 ## 12. 完成定义
 
-- [ ] `test/core` 和 `test/imgproc` 的文件、目录和 suite 名不含实施阶段标签。
-- [ ] 每个 `*_test.cpp` 被一个且仅一个活动 target 收录。
-- [ ] `cvh_test_core` 和 `cvh_test_imgproc` 从新 build 目录构建并通过。
-- [ ] 不再重复注册 core CTest。
-- [ ] 当前所有有效 case 都有迁移映射；删除项有替代或删除理由。
-- [ ] 默认运行没有设计性永久 skip；非目标只留 manifest。
-- [ ] 公共合同测试不 include `detail` 头。
-- [ ] 每个测试都有行为断言，compile smoke 使用独立翻译单元。
-- [ ] 所有保留 fixture 有 generator、hash、oracle 和 consumer。
-- [ ] manifest 不含本机绝对路径。
-- [ ] `cvtColor`、Mat、array 等大文件按稳定职责拆分。
-- [ ] `test/readme.md`、模块 README、CMake 和 upstream manifest 一致。
+- [x] `test/core` 和 `test/imgproc` 的文件、目录和 suite 名不含实施阶段标签。
+- [x] 每个 `*_test.cpp` 被一个且仅一个活动 target 收录。
+- [x] `cvh_test_core` 和 `cvh_test_imgproc` 从新 build 目录构建并通过。
+- [x] 不再重复注册 core CTest。
+- [x] 当前所有有效 case 都有迁移映射；删除项有替代或删除理由。
+- [x] 默认运行没有设计性永久 skip；非目标只留 manifest。
+- [x] 公共合同测试不 include `detail` 头。
+- [x] 每个测试都有行为断言，compile smoke 使用独立翻译单元。
+- [x] 所有保留 fixture 有 generator、hash、oracle 和 consumer。
+- [x] manifest 不含本机绝对路径。
+- [x] `cvtColor`、Mat、array 等大文件按稳定职责拆分。
+- [x] `test/readme.md`、模块 README、CMake 和 upstream manifest 一致。
 
 ## 13. 提交策略
 

@@ -40,3 +40,66 @@ function(cvh_assert_all_test_sources_registered module_root)
             "Registered:\n  ${registered_text}")
     endif()
 endfunction()
+
+function(cvh_assert_public_header_compile_smoke header_root)
+    cmake_parse_arguments(CVH "" "" "HEADERS;SOURCES" ${ARGN})
+
+    file(GLOB discovered_headers
+        CONFIGURE_DEPENDS
+        "${header_root}/*.h"
+    )
+    list(FILTER discovered_headers EXCLUDE REGEX "\\.inl\\.h$")
+
+    set(registered_headers)
+    set(expected_sources)
+    foreach(header IN LISTS CVH_HEADERS)
+        if(IS_ABSOLUTE "${header}")
+            set(absolute_header "${header}")
+        else()
+            get_filename_component(
+                absolute_header
+                "${header}"
+                ABSOLUTE
+                BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+            )
+        endif()
+        list(APPEND registered_headers "${absolute_header}")
+
+        get_filename_component(header_name "${absolute_header}" NAME_WE)
+        list(APPEND expected_sources
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/smoke/core_headers/${header_name}_compile.cpp"
+        )
+    endforeach()
+    list(APPEND expected_sources
+        "${CMAKE_CURRENT_SOURCE_DIR}/test/smoke/core_headers/main.cpp"
+    )
+
+    set(registered_sources)
+    foreach(source IN LISTS CVH_SOURCES)
+        if(IS_ABSOLUTE "${source}")
+            set(absolute_source "${source}")
+        else()
+            get_filename_component(
+                absolute_source
+                "${source}"
+                ABSOLUTE
+                BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
+            )
+        endif()
+        list(APPEND registered_sources "${absolute_source}")
+    endforeach()
+
+    list(SORT discovered_headers)
+    list(SORT registered_headers)
+    if(NOT "${discovered_headers}" STREQUAL "${registered_headers}")
+        message(FATAL_ERROR
+            "Core public header inventory does not match include/cvh/core/*.h")
+    endif()
+
+    list(SORT expected_sources)
+    list(SORT registered_sources)
+    if(NOT "${expected_sources}" STREQUAL "${registered_sources}")
+        message(FATAL_ERROR
+            "Core public header compile-smoke source inventory is incomplete")
+    endif()
+endfunction()

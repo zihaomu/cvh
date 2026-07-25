@@ -5,7 +5,8 @@
 #ifndef CVH_SATURATE_H
 #define CVH_SATURATE_H
 
-#include "mat.h"
+#include "define.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <climits>

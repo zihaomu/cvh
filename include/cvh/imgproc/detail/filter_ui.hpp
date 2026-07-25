@@ -592,6 +592,10 @@ inline bool spatial_gradient_u8_c1(const Mat& src,
     }
     const int rows = src.size.p[0];
     const int cols = src.size.p[1];
+    if (cols < 10)
+    {
+        return false;
+    }
     dx.create(src.shape(), CV_16SC1);
     dy.create(src.shape(), CV_16SC1);
     const bool do_parallel =

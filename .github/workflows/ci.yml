@@ -16,26 +16,45 @@ permissions:
   contents: read
 
 jobs:
-  lite_all:
+  headers_all:
+    name: Header-only (${{ matrix.profile }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - opencv_intrin: ON
+            profile: ui-on
+          - opencv_intrin: OFF
+            profile: ui-off
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run complete header-only gate
+        env:
+          CVH_CI_OPENCV_INTRIN: ${{ matrix.opencv_intrin }}
+        run: ./scripts/ci_headers_all.sh
+
+      - name: Upload machine-readable test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: header-test-reports-${{ matrix.profile }}
+          path: build-ci-headers-${{ matrix.profile }}/test-reports/*.xml
+          if-no-files-found: error
+
+  native_all:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Lite Full Test Suite (core + imgproc)
-        run: ./scripts/ci_lite_all.sh
-
-  full_all:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Full Full Test Suite (core + imgproc)
-        run: ./scripts/ci_full_all.sh
+      - name: Run native-backend compatibility suite
+        run: ./scripts/ci_native_all.sh
 
   opencv_compare:
-    needs: [lite_all, full_all]
+    needs: [headers_all, native_all]
     if: >
       (github.event_name == 'pull_request' &&
        contains(github.event.pull_request.labels.*.name, 'ci/run-opencv-compare')) ||

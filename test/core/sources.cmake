@@ -33,6 +33,7 @@ set(CVH_CORE_TEST_SOURCES
     test/core/operations/transpose_test.cpp
     test/core/runtime/error_test.cpp
     test/core/runtime/parallel_for_test.cpp
+    test/core/support/floating_point_test_utils_test.cpp
     test/core/support/npy_reader_test.cpp
     test/core/types/geometry_test.cpp
     test/core/types/scalar_test.cpp

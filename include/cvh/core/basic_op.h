@@ -111,25 +111,6 @@ void merge(const std::vector<Mat>& src, Mat& dst);
 void split(const Mat& src, Mat* dst);
 void split(const Mat& src, std::vector<Mat>& dst);
 
-// Apply softmax along the last dimension.
-void softmax(const Mat& input, Mat& output);
-Mat softmax(const Mat& input);
-
-// Apply SiLU elementwise: x / (1 + exp(-x))
-void silu(const Mat& input, Mat& output);
-Mat silu(const Mat& input);
-
-// Apply RMSNorm along the last dimension using 1D weight.
-void rmsnorm(const Mat& input, const Mat& weight, Mat& output, float eps = 1e-6f);
-Mat rmsnorm(const Mat& input, const Mat& weight, float eps = 1e-6f);
-void rmsnorm(const Mat& input, const Mat& weight, const Mat& weight_scales, Mat& output, float eps = 1e-6f);
-Mat rmsnorm(const Mat& input, const Mat& weight, const Mat& weight_scales, float eps = 1e-6f);
-
-// Apply rotary positional embedding to Q/K in place.
-// q shape: [seq_len, head_count, head_dim]
-// k shape: [seq_len, head_count_kv, head_dim]
-void rope(Mat& q, Mat& k, int start_pos = 0, float freq_base = 10000.0f);
-
 // Transpose Mat last two dimension, if the Mat is one dimension, add the axis to the shape.
 Mat transpose(const Mat& input);
 

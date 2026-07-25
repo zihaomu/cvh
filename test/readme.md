@@ -27,9 +27,21 @@ cmake --build build-tests --target cvh_test_core cvh_test_imgproc -j
 ctest --test-dir build-tests --output-on-failure
 ```
 
-规范测试 target 只有 `cvh_test_core` 和 `cvh_test_imgproc`，不再注册同一二进制的
-重复别名。`test/core/sources.cmake` 与 `test/imgproc/sources.cmake` 显式列出
-source；配置阶段会审计遗漏、重复和不存在的 `*_test.cpp`。
+规范模块级 GTest target 只有 `cvh_test_core` 和 `cvh_test_imgproc`，不再注册同一
+二进制的重复别名。`test/core/sources.cmake` 与
+`test/imgproc/sources.cmake` 显式列出 source；配置阶段会审计遗漏、重复和
+不存在的 `*_test.cpp`。
+
+完整发布门禁应运行两种 header 配置：
+
+```bash
+./scripts/ci_headers_all.sh
+CVH_CI_OPENCV_INTRIN=OFF ./scripts/ci_headers_all.sh
+```
+
+两者都构建默认 `all` 目标并运行完整 CTest；Core/Imgproc 的 XML、CTest
+inventory 和 executed/failed/skipped 数量由
+`test/ci/header_gate_expectations.json` 校验。
 
 ## 维护约束
 

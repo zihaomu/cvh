@@ -25,6 +25,7 @@ if(NOT "${CVH_BUILD_FULL_BACKEND}" STREQUAL "")
 endif()
 option(CVH_BUILD_TESTS "Build all test targets (smoke + core)" ON)
 option(CVH_BUILD_BENCHMARKS "Build benchmark targets" ON)
+option(CVH_ENABLE_OPENCV_INTRIN "Enable OpenCV Universal Intrinsics in cvh headers" ON)
 option(CVH_USE_OPENMP "Internal/development-only: enable OpenMP in legacy .cpp experiments when available" ON)
 option(CVH_ENABLE_OPENCV_COMPARE "Build cvh vs OpenCV compare benchmark target" OFF)
 set(CVH_OPENCV_BENCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/benchmark/opencv_compare/opencv-bench-slim" CACHE PATH "Path to opencv-bench-slim source repository")
@@ -56,6 +57,13 @@ target_include_directories(cvh_headers INTERFACE
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_compile_features(cvh_headers INTERFACE cxx_std_17)
+if(NOT CVH_ENABLE_OPENCV_INTRIN)
+    target_compile_definitions(cvh_headers INTERFACE
+        CVH_ENABLE_OPENCV_INTRIN=0
+    )
+endif()
+message(STATUS
+    "cvh_headers: OpenCV Universal Intrinsics=${CVH_ENABLE_OPENCV_INTRIN}")
 
 set(CVH_OPENCV_INTRIN_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/cvh/3rdparty/opencv_intrin")
 target_include_directories(cvh_headers INTERFACE
@@ -222,6 +230,7 @@ if(CVH_BUILD_TESTS)
     include(test/cmake/CvhTest.cmake)
     include(test/core/sources.cmake)
     include(test/imgproc/sources.cmake)
+    include(test/smoke/core_headers/sources.cmake)
     include(test/smoke/imgproc_headers/sources.cmake)
 
     cvh_assert_all_test_sources_registered(
@@ -232,6 +241,11 @@ if(CVH_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/test/imgproc"
         SOURCES ${CVH_IMGPROC_TEST_SOURCES}
     )
+    cvh_assert_public_header_compile_smoke(
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/cvh/core"
+        HEADERS ${CVH_CORE_PUBLIC_HEADERS}
+        SOURCES ${CVH_CORE_HEADER_COMPILE_SMOKE_SOURCES}
+    )
 
     add_executable(cvh_header_compile_smoke test/smoke/cvh_header_compile_smoke.cpp)
     target_link_libraries(cvh_header_compile_smoke PRIVATE cvh::headers)
@@ -241,6 +255,12 @@ if(CVH_BUILD_TESTS)
         test/smoke/cvh_core_header_odr_peer.cpp
     )
     target_link_libraries(cvh_core_header_odr_smoke PRIVATE cvh::headers)
+
+    add_executable(cvh_core_headers_compile_smoke
+        ${CVH_CORE_HEADER_COMPILE_SMOKE_SOURCES}
+    )
+    target_link_libraries(cvh_core_headers_compile_smoke PRIVATE cvh::headers)
+    target_compile_features(cvh_core_headers_compile_smoke PRIVATE cxx_std_17)
 
     add_executable(cvh_imgproc_header_odr_smoke
         test/smoke/cvh_imgproc_header_odr_main.cpp
@@ -260,12 +280,15 @@ if(CVH_BUILD_TESTS)
         ${CVH_OPENCV_INTRIN_INCLUDE_DIR}
     )
     target_compile_features(cvh_include_only_smoke PRIVATE cxx_std_17)
+    if(NOT CVH_ENABLE_OPENCV_INTRIN)
+        target_compile_definitions(
+            cvh_include_only_smoke
+            PRIVATE CVH_ENABLE_OPENCV_INTRIN=0
+        )
+    endif()
 
     add_executable(cvh_mode_lite_smoke test/smoke/cvh_mode_smoke.cpp)
     target_link_libraries(cvh_mode_lite_smoke PRIVATE cvh::headers)
-
-    add_executable(cvh_headers_fast_smoke test/smoke/cvh_headers_fast_smoke.cpp)
-    target_link_libraries(cvh_headers_fast_smoke PRIVATE cvh::headers_fast)
 
     add_executable(cvh_lite_pipeline_smoke test/smoke/cvh_lite_pipeline_smoke.cpp)
     target_link_libraries(cvh_lite_pipeline_smoke PRIVATE cvh::headers)
@@ -273,25 +296,65 @@ if(CVH_BUILD_TESTS)
     add_executable(cvh_resize_dispatch_lite_smoke test/smoke/cvh_resize_dispatch_smoke.cpp)
     target_link_libraries(cvh_resize_dispatch_lite_smoke PRIVATE cvh::headers)
 
-    add_executable(cvh_opencv_intrin_smoke test/smoke/cvh_opencv_intrin_smoke.cpp)
-    target_link_libraries(cvh_opencv_intrin_smoke PRIVATE cvh::headers)
-    target_compile_definitions(cvh_opencv_intrin_smoke PRIVATE CV_FORCE_SIMD128_CPP=1)
+    if(CVH_ENABLE_OPENCV_INTRIN)
+        add_executable(cvh_headers_fast_smoke test/smoke/cvh_headers_fast_smoke.cpp)
+        target_link_libraries(cvh_headers_fast_smoke PRIVATE cvh::headers_fast)
 
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64|i386|i686|x86|X86)$")
-        add_executable(cvh_opencv_intrin_x86_smoke test/smoke/cvh_opencv_intrin_x86_smoke.cpp)
-        target_link_libraries(cvh_opencv_intrin_x86_smoke PRIVATE cvh::headers_fast)
-        if(MSVC)
-            target_compile_options(cvh_opencv_intrin_x86_smoke PRIVATE /arch:AVX2)
-        else()
-            target_compile_options(cvh_opencv_intrin_x86_smoke PRIVATE -mavx2)
+        add_executable(cvh_opencv_intrin_smoke test/smoke/cvh_opencv_intrin_smoke.cpp)
+        target_link_libraries(cvh_opencv_intrin_smoke PRIVATE cvh::headers)
+        target_compile_definitions(cvh_opencv_intrin_smoke PRIVATE CV_FORCE_SIMD128_CPP=1)
+
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64|i386|i686|x86|X86)$")
+            add_executable(cvh_opencv_intrin_x86_smoke test/smoke/cvh_opencv_intrin_x86_smoke.cpp)
+            target_link_libraries(cvh_opencv_intrin_x86_smoke PRIVATE cvh::headers_fast)
+            if(MSVC)
+                target_compile_options(cvh_opencv_intrin_x86_smoke PRIVATE /arch:AVX2)
+            else()
+                target_compile_options(cvh_opencv_intrin_x86_smoke PRIVATE -mavx2)
+            endif()
+
+            include(CheckCXXSourceRuns)
+            set(cvh_saved_required_flags "${CMAKE_REQUIRED_FLAGS}")
+            if(MSVC)
+                set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} /arch:AVX2")
+            else()
+                set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -mavx2")
+            endif()
+            check_cxx_source_runs(
+                [=[
+                    #include <immintrin.h>
+                    int main()
+                    {
+                        alignas(32) int values[8] = {};
+                        const __m256i vector = _mm256_set1_epi32(7);
+                        _mm256_store_si256(
+                            reinterpret_cast<__m256i*>(values),
+                            vector);
+                        return values[7] == 7 ? 0 : 1;
+                    }
+                ]=]
+                CVH_X86_AVX2_RUNTIME_SUPPORTED
+            )
+            set(CMAKE_REQUIRED_FLAGS "${cvh_saved_required_flags}")
+            message(STATUS
+                "cvh_opencv_intrin_x86_smoke: runtime AVX2=${CVH_X86_AVX2_RUNTIME_SUPPORTED}")
         endif()
+
+        add_executable(cvh_cvtcolor_opencv_intrin_smoke test/smoke/cvh_cvtcolor_opencv_intrin_smoke.cpp)
+        target_link_libraries(cvh_cvtcolor_opencv_intrin_smoke PRIVATE cvh::headers_fast)
+
+        add_executable(cvh_resize_opencv_intrin_smoke test/smoke/cvh_resize_opencv_intrin_smoke.cpp)
+        target_link_libraries(cvh_resize_opencv_intrin_smoke PRIVATE cvh::headers_fast)
+    else()
+        add_executable(
+            cvh_opencv_intrin_disabled_smoke
+            test/smoke/cvh_opencv_intrin_disabled_smoke.cpp
+        )
+        target_link_libraries(
+            cvh_opencv_intrin_disabled_smoke
+            PRIVATE cvh::headers
+        )
     endif()
-
-    add_executable(cvh_cvtcolor_opencv_intrin_smoke test/smoke/cvh_cvtcolor_opencv_intrin_smoke.cpp)
-    target_link_libraries(cvh_cvtcolor_opencv_intrin_smoke PRIVATE cvh::headers_fast)
-
-    add_executable(cvh_resize_opencv_intrin_smoke test/smoke/cvh_resize_opencv_intrin_smoke.cpp)
-    target_link_libraries(cvh_resize_opencv_intrin_smoke PRIVATE cvh::headers_fast)
 
     add_executable(cvh_test_imgcodecs
         test/imgcodecs/imgcodecs_format_test.cpp
@@ -391,19 +454,39 @@ if(CVH_BUILD_TESTS)
     if(BUILD_TESTING)
         add_test(NAME cvh_header_compile_smoke COMMAND cvh_header_compile_smoke)
         add_test(NAME cvh_core_header_odr_smoke COMMAND cvh_core_header_odr_smoke)
+        add_test(NAME cvh_core_headers_compile_smoke COMMAND cvh_core_headers_compile_smoke)
         add_test(NAME cvh_imgproc_header_odr_smoke COMMAND cvh_imgproc_header_odr_smoke)
         add_test(NAME cvh_imgproc_headers_compile_smoke COMMAND cvh_imgproc_headers_compile_smoke)
         add_test(NAME cvh_include_only_smoke COMMAND cvh_include_only_smoke)
         add_test(NAME cvh_mode_lite_smoke COMMAND cvh_mode_lite_smoke)
-        add_test(NAME cvh_headers_fast_smoke COMMAND cvh_headers_fast_smoke)
         add_test(NAME cvh_lite_pipeline_smoke COMMAND cvh_lite_pipeline_smoke)
         add_test(NAME cvh_resize_dispatch_lite_smoke COMMAND cvh_resize_dispatch_lite_smoke)
-        add_test(NAME cvh_opencv_intrin_smoke COMMAND cvh_opencv_intrin_smoke)
-        if(TARGET cvh_opencv_intrin_x86_smoke)
-            add_test(NAME cvh_opencv_intrin_x86_smoke COMMAND cvh_opencv_intrin_x86_smoke)
+        if(CVH_ENABLE_OPENCV_INTRIN)
+            add_test(NAME cvh_headers_fast_smoke COMMAND cvh_headers_fast_smoke)
+            add_test(NAME cvh_opencv_intrin_smoke COMMAND cvh_opencv_intrin_smoke)
+            if(TARGET cvh_opencv_intrin_x86_smoke)
+                if("${CVH_X86_AVX2_RUNTIME_SUPPORTED}" STREQUAL "1")
+                    add_test(
+                        NAME cvh_opencv_intrin_x86_smoke
+                        COMMAND cvh_opencv_intrin_x86_smoke
+                    )
+                else()
+                    add_test(
+                        NAME cvh_opencv_intrin_x86_smoke
+                        COMMAND
+                            ${CMAKE_COMMAND} -E echo
+                            "cvh_opencv_intrin_x86_smoke: compile-only; runtime AVX2 unavailable"
+                    )
+                endif()
+            endif()
+            add_test(NAME cvh_cvtcolor_opencv_intrin_smoke COMMAND cvh_cvtcolor_opencv_intrin_smoke)
+            add_test(NAME cvh_resize_opencv_intrin_smoke COMMAND cvh_resize_opencv_intrin_smoke)
+        else()
+            add_test(
+                NAME cvh_opencv_intrin_disabled_smoke
+                COMMAND cvh_opencv_intrin_disabled_smoke
+            )
         endif()
-        add_test(NAME cvh_cvtcolor_opencv_intrin_smoke COMMAND cvh_cvtcolor_opencv_intrin_smoke)
-        add_test(NAME cvh_resize_opencv_intrin_smoke COMMAND cvh_resize_opencv_intrin_smoke)
         add_test(NAME cvh_test_imgcodecs COMMAND cvh_test_imgcodecs)
         add_test(NAME cvh_test_imgproc COMMAND cvh_test_imgproc)
         add_test(NAME cvh_test_highgui COMMAND cvh_test_highgui)
@@ -411,6 +494,10 @@ if(CVH_BUILD_TESTS)
         set_tests_properties(
             cvh_test_core
             PROPERTIES LABELS "core;unit"
+        )
+        set_tests_properties(
+            cvh_core_headers_compile_smoke
+            PROPERTIES LABELS "core;smoke"
         )
         set_tests_properties(
             cvh_test_imgproc

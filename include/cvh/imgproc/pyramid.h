@@ -956,6 +956,7 @@ inline void pyrDown(const Mat& src,
     {
         CV_Error(Error::StsBadSize, "pyrDown invalid destination size");
     }
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     const Mat source = src.data == dst.data ? src.clone() : src;
     dst.create(
         {output_rows, output_cols}, source.type());
@@ -992,6 +993,7 @@ inline void pyrUp(const Mat& src,
     {
         CV_Error(Error::StsBadSize, "pyrUp invalid destination size");
     }
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     const Mat source = src.data == dst.data ? src.clone() : src;
     dst.create(
         {output_rows, output_cols}, source.type());
@@ -1019,6 +1021,7 @@ inline void buildPyramid(const Mat& src,
             Error::StsOutOfRange,
             "buildPyramid maxlevel must be non-negative");
     }
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     dst.clear();
     dst.reserve(static_cast<size_t>(maxlevel + 1));
     dst.push_back(src.clone());

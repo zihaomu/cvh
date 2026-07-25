@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "ui-on": {
+      "arm64": {
+        "ctest": [
+          "cvh_header_compile_smoke",
+          "cvh_core_header_odr_smoke",
+          "cvh_core_headers_compile_smoke",
+          "cvh_imgproc_header_odr_smoke",
+          "cvh_imgproc_headers_compile_smoke",
+          "cvh_include_only_smoke",
+          "cvh_mode_lite_smoke",
+          "cvh_headers_fast_smoke",
+          "cvh_lite_pipeline_smoke",
+          "cvh_resize_dispatch_lite_smoke",
+          "cvh_opencv_intrin_smoke",
+          "cvh_cvtcolor_opencv_intrin_smoke",
+          "cvh_resize_opencv_intrin_smoke",
+          "cvh_test_imgcodecs",
+          "cvh_test_imgproc",
+          "cvh_test_highgui",
+          "cvh_test_core"
+        ],
+        "gtest": {
+          "core": {
+            "executed": 209,
+            "failed": 0,
+            "skipped": 0
+          },
+          "imgproc": {
+            "executed": 186,
+            "failed": 0,
+            "skipped": 0
+          }
+        }
+      },
+      "x86_64": {
+        "ctest": [
+          "cvh_header_compile_smoke",
+          "cvh_core_header_odr_smoke",
+          "cvh_core_headers_compile_smoke",
+          "cvh_imgproc_header_odr_smoke",
+          "cvh_imgproc_headers_compile_smoke",
+          "cvh_include_only_smoke",
+          "cvh_mode_lite_smoke",
+          "cvh_headers_fast_smoke",
+          "cvh_lite_pipeline_smoke",
+          "cvh_resize_dispatch_lite_smoke",
+          "cvh_opencv_intrin_smoke",
+          "cvh_opencv_intrin_x86_smoke",
+          "cvh_cvtcolor_opencv_intrin_smoke",
+          "cvh_resize_opencv_intrin_smoke",
+          "cvh_test_imgcodecs",
+          "cvh_test_imgproc",
+          "cvh_test_highgui",
+          "cvh_test_core"
+        ],
+        "gtest": {
+          "core": {
+            "executed": 209,
+            "failed": 0,
+            "skipped": 0
+          },
+          "imgproc": {
+            "executed": 186,
+            "failed": 0,
+            "skipped": 0
+          }
+        }
+      }
+    },
+    "ui-off": {
+      "arm64": {
+        "ctest": [
+          "cvh_header_compile_smoke",
+          "cvh_core_header_odr_smoke",
+          "cvh_core_headers_compile_smoke",
+          "cvh_imgproc_header_odr_smoke",
+          "cvh_imgproc_headers_compile_smoke",
+          "cvh_include_only_smoke",
+          "cvh_mode_lite_smoke",
+          "cvh_lite_pipeline_smoke",
+          "cvh_resize_dispatch_lite_smoke",
+          "cvh_opencv_intrin_disabled_smoke",
+          "cvh_test_imgcodecs",
+          "cvh_test_imgproc",
+          "cvh_test_highgui",
+          "cvh_test_core"
+        ],
+        "gtest": {
+          "core": {
+            "executed": 209,
+            "failed": 0,
+            "skipped": 13
+          },
+          "imgproc": {
+            "executed": 186,
+            "failed": 0,
+            "skipped": 0
+          }
+        }
+      },
+      "x86_64": {
+        "ctest": [
+          "cvh_header_compile_smoke",
+          "cvh_core_header_odr_smoke",
+          "cvh_core_headers_compile_smoke",
+          "cvh_imgproc_header_odr_smoke",
+          "cvh_imgproc_headers_compile_smoke",
+          "cvh_include_only_smoke",
+          "cvh_mode_lite_smoke",
+          "cvh_lite_pipeline_smoke",
+          "cvh_resize_dispatch_lite_smoke",
+          "cvh_opencv_intrin_disabled_smoke",
+          "cvh_test_imgcodecs",
+          "cvh_test_imgproc",
+          "cvh_test_highgui",
+          "cvh_test_core"
+        ],
+        "gtest": {
+          "core": {
+            "executed": 209,
+            "failed": 0,
+            "skipped": 13
+          },
+          "imgproc": {
+            "executed": 186,
+            "failed": 0,
+            "skipped": 0
+          }
+        }
+      }
+    }
+  }
+}

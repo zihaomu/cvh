@@ -115,6 +115,10 @@ inline bool run_u8_sorting_network(const Mat& src,
     const int vector_begin = radius * channels;
     const int vector_end = (cols - radius) * channels;
     const int lanes = cv::VTraits<cv::v_uint8>::vlanes();
+    if (vector_begin > vector_end - lanes)
+    {
+        return false;
+    }
     auto compare = [](cv::v_uint8& first, cv::v_uint8& second) {
         const cv::v_uint8 original = first;
         first = cv::v_min(first, second);
@@ -341,6 +345,7 @@ inline void medianBlur(const Mat& src, Mat& dst, int ksize)
         CV_Error(Error::StsBadSize, "medianBlur CV_32F supports ksize 3 or 5");
     }
 
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     const Mat source = src.data == dst.data ? src.clone() : src;
     dst.create(source.shape(), source.type());
     if (source.depth() == CV_8U &&

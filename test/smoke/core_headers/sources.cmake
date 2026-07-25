@@ -1,0 +1,32 @@
+set(CVH_CORE_PUBLIC_HEADERS
+    include/cvh/core/array.h
+    include/cvh/core/basic_op.h
+    include/cvh/core/context.h
+    include/cvh/core/define.h
+    include/cvh/core/gemm.h
+    include/cvh/core/mat.h
+    include/cvh/core/math.h
+    include/cvh/core/parallel.h
+    include/cvh/core/reduce.h
+    include/cvh/core/saturate.h
+    include/cvh/core/system.h
+    include/cvh/core/types.h
+    include/cvh/core/utils.h
+)
+
+set(CVH_CORE_HEADER_COMPILE_SMOKE_SOURCES
+    test/smoke/core_headers/main.cpp
+    test/smoke/core_headers/array_compile.cpp
+    test/smoke/core_headers/basic_op_compile.cpp
+    test/smoke/core_headers/context_compile.cpp
+    test/smoke/core_headers/define_compile.cpp
+    test/smoke/core_headers/gemm_compile.cpp
+    test/smoke/core_headers/mat_compile.cpp
+    test/smoke/core_headers/math_compile.cpp
+    test/smoke/core_headers/parallel_compile.cpp
+    test/smoke/core_headers/reduce_compile.cpp
+    test/smoke/core_headers/saturate_compile.cpp
+    test/smoke/core_headers/system_compile.cpp
+    test/smoke/core_headers/types_compile.cpp
+    test/smoke/core_headers/utils_compile.cpp
+)

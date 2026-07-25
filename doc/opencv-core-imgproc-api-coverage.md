@@ -230,10 +230,11 @@ they matter for source compatibility.
 | `PCA`, `SVD`, `LDA` and solver classes | Missing | Dense linear algebra beyond the current GEMM subset is absent. |
 | `Affine`, `Quaternion`, `DualQuaternion` | Missing | Geometry helper classes are absent. |
 
-The cvh-only APIs `gemm_pack_b`, `softmax`, `silu`, `rmsnorm`, and `rope` do
-not increase upstream coverage. `gemm_pack_b` is implemented as a cvh
-extension; the neural-network helpers remain outside the accepted header-only
-contract unless they gain inline implementations and tests.
+The cvh-only `gemm_pack_b` API does not increase upstream coverage and is
+implemented as a tested cvh extension. The legacy declaration-only
+`softmax`, `silu`, `rmsnorm`, and `rope` APIs were removed from the installed
+surface because inference operators are outside the accepted header-only
+product boundary.
 
 ## 6. Imgproc Operation Families
 

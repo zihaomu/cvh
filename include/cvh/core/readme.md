@@ -58,6 +58,9 @@
 
 - 本目录不承接 `imgproc/imgcodecs` 的具体业务逻辑。
 - `softmax/rmsnorm/rope/silu` 这类偏推理算子不作为主线核心 API 扩展依据。
+- `include/cvh/core/*.h`（不含 `*.inl.h`）是可独立包含的公开入口清单，
+  由 `test/smoke/core_headers` 逐头编译验证。
+- `detail/**`、`simd/**` 和 `*.inl.h` 是实现片段，不承诺作为独立公开入口。
 
 ## 完成定义（DoD）
 

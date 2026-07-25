@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/cvh_header_only_contract.XXXXXX")"
+PARALLELISM="${CVH_CI_PARALLEL:-2}"
 
 cleanup() {
   if [[ "${CVH_KEEP_CONTRACT_TMP:-0}" != "1" ]]; then
@@ -62,16 +63,18 @@ cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
   -DCVH_BUILD_BENCHMARKS=OFF \
   >/dev/null
 
-cmake --build "${BUILD_DIR}" -j --target \
+cmake --build "${BUILD_DIR}" --parallel "${PARALLELISM}" --target \
   cvh_header_compile_smoke \
   cvh_core_header_odr_smoke \
+  cvh_core_headers_compile_smoke \
   cvh_imgproc_header_odr_smoke \
+  cvh_imgproc_headers_compile_smoke \
   cvh_include_only_smoke \
   cvh_headers_fast_smoke \
   >/dev/null
 
 ctest --test-dir "${BUILD_DIR}" --output-on-failure \
-  -R 'cvh_header_compile_smoke|cvh_core_header_odr_smoke|cvh_imgproc_header_odr_smoke|cvh_include_only_smoke|cvh_headers_fast_smoke'
+  -R 'cvh_header_compile_smoke|cvh_core_header_odr_smoke|cvh_core_headers_compile_smoke|cvh_imgproc_header_odr_smoke|cvh_imgproc_headers_compile_smoke|cvh_include_only_smoke|cvh_headers_fast_smoke'
 
 cmake --install "${BUILD_DIR}" --prefix "${INSTALL_DIR}" >/dev/null
 require_no_legacy_export "${INSTALL_DIR}/lib/cmake/opencv_header_only"
@@ -156,7 +159,8 @@ EOF
 cmake -S "${HEADERS_CONSUMER_DIR}" -B "${HEADERS_CONSUMER_DIR}/build" \
   -DCMAKE_PREFIX_PATH="${INSTALL_DIR}" \
   >/dev/null
-cmake --build "${HEADERS_CONSUMER_DIR}/build" -j >/dev/null
+cmake --build "${HEADERS_CONSUMER_DIR}/build" \
+  --parallel "${PARALLELISM}" >/dev/null
 "${HEADERS_CONSUMER_DIR}/build/headers_consumer"
 
 mkdir -p "${FAST_CONSUMER_DIR}"
@@ -226,7 +230,8 @@ EOF
 cmake -S "${FAST_CONSUMER_DIR}" -B "${FAST_CONSUMER_DIR}/build" \
   -DCMAKE_PREFIX_PATH="${INSTALL_DIR}" \
   >/dev/null
-cmake --build "${FAST_CONSUMER_DIR}/build" -j >/dev/null
+cmake --build "${FAST_CONSUMER_DIR}/build" \
+  --parallel "${PARALLELISM}" >/dev/null
 "${FAST_CONSUMER_DIR}/build/headers_fast_consumer"
 
 cmake -S "${ROOT_DIR}" -B "${LEGACY_ON_BUILD_DIR}" \

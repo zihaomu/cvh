@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cvh/core/detail/dispatch_control.h"
+#include "cvh/core/simd/opencv_ui.h"
 
 namespace cvh::test
 {
@@ -30,5 +31,22 @@ public:
 private:
     cpu::DispatchMode previous_;
 };
+
+inline constexpr bool fixed_width_opencv_ui_available()
+{
+#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    return true;
+#else
+    return false;
+#endif
+}
+
+inline cpu::DispatchTag expected_fixed_width_dispatch_tag()
+{
+    return fixed_width_opencv_ui_available()
+        ? cpu::DispatchTag::OpenCVUI
+        : cpu::DispatchTag::Scalar;
+}
 
 }  // namespace cvh::test

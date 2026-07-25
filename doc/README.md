@@ -23,6 +23,9 @@ This directory keeps only current project documents.
 - [core-imgproc-test-refactor-plan.md](core-imgproc-test-refactor-plan.md):
   source-of-truth, naming, layout, fixture, and validation plan for
   reorganizing the `core` and `imgproc` tests.
+- [test-design-review-findings.md](test-design-review-findings.md):
+  resolved correctness, public API, SIMD dispatch, header self-containment, and
+  CI findings from the 2026-07-25 test-suite review, including closure evidence.
 - [opencv-ui-kernel-migration-checklist.md](opencv-ui-kernel-migration-checklist.md):
   checklist for porting OpenCV Universal Intrinsics kernel fragments.
 - [opencv-universal-intrinsics-adapter-plan.md](opencv-universal-intrinsics-adapter-plan.md):

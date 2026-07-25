@@ -60,6 +60,7 @@ inline void convolve(const Mat& src,
     {
         CV_Error_(Error::StsBadArg, ("%s unsupported border", fn_name));
     }
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     const Mat source = src.data == dst.data ? src.clone() : src;
     const detail::SobelSamplingWindow window =
         detail::resolve_sobel_sampling_window(source, isolated);
@@ -232,6 +233,7 @@ inline void spatialGradient(const Mat& src,
             Error::StsBadArg,
             "spatialGradient supports ksize=3 and reflect101/replicate borders");
     }
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     const bool isolated = (borderType & BORDER_ISOLATED) != 0;
     const detail::SobelSamplingWindow window =
         detail::resolve_sobel_sampling_window(src, isolated);

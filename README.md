@@ -59,7 +59,12 @@ find_package(opencv_header_only CONFIG REQUIRED)
 target_link_libraries(app PRIVATE cvh::headers_fast)
 ```
 
-Users should not need to define `CVH_ENABLE_OPENCV_INTRIN`; it is enabled by default. Use `cvh::headers_fast` only when the platform fast-profile toggles are desired.
+OpenCV Universal Intrinsics are enabled by default. Project builds can select a
+fully scalar header configuration with
+`-DCVH_ENABLE_OPENCV_INTRIN=OFF`; the exported `cvh::headers` target then
+propagates `CVH_ENABLE_OPENCV_INTRIN=0`. The default `ON` configuration does not
+define the macro redundantly, so direct consumer overrides remain available.
+Use `cvh::headers_fast` only when the platform fast-profile toggles are desired.
 
 xsimd is not part of the accepted runtime path. P5.3 removed the legacy `.cpp` xsimd kernels, public adapter surface, tests, dispatch mode, and vendored xsimd tree.
 
@@ -84,7 +89,7 @@ Legend:
 | `core` | `copyTo(mask)`, channel routing, `flip/flipND`, `rotate`, `repeat`, concat, `broadcast`, `swap`, `borderInterpolate` | Supported | Byte-preserving 2D/N-D layout operations with explicit alias handling and documented trailing-dimension broadcast rules. | Scalar header baseline; copy/layout benchmark rows are established. |
 | `core` | `transpose`, `transposeND` | Supported | Header-only blocked transpose with continuous, ROI, C1/C3/C4 and non-square coverage. | Inherits the scalar header baseline. |
 | `core` | `gemm`, `gemm_pack_b` | Supported | FP32 activation with FP32/FP16 weights, 2D/broadcast NN and packed-B; INT8 scales remain limited to the existing NT path. | Inherits the scalar header baseline. |
-| `core` | `softmax`, `silu`, `rmsnorm`, `rope` | WIP | Declarations remain outside the accepted pure header-only operator contract. | No accepted fast path. |
+| `core` | `softmax`, `silu`, `rmsnorm`, `rope` | Out of scope | Legacy declaration-only inference APIs were removed from the installed surface. | Not applicable. |
 | `imgproc` | `resize` | Supported + fast path | `CV_8U` / `CV_32F`, `C1` / `C3` / `C4`, `INTER_NEAREST`, `INTER_NEAREST_EXACT`, `INTER_LINEAR`. | `CV_8UC1` exact 2x downsample with `INTER_LINEAR`. |
 | `imgproc` | `cvtColor` | Supported + fast path | `CV_8U` / `CV_32F` common BGR/RGB/GRAY/BGRA/RGBA conversions; `CV_8U` YUV encode/decode families. | `CV_8UC3` `BGR2GRAY` and `RGB2GRAY`. |
 | `imgproc` | `threshold` | Supported + fast path | `CV_8U` / `CV_32F` fixed thresholds; `OTSU` / `TRIANGLE` for `CV_8UC1`. | Row-parallel `CV_32F` fixed thresholds; other modes fall back. |
@@ -173,9 +178,12 @@ Header-only validation:
 
 ```bash
 ./scripts/ci_headers_all.sh
+CVH_CI_OPENCV_INTRIN=OFF ./scripts/ci_headers_all.sh
 ```
 
-`scripts/ci_lite_all.sh` remains as a deprecated compatibility wrapper for now.
+The two commands run the complete UI-enabled and UI-disabled gates,
+respectively. `scripts/ci_lite_all.sh` remains as a deprecated compatibility
+wrapper for now.
 
 Benchmark targets:
 

@@ -13,9 +13,14 @@ OpenCV upstream 兼容合同。
 - `upstream/`：已落地并执行的 OpenCV case 子集。
 - `support/`：测试专用 reference、guard 和比较工具。
 - `data/`：当前被消费的 NumPy fixture、manifest 和唯一生成入口。
+- `../smoke/core_headers/`：每个顶层 Core 公共 `.h` 的独立 C++17 编译单元。
 
 公开目录不 include `cvh/core/detail/*`。内部测试修改全局 dispatch mode 时必须通过
 RAII guard 恢复，避免失败断言污染后续用例。
+
+Core 公共头清单与 compile-smoke source 清单在配置期逐项比对。新增顶层公共
+`.h` 而未新增对应 `<name>_compile.cpp` 会直接使配置失败；`.inl.h`、`detail/`
+和 `simd/` 明确属于内部实现面。
 
 ## Fixture
 
