@@ -203,7 +203,9 @@ TEST(MathOpsContract_TEST, ui_convert_fp16_matches_scalar_in_both_directions)
     if (!math_detail::ui::enabled())
         GTEST_SKIP() << "OpenCV UI math kernels require NEON or SSE/AVX";
 
+#if CVH_ENABLE_OPENCV_INTRIN
     static_assert(sizeof(cv::hfloat) == 2, "UI half layout must remain 16-bit");
+#endif
     Mat parent({3, 23}, CV_32FC3);
     for (int row = 0; row < 3; ++row)
     {

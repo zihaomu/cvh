@@ -2,8 +2,11 @@
 #define CVH_IMGPROC_KERNELS_H
 
 #include "detail/common.h"
+#include "cvh/core/detail/dispatch_control.h"
+#include "cvh/core/simd/opencv_ui.h"
 
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 namespace cvh
@@ -141,7 +144,11 @@ inline Mat getStructuringElement(int shape,
     }
 
     Mat result({ksize.height, ksize.width}, CV_8UC1);
-    result.setTo(Scalar::all(0));
+    std::memset(
+        result.data,
+        0,
+        static_cast<size_t>(ksize.height) *
+            static_cast<size_t>(ksize.width));
     const int radius_y = ksize.height / 2;
     const int center_x = ksize.width / 2;
     for (int y = 0; y < ksize.height; ++y)
@@ -183,9 +190,14 @@ inline Mat getStructuringElement(int shape,
                 end = std::min(ksize.width, center_x + dx + 1);
             }
         }
-        for (int x = start; x < end; ++x)
+        if (end > start)
         {
-            result.at<uchar>(y, x) = 1;
+            uchar* row =
+                result.data + static_cast<size_t>(y) * result.step(0);
+            std::memset(
+                row + start,
+                1,
+                static_cast<size_t>(end - start));
         }
     }
     return result;
@@ -293,13 +305,29 @@ inline void getDerivKernels(Mat& kx,
     ky.create(
         {static_cast<int>(values_y.size()), 1},
         CV_MAKETYPE(CV_MAT_DEPTH(ktype), 1));
-    for (size_t i = 0; i < values_x.size(); ++i)
+    if (CV_MAT_DEPTH(ktype) == CV_32F)
     {
-        kernel_detail::write_kernel_value(kx, static_cast<int>(i), 0, values_x[i]);
+        float* output_x = reinterpret_cast<float*>(kx.data);
+        float* output_y = reinterpret_cast<float*>(ky.data);
+        for (size_t i = 0; i < values_x.size(); ++i)
+        {
+            output_x[i] = static_cast<float>(values_x[i]);
+        }
+        for (size_t i = 0; i < values_y.size(); ++i)
+        {
+            output_y[i] = static_cast<float>(values_y[i]);
+        }
     }
-    for (size_t i = 0; i < values_y.size(); ++i)
+    else
     {
-        kernel_detail::write_kernel_value(ky, static_cast<int>(i), 0, values_y[i]);
+        std::copy(
+            values_x.begin(),
+            values_x.end(),
+            reinterpret_cast<double*>(kx.data));
+        std::copy(
+            values_y.begin(),
+            values_y.end(),
+            reinterpret_cast<double*>(ky.data));
     }
 }
 
@@ -338,19 +366,42 @@ inline Mat getGaborKernel(Size ksize,
     const double exponent_x = -0.5 / (sigma_x * sigma_x);
     const double exponent_y = -0.5 / (sigma_y * sigma_y);
     const double cosine_scale = 2.0 * CV_PI / lambd;
-    for (int y = -ymax; y <= ymax; ++y)
+    if (CV_MAT_DEPTH(ktype) == CV_32F)
     {
-        for (int x = -xmax; x <= xmax; ++x)
+        for (int y = -ymax; y <= ymax; ++y)
         {
-            const double rotated_x = x * cosine + y * sine;
-            const double rotated_y = -x * sine + y * cosine;
-            const double value =
-                std::exp(
-                    exponent_x * rotated_x * rotated_x +
-                    exponent_y * rotated_y * rotated_y) *
-                std::cos(cosine_scale * rotated_x + psi);
-            kernel_detail::write_kernel_value(
-                result, ymax - y, xmax - x, value);
+            float* output = reinterpret_cast<float*>(
+                result.data +
+                static_cast<size_t>(ymax - y) * result.step(0));
+            for (int x = -xmax; x <= xmax; ++x)
+            {
+                const double rotated_x = x * cosine + y * sine;
+                const double rotated_y = -x * sine + y * cosine;
+                output[xmax - x] = static_cast<float>(
+                    std::exp(
+                        exponent_x * rotated_x * rotated_x +
+                        exponent_y * rotated_y * rotated_y) *
+                    std::cos(cosine_scale * rotated_x + psi));
+            }
+        }
+    }
+    else
+    {
+        for (int y = -ymax; y <= ymax; ++y)
+        {
+            double* output = reinterpret_cast<double*>(
+                result.data +
+                static_cast<size_t>(ymax - y) * result.step(0));
+            for (int x = -xmax; x <= xmax; ++x)
+            {
+                const double rotated_x = x * cosine + y * sine;
+                const double rotated_y = -x * sine + y * cosine;
+                output[xmax - x] =
+                    std::exp(
+                        exponent_x * rotated_x * rotated_x +
+                        exponent_y * rotated_y * rotated_y) *
+                    std::cos(cosine_scale * rotated_x + psi);
+            }
         }
     }
     return result;
@@ -368,16 +419,116 @@ inline void createHanningWindow(Mat& dst, Size winSize, int type)
         CV_MAKETYPE(CV_MAT_DEPTH(type), 1));
     const double x_scale = 2.0 * CV_PI / (winSize.width - 1);
     const double y_scale = 2.0 * CV_PI / (winSize.height - 1);
-    for (int y = 0; y < winSize.height; ++y)
+    std::vector<double> x_weights(
+        static_cast<size_t>(winSize.width));
+    std::vector<double> y_weights(
+        static_cast<size_t>(winSize.height));
+    for (int x = 0; x <= (winSize.width - 1) / 2; ++x)
     {
-        const double y_weight = 0.5 * (1.0 - std::cos(y_scale * y));
+        const double weight = std::sqrt(
+            0.5 * (1.0 - std::cos(x_scale * x)));
+        x_weights[static_cast<size_t>(x)] = weight;
+        x_weights[static_cast<size_t>(winSize.width - 1 - x)] =
+            weight;
+    }
+    for (int y = 0; y <= (winSize.height - 1) / 2; ++y)
+    {
+        const double weight = std::sqrt(
+            0.5 * (1.0 - std::cos(y_scale * y)));
+        y_weights[static_cast<size_t>(y)] = weight;
+        y_weights[static_cast<size_t>(winSize.height - 1 - y)] =
+            weight;
+    }
+
+    bool used_ui = false;
+    if (dst.depth() == CV_32F)
+    {
+        std::vector<float> x_weights_f32(
+            static_cast<size_t>(winSize.width));
         for (int x = 0; x < winSize.width; ++x)
         {
-            const double x_weight = 0.5 * (1.0 - std::cos(x_scale * x));
-            kernel_detail::write_kernel_value(
-                dst, y, x, std::sqrt(x_weight * y_weight));
+            x_weights_f32[static_cast<size_t>(x)] =
+                static_cast<float>(
+                    x_weights[static_cast<size_t>(x)]);
+        }
+        for (int y = 0; y < winSize.height; ++y)
+        {
+            float* output = reinterpret_cast<float*>(
+                dst.data + static_cast<size_t>(y) * dst.step(0));
+            const float row_weight = static_cast<float>(
+                y_weights[static_cast<size_t>(y)]);
+            int x = 0;
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+            if (cpu::dispatch_mode() !=
+                cpu::DispatchMode::ScalarOnly)
+            {
+                const int lanes =
+                    cv::VTraits<cv::v_float32>::vlanes();
+                const cv::v_float32 row_vector =
+                    cv::vx_setall_f32(row_weight);
+                for (; x + lanes <= winSize.width; x += lanes)
+                {
+                    cv::vx_store(
+                        output + x,
+                        cv::v_mul(
+                            cv::vx_load(
+                                x_weights_f32.data() + x),
+                            row_vector));
+                }
+                used_ui = used_ui || x > 0;
+            }
+#endif
+            for (; x < winSize.width; ++x)
+            {
+                output[x] =
+                    x_weights_f32[static_cast<size_t>(x)] *
+                    row_weight;
+            }
         }
     }
+    else
+    {
+        for (int y = 0; y < winSize.height; ++y)
+        {
+            double* output = reinterpret_cast<double*>(
+                dst.data + static_cast<size_t>(y) * dst.step(0));
+            const double row_weight =
+                y_weights[static_cast<size_t>(y)];
+            int x = 0;
+#if CVH_ENABLE_OPENCV_INTRIN && \
+    (CV_SIMD_64F || CV_SIMD_SCALABLE_64F) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+            if (cpu::dispatch_mode() !=
+                cpu::DispatchMode::ScalarOnly)
+            {
+                const int lanes =
+                    cv::VTraits<cv::v_float64>::vlanes();
+                const cv::v_float64 row_vector =
+                    cv::vx_setall_f64(row_weight);
+                for (; x + lanes <= winSize.width; x += lanes)
+                {
+                    cv::vx_store(
+                        output + x,
+                        cv::v_mul(
+                            cv::vx_load(x_weights.data() + x),
+                            row_vector));
+                }
+                used_ui = used_ui || x > 0;
+            }
+#endif
+            for (; x < winSize.width; ++x)
+            {
+                output[x] =
+                    x_weights[static_cast<size_t>(x)] *
+                    row_weight;
+            }
+        }
+    }
+    cpu::set_last_dispatch_tag(
+        used_ui
+            ? cpu::DispatchTag::OpenCVUI
+            : cpu::DispatchTag::Scalar);
 }
 
 }  // namespace cvh

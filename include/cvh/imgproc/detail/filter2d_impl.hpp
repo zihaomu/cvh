@@ -2,6 +2,7 @@
 #define CVH_IMGPROC_DETAIL_FILTER2D_IMPL_HPP
 
 #include "fastpath_common.hpp"
+#include "filter_ui.hpp"
 
 namespace cvh
 {
@@ -88,6 +89,20 @@ inline bool try_filter2d_fastpath(const Mat& src,
             kernel_coeffs[static_cast<std::size_t>(ky) * static_cast<std::size_t>(kcols) + static_cast<std::size_t>(kx)] =
                 kernel.at<float>(ky, kx);
         }
+    }
+
+    if (filter_ui::filter2d_c1(*src_ref,
+                               dst,
+                               out_depth,
+                               kernel_coeffs,
+                               krows,
+                               kcols,
+                               ax,
+                               ay,
+                               delta,
+                               border_type))
+    {
+        return true;
     }
 
     std::vector<int> x_offsets(static_cast<std::size_t>(cols) * static_cast<std::size_t>(kcols), -1);

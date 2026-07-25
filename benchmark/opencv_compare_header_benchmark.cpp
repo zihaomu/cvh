@@ -29,6 +29,7 @@ struct Args
     int iters = 5;
     int repeats = 1;
     int threads = 1;
+    std::string ops;
     std::string output_csv;
 };
 
@@ -64,7 +65,7 @@ void usage()
     std::cout
         << "Usage: cvh_benchmark_opencv_compare_headers_fast "
         << "[--profile quick|stable|full] [--warmup N] [--iters N] [--repeats N] "
-        << "[--threads N] [--impl name] [--output path]\n";
+        << "[--threads N] [--impl name] [--ops GEMM] [--output path]\n";
 }
 
 Args parse_args(int argc, char** argv)
@@ -106,6 +107,10 @@ Args parse_args(int argc, char** argv)
         {
             args.impl = next_value("--impl");
         }
+        else if (token == "--ops")
+        {
+            args.ops = next_value("--ops");
+        }
         else if (token == "--output")
         {
             args.output_csv = next_value("--output");
@@ -134,6 +139,12 @@ Args parse_args(int argc, char** argv)
     {
         std::cerr << "Unsupported impl: " << args.impl
                   << " (Mode B only compares cvh_headers_fast against upstream OpenCV)\n";
+        std::exit(2);
+    }
+    if (!args.ops.empty() && args.ops != "GEMM")
+    {
+        std::cerr << "Unsupported --ops value: " << args.ops
+                  << " (currently supported: GEMM)\n";
         std::exit(2);
     }
     return args;
@@ -590,10 +601,13 @@ void append_core_compute_cases(const Args& args, std::vector<CompareRow>& rows)
                         transposed.data,
                         transpose_bytes),
                     "TRANSPOSE/" + depth_case.second + "C" + std::to_string(channels) + "/" + shape_name);
+                cvh::cpu::reset_last_dispatch_tag();
                 const double cvh_ms = measure_cvh_mat_ms(
                     [&]() { transposed = cvh::transpose(a); },
                     transposed,
                     args);
+                const cvh::cpu::DispatchTag transpose_dispatch_tag =
+                    cvh::cpu::last_dispatch_tag();
                 const double opencv_ms = bench_opencv_transpose(
                     shape.rows,
                     shape.cols,
@@ -609,7 +623,9 @@ void append_core_compute_cases(const Args& args, std::vector<CompareRow>& rows)
                     "core_mat",
                     "TRANSPOSE",
                     "continuous",
-                    "headers_baseline",
+                    transpose_dispatch_tag == cvh::cpu::DispatchTag::Unknown
+                        ? "headers_baseline"
+                        : cvh::cpu::dispatch_tag_name(transpose_dispatch_tag),
                     depth_case.second,
                     channels,
                     shape_name,
@@ -620,35 +636,83 @@ void append_core_compute_cases(const Args& args, std::vector<CompareRow>& rows)
         }
     }
 
-    std::vector<int> gemm_sizes {128};
+}
+
+void append_gemm_compare_cases(
+    const Args& args,
+    std::vector<CompareRow>& rows)
+{
+    constexpr std::uint32_t seed_a = 0xB101u;
+    constexpr std::uint32_t seed_b = 0xB202u;
+    struct GemmCase
+    {
+        const char* name;
+        int m;
+        int k;
+        int n;
+    };
+
+    std::vector<GemmCase> gemm_cases {
+        {"square_128", 128, 128, 128},
+        {"skinny_m32_k512_n64", 32, 512, 64},
+        {"wide_m256_k32_n256", 256, 32, 256},
+    };
     if (args.profile == "stable" || args.profile == "full")
     {
-        gemm_sizes = {128, 256, 512};
+        gemm_cases.push_back(
+            {"square_256", 256, 256, 256});
     }
-    for (const int size : gemm_sizes)
+    if (args.profile == "full")
     {
-        cvh::Mat a({size, size}, CV_32F);
-        cvh::Mat b({size, size}, CV_32F);
+        gemm_cases.push_back(
+            {"square_512", 512, 512, 512});
+    }
+
+    for (const GemmCase& gemm_case : gemm_cases)
+    {
+        cvh::Mat a(
+            {gemm_case.m, gemm_case.k}, CV_32F);
+        cvh::Mat b(
+            {gemm_case.k, gemm_case.n}, CV_32F);
         fill_f32(a, seed_a);
         fill_f32(b, seed_b);
 
         Args gemm_args = args;
         const std::uint64_t work =
-            static_cast<std::uint64_t>(size) * static_cast<std::uint64_t>(size) * static_cast<std::uint64_t>(size);
-        gemm_args.iters = std::min(args.iters, std::max(1, static_cast<int>((16u << 20) / work)));
-        gemm_args.warmup = std::min(args.warmup, 1);
+            static_cast<std::uint64_t>(gemm_case.m) *
+            static_cast<std::uint64_t>(gemm_case.k) *
+            static_cast<std::uint64_t>(gemm_case.n);
+        if (work > (16u << 20))
+        {
+            gemm_args.iters = std::min(
+                args.iters,
+                std::max(
+                    1,
+                    static_cast<int>((16u << 20) / work)));
+            gemm_args.warmup = std::min(args.warmup, 1);
+        }
 
         cvh::Mat dst = cvh::gemm(a, b);
         const std::uint64_t output_bytes =
             static_cast<std::uint64_t>(dst.total()) * dst.elemSize();
         require_correct(
-            validate_opencv_gemm(size, size, size, seed_a, seed_b, dst.data, output_bytes),
-            "GEMM/NN/" + std::to_string(size));
+            validate_opencv_gemm(
+                gemm_case.m,
+                gemm_case.k,
+                gemm_case.n,
+                seed_a,
+                seed_b,
+                dst.data,
+                output_bytes),
+            "GEMM/NN/" + std::string(gemm_case.name));
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms([&]() { dst = cvh::gemm(a, b); }, dst, gemm_args);
+        const cvh::cpu::DispatchTag gemm_dispatch_tag =
+            cvh::cpu::last_dispatch_tag();
         const double opencv_ms = bench_opencv_gemm(
-            size,
-            size,
-            size,
+            gemm_case.m,
+            gemm_case.k,
+            gemm_case.n,
             gemm_args.warmup,
             gemm_args.iters,
             gemm_args.repeats,
@@ -660,25 +724,43 @@ void append_core_compute_cases(const Args& args, std::vector<CompareRow>& rows)
             "core_mat",
             "GEMM",
             "fp32_nn_end_to_end",
-            "headers_baseline",
+            gemm_dispatch_tag == cvh::cpu::DispatchTag::Unknown
+                ? "headers_baseline"
+                : cvh::cpu::dispatch_tag_name(gemm_dispatch_tag),
             "CV_32F",
             1,
-            std::to_string(size) + "x" + std::to_string(size) + "x" + std::to_string(size),
+            std::to_string(gemm_case.m) + "x" +
+                std::to_string(gemm_case.k) + "x" +
+                std::to_string(gemm_case.n),
             cvh_ms,
             opencv_ms,
-            "correctness=upstream_pass;iters=" + std::to_string(gemm_args.iters));
+            "correctness=upstream_pass;shape=" +
+                std::string(gemm_case.name) +
+                ";component=public_end_to_end;iters=" +
+                std::to_string(gemm_args.iters));
 
         const cvh::GemmPackedB packed_b = cvh::gemm_pack_b(b);
         dst = cvh::gemm(a, packed_b);
         require_correct(
-            validate_opencv_gemm(size, size, size, seed_a, seed_b, dst.data, output_bytes),
-            "GEMM/NN/pack_once/" + std::to_string(size));
+            validate_opencv_gemm(
+                gemm_case.m,
+                gemm_case.k,
+                gemm_case.n,
+                seed_a,
+                seed_b,
+                dst.data,
+                output_bytes),
+            "GEMM/NN/pack_once/" +
+                std::string(gemm_case.name));
+        cvh::cpu::reset_last_dispatch_tag();
         const double packed_cvh_ms =
             measure_cvh_mat_ms([&]() { dst = cvh::gemm(a, packed_b); }, dst, gemm_args);
+        const cvh::cpu::DispatchTag packed_gemm_dispatch_tag =
+            cvh::cpu::last_dispatch_tag();
         const double packed_opencv_ms = bench_opencv_gemm_prepack(
-            size,
-            size,
-            size,
+            gemm_case.m,
+            gemm_case.k,
+            gemm_case.n,
             gemm_args.warmup,
             gemm_args.iters,
             gemm_args.repeats,
@@ -690,13 +772,20 @@ void append_core_compute_cases(const Args& args, std::vector<CompareRow>& rows)
             "core_mat",
             "GEMM",
             "fp32_nn_pack_once",
-            "headers_baseline",
+            packed_gemm_dispatch_tag == cvh::cpu::DispatchTag::Unknown
+                ? "headers_baseline"
+                : cvh::cpu::dispatch_tag_name(packed_gemm_dispatch_tag),
             "CV_32F",
             1,
-            std::to_string(size) + "x" + std::to_string(size) + "x" + std::to_string(size),
+            std::to_string(gemm_case.m) + "x" +
+                std::to_string(gemm_case.k) + "x" +
+                std::to_string(gemm_case.n),
             packed_cvh_ms,
             packed_opencv_ms,
-            "correctness=upstream_pass;opencv_reuses_B_without_public_pack_handle;iters=" +
+            "correctness=upstream_pass;shape=" +
+                std::string(gemm_case.name) +
+                ";component=public_pack_once;"
+                "opencv_reuses_B_without_public_pack_handle;iters=" +
                 std::to_string(gemm_args.iters));
     }
 }
@@ -908,7 +997,19 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
                 args);
             const double opencv_ms = bench_opencv_warp_affine(
                 shape.rows, shape.cols, DepthId::U8, 1, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "WARP_AFFINE", "linear_inverse_replicate", "headers_baseline", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_row(
+                rows,
+                args,
+                "imgproc",
+                "WARP_AFFINE",
+                "linear_inverse_replicate",
+                "fixed_coordinate_block",
+                "CV_8U",
+                1,
+                shape_name,
+                cvh_ms,
+                opencv_ms,
+                "U8 linear path uses fixed coordinate blocks and shared sampling");
         }
 
         {
@@ -982,13 +1083,13 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
                     "imgproc",
                     "REMAP",
                     remap_case.variant,
-                    "public_header_scalar",
+                    "fixed_coordinate_block",
                     "CV_8U",
                     3,
                     shape_name,
                     cvh_ms,
                     opencv_ms,
-                    "no qualified SIMD fast path");
+                    "Shared fixed coordinate block and U8 bilinear sampling path");
             }
         }
 
@@ -1034,13 +1135,13 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
                 "imgproc",
                 "WARP_PERSPECTIVE",
                 "projective_linear_u8c3",
-                "public_header_scalar",
+                "fixed_coordinate_block",
                 "CV_8U",
                 3,
                 shape_name,
                 cvh_ms,
                 opencv_ms,
-                "no qualified SIMD fast path");
+                "Shared fixed coordinate block and U8 bilinear sampling path");
         }
 
         {
@@ -1224,9 +1325,23 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
             const double opencv_ms = bench_opencv_warp_affine(
                 shape.rows, shape.cols, type_case.depth, type_case.channels,
                 args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "WARP_AFFINE", "linear_inverse_replicate_" + suffix,
-                       "headers_baseline", type_case.depth_name, type_case.channels,
-                       shape_name, cvh_ms, opencv_ms);
+            append_row(
+                rows,
+                args,
+                "imgproc",
+                "WARP_AFFINE",
+                "linear_inverse_replicate_" + suffix,
+                type_case.depth == DepthId::U8
+                    ? "fixed_coordinate_block"
+                    : "headers_baseline",
+                type_case.depth_name,
+                type_case.channels,
+                shape_name,
+                cvh_ms,
+                opencv_ms,
+                type_case.depth == DepthId::U8
+                    ? "U8 linear path uses fixed coordinate blocks and shared sampling"
+                    : "F32 path remains the public header baseline");
         }
     }
 
@@ -1610,14 +1725,25 @@ int main(int argc, char** argv)
 {
     const auto args = cvh_bench_compare::parse_args(argc, argv);
     cvh_bench_compare::configure_opencv_threads(args.threads);
+    cvh::setNumThreads(args.threads);
     std::vector<cvh_bench_compare::CompareRow> rows;
-    cvh_bench_compare::append_core_mat_cases(args, rows);
-    cvh_bench_compare::append_core_compute_cases(args, rows);
-    cvh_bench_compare::append_imgproc_cases(args, rows);
-    cvh_bench_compare::append_imgproc_type_channel_cases(args, rows);
-    cvh_bench_compare::append_imgproc_resize_color_cases(args, rows);
-    cvh_bench_compare::append_imgproc_roi_cases(args, rows);
-    cvh_bench_compare::append_phase1_cases(args, rows);
+    if (args.ops == "GEMM")
+    {
+        cvh_bench_compare::append_gemm_compare_cases(
+            args, rows);
+    }
+    else
+    {
+        cvh_bench_compare::append_core_mat_cases(args, rows);
+        cvh_bench_compare::append_core_compute_cases(args, rows);
+        cvh_bench_compare::append_gemm_compare_cases(
+            args, rows);
+        cvh_bench_compare::append_imgproc_cases(args, rows);
+        cvh_bench_compare::append_imgproc_type_channel_cases(args, rows);
+        cvh_bench_compare::append_imgproc_resize_color_cases(args, rows);
+        cvh_bench_compare::append_imgproc_roi_cases(args, rows);
+        cvh_bench_compare::append_phase1_cases(args, rows);
+    }
 
     if (!args.output_csv.empty())
     {
@@ -1626,6 +1752,7 @@ int main(int argc, char** argv)
 
     std::cout << "cvh_benchmark_opencv_compare_headers_fast: impl=" << args.impl
               << ", profile=" << args.profile
+              << ", ops=" << (args.ops.empty() ? "all" : args.ops)
               << ", threads=" << args.threads
               << ", rows=" << rows.size()
               << ", sink=" << cvh_bench_compare::g_sink << "\n";

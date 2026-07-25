@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,9 +22,11 @@ struct Args
 {
     std::string profile = "quick";
     std::string dispatch = "auto";
+    std::string ops;
     int warmup = 3;
     int iters = 10;
     int repeats = 7;
+    int threads = 1;
     std::string output_csv;
 };
 
@@ -72,7 +75,7 @@ void usage()
     std::cout
         << "Usage: cvh_benchmark_core_mat_header "
         << "[--profile quick|stable|full] [--dispatch auto|scalar] "
-        << "[--warmup N] [--iters N] [--repeats N] [--output path]\n";
+        << "[--ops GEMM] [--threads N] [--warmup N] [--iters N] [--repeats N] [--output path]\n";
 }
 
 Args parse_args(int argc, char** argv)
@@ -98,6 +101,10 @@ Args parse_args(int argc, char** argv)
         {
             args.dispatch = next_value("--dispatch");
         }
+        else if (token == "--ops")
+        {
+            args.ops = next_value("--ops");
+        }
         else if (token == "--warmup")
         {
             args.warmup = std::max(0, std::stoi(next_value("--warmup")));
@@ -109,6 +116,10 @@ Args parse_args(int argc, char** argv)
         else if (token == "--repeats")
         {
             args.repeats = std::max(1, std::stoi(next_value("--repeats")));
+        }
+        else if (token == "--threads")
+        {
+            args.threads = std::max(1, std::stoi(next_value("--threads")));
         }
         else if (token == "--output")
         {
@@ -135,6 +146,12 @@ Args parse_args(int argc, char** argv)
     {
         std::cerr << "Unsupported dispatch: " << args.dispatch
                   << " (expected auto/scalar)\n";
+        std::exit(2);
+    }
+    if (!args.ops.empty() && args.ops != "GEMM")
+    {
+        std::cerr << "Unsupported --ops value: " << args.ops
+                  << " (currently supported: GEMM)\n";
         std::exit(2);
     }
     return args;
@@ -210,9 +227,30 @@ void fill_mat(cvh::Mat& mat, std::uint32_t seed)
     }
 }
 
+void set_linear_nonzero(cvh::Mat& mat, std::size_t index)
+{
+    if (mat.channels() != 1 || !mat.isContinuous() || index >= mat.total())
+    {
+        throw std::runtime_error("invalid nonzero benchmark fixture");
+    }
+
+    switch (mat.depth())
+    {
+        case CV_8U:
+            mat.data[index] = 1;
+            return;
+        case CV_32F:
+            reinterpret_cast<float*>(mat.data)[index] = 1.0f;
+            return;
+        default:
+            throw std::runtime_error("unsupported nonzero benchmark depth");
+    }
+}
+
 template <typename RunFn, typename ChecksumFn>
 Result measure(RunFn&& run_once, ChecksumFn&& checksum_fn, const Args& args)
 {
+    cvh::cpu::reset_last_dispatch_tag();
     const auto timing = common::measure_repeated_ms(run_once, args.warmup, args.iters, args.repeats);
     const std::uint64_t hash = checksum_fn();
     g_sink ^= hash;
@@ -243,6 +281,7 @@ ResultRow make_row(const Args& args,
     row.warmup = args.warmup;
     row.iters = args.iters;
     row.repeats = args.repeats;
+    row.threads = args.threads;
     row.min_ms = result.min_ms;
     row.median_ms = result.median_ms;
     row.mpix_per_sec = common::mpix_per_sec(pixels, result.median_ms);
@@ -318,6 +357,11 @@ void append_measured_row(const Args& args,
         result);
     row.threads = threads;
     row.note = note;
+    const cvh::cpu::DispatchTag dispatch_tag = cvh::cpu::last_dispatch_tag();
+    if (dispatch_tag != cvh::cpu::DispatchTag::Unknown)
+    {
+        row.dispatch_path = cvh::cpu::dispatch_tag_name(dispatch_tag);
+    }
     rows.push_back(std::move(row));
 }
 
@@ -327,6 +371,8 @@ void append_reduction_rows(const Args& args,
                            std::size_t bytes,
                            std::vector<ResultRow>& rows)
 {
+    cvh::Mat zeros(src.shape(), src.type());
+    zeros.setTo(cvh::Scalar::all(0.0));
     const int saved_threads = cvh::getNumThreads();
     const int thread_counts[] = {1, saved_threads};
     const char* thread_labels[] = {"threads_1", "project_default"};
@@ -338,6 +384,8 @@ void append_reduction_rows(const Args& args,
         const std::string note =
             "deterministic_header_loop;configured_threads=" +
             std::to_string(threads);
+        const bool f32_c1 =
+            src.depth() == CV_32F && src.channels() == 1;
 
         {
             cvh::Scalar value;
@@ -349,6 +397,25 @@ void append_reduction_rows(const Args& args,
                 args,
                 shape,
                 "SUM",
+                "all_channels_" + suffix,
+                "none",
+                bytes,
+                threads,
+                note,
+                result,
+                rows);
+        }
+
+        {
+            cvh::Scalar value;
+            const auto result = measure(
+                [&]() { value = cvh::mean(src); },
+                [&]() { return checksum_doubles(value.val, 4); },
+                args);
+            append_measured_row(
+                args,
+                shape,
+                "MEAN",
                 "all_channels_" + suffix,
                 "none",
                 bytes,
@@ -379,26 +446,50 @@ void append_reduction_rows(const Args& args,
                 "none",
                 bytes,
                 threads,
-                note,
+                f32_c1
+                    ? note + ";statistics=f32_c1_two_pass_ui"
+                    : note,
                 result,
                 rows);
         }
 
+        const struct
+        {
+            const char* variant;
+            int norm_type;
+            bool difference;
+        } norm_cases[] = {
+            {"inf_single_", cvh::NORM_INF, false},
+            {"l1_single_", cvh::NORM_L1, false},
+            {"l2_", cvh::NORM_L2, false},
+            {"inf_diff_zero_", cvh::NORM_INF, true},
+            {"l1_diff_zero_", cvh::NORM_L1, true},
+            {"l2_diff_zero_", cvh::NORM_L2, true},
+        };
+        for (const auto& norm_case : norm_cases)
         {
             double value = 0.0;
             const auto result = measure(
-                [&]() { value = cvh::norm(src, cvh::NORM_L2); },
+                [&]() {
+                    value = norm_case.difference
+                        ? cvh::norm(
+                              src, zeros, norm_case.norm_type)
+                        : cvh::norm(src, norm_case.norm_type);
+                },
                 [&]() { return checksum_doubles(&value, 1); },
                 args);
             append_measured_row(
                 args,
                 shape,
                 "NORM",
-                "l2_" + suffix,
+                std::string(norm_case.variant) + suffix,
                 "none",
-                bytes,
+                norm_case.difference ? bytes * 2 : bytes,
                 threads,
-                note,
+                f32_c1 && norm_case.norm_type == cvh::NORM_INF &&
+                        !norm_case.difference
+                    ? note + ";kernel=f32_single_input_inf_ui"
+                    : note,
                 result,
                 rows);
         }
@@ -441,32 +532,108 @@ void append_reduction_rows(const Args& args,
                 note,
                 result,
                 rows);
-        }
 
-        {
-            cvh::Mat reduced;
-            const auto result = measure(
+            int min_indices[2] = {-1, -1};
+            int max_indices[2] = {-1, -1};
+            const auto index_result = measure(
                 [&]() {
-                    cvh::reduce(src, reduced, 0, cvh::REDUCE_SUM, CV_64F);
+                    cvh::minMaxIdx(
+                        src,
+                        &min_value,
+                        &max_value,
+                        min_indices,
+                        max_indices);
                 },
-                [&]() { return common::checksum_mat_bytes(reduced); },
+                [&]() {
+                    const double values[] = {
+                        min_value,
+                        max_value,
+                        static_cast<double>(min_indices[0]),
+                        static_cast<double>(min_indices[1]),
+                        static_cast<double>(max_indices[0]),
+                        static_cast<double>(max_indices[1]),
+                    };
+                    return checksum_doubles(values, 6);
+                },
                 args);
-            const std::size_t output_bytes =
-                static_cast<std::size_t>(shape.cols) *
-                static_cast<std::size_t>(src.channels()) * sizeof(double);
             append_measured_row(
                 args,
                 shape,
-                "REDUCE",
-                "axis_0_sum_f64_" + suffix,
-                "reuse",
-                bytes + output_bytes,
+                "MIN_MAX_IDX",
+                "first_tie_" + suffix,
+                "none",
+                bytes,
                 threads,
                 note,
-                result,
+                index_result,
                 rows);
         }
 
+        const struct
+        {
+            const char* name;
+            int rtype;
+        } reduce_cases[] = {
+            {"sum", cvh::REDUCE_SUM},
+            {"avg", cvh::REDUCE_AVG},
+            {"max", cvh::REDUCE_MAX},
+            {"min", cvh::REDUCE_MIN},
+            {"sum2", cvh::REDUCE_SUM2},
+        };
+        for (int axis = 0; axis <= 1; ++axis)
+        {
+            for (const auto& reduce_case : reduce_cases)
+            {
+                cvh::Mat reduced;
+                const auto result = measure(
+                    [&]() {
+                        cvh::reduce(
+                            src,
+                            reduced,
+                            axis,
+                            reduce_case.rtype,
+                            CV_64F);
+                    },
+                    [&]() {
+                        return common::checksum_mat_bytes(reduced);
+                    },
+                    args);
+                const std::size_t output_elements =
+                    static_cast<std::size_t>(
+                        axis == 0 ? shape.cols : shape.rows) *
+                    static_cast<std::size_t>(src.channels());
+                append_measured_row(
+                    args,
+                    shape,
+                    "REDUCE",
+                    "axis_" + std::to_string(axis) + "_" +
+                        reduce_case.name + "_f64_" + suffix,
+                    "reuse",
+                    bytes + output_elements * sizeof(double),
+                    threads,
+                    f32_c1 && axis == 1 &&
+                            (reduce_case.rtype == cvh::REDUCE_MAX ||
+                             reduce_case.rtype == cvh::REDUCE_MIN)
+                        ? note + ";kernel=f32_c1_vector_extrema"
+                        : note,
+                    result,
+                    rows);
+            }
+        }
+
+        const struct
+        {
+            const char* variant;
+            int norm_type;
+            double alpha;
+            double beta;
+        } normalize_cases[] = {
+            {"inf_", cvh::NORM_INF, 1.0, 0.0},
+            {"l1_", cvh::NORM_L1, 1.0, 0.0},
+            {"l2_", cvh::NORM_L2, 1.0, 0.0},
+            {"minmax_", cvh::NORM_MINMAX, -1.0, 1.0},
+        };
+        for (const auto& normalize_case : normalize_cases)
         {
             cvh::Mat normalized;
             const auto result = measure(
@@ -474,9 +641,9 @@ void append_reduction_rows(const Args& args,
                     cvh::normalize(
                         src,
                         normalized,
-                        1.0,
-                        0.0,
-                        cvh::NORM_L2);
+                        normalize_case.alpha,
+                        normalize_case.beta,
+                        normalize_case.norm_type);
                 },
                 [&]() { return common::checksum_mat_bytes(normalized); },
                 args);
@@ -484,7 +651,7 @@ void append_reduction_rows(const Args& args,
                 args,
                 shape,
                 "NORMALIZE",
-                "l2_" + suffix,
+                std::string(normalize_case.variant) + suffix,
                 "reuse",
                 bytes * 2,
                 threads,
@@ -492,8 +659,200 @@ void append_reduction_rows(const Args& args,
                 result,
                 rows);
         }
+
+        if (src.depth() == CV_32F)
+        {
+            cvh::Mat applied(src.shape(), src.type());
+            const auto result = measure(
+                [&]() {
+                    if (cvh::detail::reduce_ui::try_apply_normalize(
+                            src,
+                            applied,
+                            cvh::Mat(),
+                            0.125,
+                            1.5))
+                    {
+                        cvh::cpu::set_last_dispatch_tag(
+                            cvh::cpu::DispatchTag::OpenCVUI);
+                    }
+                    else
+                    {
+                        cvh::reduce_detail::apply_normalize(
+                            src,
+                            applied,
+                            cvh::Mat(),
+                            0.125,
+                            1.5);
+                        cvh::cpu::set_last_dispatch_tag(
+                            cvh::cpu::DispatchTag::Scalar);
+                    }
+                },
+                [&]() { return common::checksum_mat_bytes(applied); },
+                args);
+            append_measured_row(
+                args,
+                shape,
+                "NORMALIZE_APPLY_SCALE",
+                "f32_to_f32_" + suffix,
+                "reuse",
+                bytes * 2,
+                threads,
+                note + ";reduction_excluded",
+                result,
+                rows);
+        }
     }
     cvh::setNumThreads(saved_threads);
+
+    if (src.channels() != 1)
+    {
+        return;
+    }
+
+    const std::vector<int> dims {shape.rows, shape.cols};
+    cvh::Mat all_zero(dims, shape.type);
+    all_zero.setTo(cvh::Scalar::all(0.0));
+    cvh::Mat first_nonzero = all_zero.clone();
+    cvh::Mat tail_nonzero = all_zero.clone();
+    set_linear_nonzero(first_nonzero, 0);
+    set_linear_nonzero(tail_nonzero, tail_nonzero.total() - 1);
+    const std::string note = "single_channel;distribution_sensitive";
+
+    {
+        int value = 0;
+        const auto result = measure(
+            [&]() { value = cvh::countNonZero(src); },
+            [&]() {
+                const double checksum_value = static_cast<double>(value);
+                return checksum_doubles(&checksum_value, 1);
+            },
+            args);
+        append_measured_row(
+            args,
+            shape,
+            "COUNT_NON_ZERO",
+            "random_dense",
+            "none",
+            bytes,
+            1,
+            note,
+            result,
+            rows);
+    }
+
+    const struct
+    {
+        const char* variant;
+        const cvh::Mat* input;
+    } has_nonzero_cases[] = {
+        {"all_zero", &all_zero},
+        {"first_nonzero", &first_nonzero},
+        {"tail_nonzero", &tail_nonzero},
+    };
+    for (const auto& benchmark_case : has_nonzero_cases)
+    {
+        bool value = false;
+        const auto result = measure(
+            [&]() { value = cvh::hasNonZero(*benchmark_case.input); },
+            [&]() {
+                const double checksum_value = value ? 1.0 : 0.0;
+                return checksum_doubles(&checksum_value, 1);
+            },
+            args);
+        append_measured_row(
+            args,
+            shape,
+            "HAS_NON_ZERO",
+            benchmark_case.variant,
+            "none",
+            bytes,
+            1,
+            note,
+            result,
+            rows);
+    }
+
+    const struct
+    {
+        const char* variant;
+        const cvh::Mat* input;
+    } find_nonzero_cases[] = {
+        {"all_zero", &all_zero},
+        {"sparse_tail", &tail_nonzero},
+        {"random_dense", &src},
+    };
+    for (const auto& benchmark_case : find_nonzero_cases)
+    {
+        std::vector<cvh::Point> points;
+        const auto result = measure(
+            [&]() {
+                cvh::findNonZero(*benchmark_case.input, points);
+            },
+            [&]() {
+                if (points.empty())
+                {
+                    return common::fnv1a64_basis();
+                }
+                const double values[] = {
+                    static_cast<double>(points.size()),
+                    static_cast<double>(points.front().x),
+                    static_cast<double>(points.front().y),
+                    static_cast<double>(points.back().x),
+                    static_cast<double>(points.back().y),
+                };
+                return checksum_doubles(values, 5);
+            },
+            args);
+        append_measured_row(
+            args,
+            shape,
+            "FIND_NON_ZERO",
+            benchmark_case.variant,
+            "reuse",
+            bytes,
+            1,
+            note,
+            result,
+            rows);
+    }
+
+    {
+        cvh::Mat indices;
+        const auto result = measure(
+            [&]() { cvh::reduceArgMin(src, indices, 1, false); },
+            [&]() { return common::checksum_mat_bytes(indices); },
+            args);
+        append_measured_row(
+            args,
+            shape,
+            "REDUCE_ARG_MIN",
+            "axis_1_first",
+            "reuse",
+            bytes + static_cast<size_t>(shape.rows) * sizeof(int),
+            1,
+            note,
+            result,
+            rows);
+    }
+
+    {
+        cvh::Mat indices;
+        const auto result = measure(
+            [&]() { cvh::reduceArgMax(src, indices, 0, true); },
+            [&]() { return common::checksum_mat_bytes(indices); },
+            args);
+        append_measured_row(
+            args,
+            shape,
+            "REDUCE_ARG_MAX",
+            "axis_0_last",
+            "reuse",
+            bytes + static_cast<size_t>(shape.cols) * sizeof(int),
+            1,
+            note,
+            result,
+            rows);
+    }
 }
 
 void append_layout_rows(const Args& args,
@@ -515,6 +874,7 @@ void append_layout_rows(const Args& args,
             }
         }
         cvh::Mat dst(dims, shape.type);
+        dst.setTo(cvh::Scalar::all(0.0));
         append_array_op_row(
             args,
             shape,
@@ -523,6 +883,36 @@ void append_layout_rows(const Args& args,
             bytes * 2 + mask.total(),
             dst,
             [&]() { cvh::copyTo(src, dst, mask); },
+            rows);
+    }
+
+    if (src.channels() > 1)
+    {
+        cvh::Mat dst;
+        append_array_op_row(
+            args,
+            shape,
+            "EXTRACT_CHANNEL",
+            "last_channel",
+            bytes + src.total() * src.elemSize1(),
+            dst,
+            [&]() { cvh::extractChannel(src, dst, src.channels() - 1); },
+            rows);
+
+        cvh::Mat channel;
+        cvh::extractChannel(src, channel, 0);
+        cvh::Mat inserted = src.clone();
+        append_array_op_row(
+            args,
+            shape,
+            "INSERT_CHANNEL",
+            "channel_0_to_last",
+            bytes * 2 + channel.total() * channel.elemSize(),
+            inserted,
+            [&]() {
+                cvh::insertChannel(
+                    channel, inserted, inserted.channels() - 1);
+            },
             rows);
     }
 
@@ -572,6 +962,58 @@ void append_layout_rows(const Args& args,
         append_array_op_row(
             args,
             shape,
+            "FLIP_ND",
+            "axis_1",
+            bytes * 2,
+            dst,
+            [&]() { cvh::flipND(src, dst, 1); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst;
+        append_array_op_row(
+            args,
+            shape,
+            "TRANSPOSE",
+            "last_two",
+            bytes * 2,
+            dst,
+            [&]() { dst = cvh::transpose(src); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst;
+        append_array_op_row(
+            args,
+            shape,
+            "ROTATE",
+            "clockwise_90",
+            bytes * 3,
+            dst,
+            [&]() { cvh::rotate(src, dst, cvh::ROTATE_90_CLOCKWISE); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst;
+        append_array_op_row(
+            args,
+            shape,
+            "REPEAT",
+            "2x2",
+            bytes * 5,
+            dst,
+            [&]() { cvh::repeat(src, 2, 2, dst); },
+            rows);
+    }
+
+    {
+        cvh::Mat dst;
+        append_array_op_row(
+            args,
+            shape,
             "HCONCAT",
             "two_equal_inputs",
             bytes * 3,
@@ -609,6 +1051,204 @@ void append_layout_rows(const Args& args,
                     dst);
             },
             rows);
+    }
+}
+
+void append_gemm_rows(const Args& args, std::vector<ResultRow>& rows)
+{
+    struct GemmCase
+    {
+        const char* name;
+        int m;
+        int k;
+        int n;
+    };
+
+    std::vector<GemmCase> cases {
+        {"square_128", 128, 128, 128},
+        {"skinny_m32_k512_n64", 32, 512, 64},
+        {"wide_m256_k32_n256", 256, 32, 256},
+    };
+    if (args.profile == "stable" || args.profile == "full")
+    {
+        cases.push_back({"square_256", 256, 256, 256});
+    }
+    if (args.profile == "full")
+    {
+        cases.push_back({"square_512", 512, 512, 512});
+    }
+
+    for (const GemmCase& gemm_case : cases)
+    {
+        const ShapeCase shape {
+            gemm_case.name,
+            gemm_case.m,
+            gemm_case.n,
+            CV_32FC1};
+        cvh::Mat a(
+            {gemm_case.m, gemm_case.k}, CV_32FC1);
+        cvh::Mat b(
+            {gemm_case.k, gemm_case.n}, CV_32FC1);
+        fill_mat(a, 0x13579BDFu);
+        fill_mat(b, 0x2468ACE0u);
+        const std::size_t a_bytes = a.total() * a.elemSize();
+        const std::size_t b_bytes = b.total() * b.elemSize();
+        const std::size_t c_bytes =
+            static_cast<std::size_t>(gemm_case.m) *
+            static_cast<std::size_t>(gemm_case.n) *
+            sizeof(float);
+        const std::uint64_t work =
+            static_cast<std::uint64_t>(gemm_case.m) *
+            static_cast<std::uint64_t>(gemm_case.k) *
+            static_cast<std::uint64_t>(gemm_case.n);
+        Args gemm_args = args;
+        if (work > (16u << 20))
+        {
+            gemm_args.iters = std::min(
+                args.iters,
+                std::max(
+                    1,
+                    static_cast<int>((16u << 20) / work)));
+            gemm_args.warmup = std::min(args.warmup, 1);
+        }
+        const std::string suffix =
+            std::string(gemm_case.name);
+
+        cvh::Mat dst;
+        append_array_op_row(
+            gemm_args,
+            shape,
+            "GEMM",
+            "fp32_nn_end_to_end_" + suffix,
+            a_bytes + b_bytes + c_bytes,
+            dst,
+            [&]() { dst = cvh::gemm(a, b); },
+            rows);
+        rows.back().allocation_mode = "recreate";
+        rows.back().note =
+            "component=public_end_to_end;packing=included;"
+            "output_allocation=included";
+
+        cvh::GemmPackedB packed_b;
+        const auto pack_result = measure(
+            [&]() { packed_b = cvh::gemm_pack_b(b); },
+            [&]() {
+                if (!packed_b.packed_fp32.empty())
+                {
+                    return common::checksum_bytes(
+                        reinterpret_cast<const uchar*>(
+                            packed_b.packed_fp32.data()),
+                        packed_b.packed_fp32.size() *
+                            sizeof(float));
+                }
+                return common::fnv1a64_basis();
+            },
+            gemm_args);
+        ResultRow pack_row = make_row(
+            gemm_args,
+            shape,
+            "GEMM",
+            "fp32_pack_b_only_" + suffix,
+            "continuous",
+            "precompute",
+            b_bytes * 2,
+            pack_result);
+        pack_row.dispatch_path = "detail_precompute";
+        pack_row.note =
+            "component=precompute;output_allocation=excluded;"
+            "matrix_kernel=excluded";
+        rows.push_back(std::move(pack_row));
+
+        append_array_op_row(
+            gemm_args,
+            shape,
+            "GEMM",
+            "fp32_nn_pack_once_" + suffix,
+            a_bytes + b_bytes + c_bytes,
+            dst,
+            [&]() { dst = cvh::gemm(a, packed_b); },
+            rows);
+        rows.back().allocation_mode = "packed_b";
+        rows.back().note =
+            "component=public_pack_once;packing=excluded;"
+            "output_allocation=included";
+
+        cvh::Mat kernel_dst(
+            {gemm_case.m, gemm_case.n}, CV_32FC1);
+        auto run_kernel = [&]() {
+            const bool use_ui =
+                cvh::detail::gemm_ui::can_vectorize_nn(
+                    gemm_case.n);
+            cvh::cpu::set_last_dispatch_tag(
+                use_ui ? cvh::cpu::DispatchTag::OpenCVUI
+                       : cvh::cpu::DispatchTag::Scalar);
+            const float* a_ptr =
+                reinterpret_cast<const float*>(a.data);
+            const float* b_ptr =
+                packed_b.packed_fp32.data();
+            float* c_ptr =
+                reinterpret_cast<float*>(kernel_dst.data);
+            for (int row = 0; row < gemm_case.m; ++row)
+            {
+                const float* a_row =
+                    a_ptr +
+                    static_cast<std::size_t>(row) *
+                        static_cast<std::size_t>(gemm_case.k);
+                float* c_row =
+                    c_ptr +
+                    static_cast<std::size_t>(row) *
+                        static_cast<std::size_t>(gemm_case.n);
+                if (use_ui)
+                {
+                    cvh::detail::gemm_ui::kernel_nn_row_f32(
+                        a_row,
+                        b_ptr,
+                        c_row,
+                        gemm_case.n,
+                        gemm_case.k);
+                }
+                else
+                {
+                    cvh::gemm_kernel_nn_row_scalar(
+                        a_row,
+                        b_ptr,
+                        c_row,
+                        gemm_case.n,
+                        gemm_case.k);
+                }
+            }
+        };
+        append_array_op_row(
+            gemm_args,
+            shape,
+            "GEMM",
+            "fp32_nn_kernel_only_" + suffix,
+            a_bytes + b_bytes + c_bytes,
+            kernel_dst,
+            run_kernel,
+            rows);
+        rows.back().allocation_mode = "precomputed_workspace";
+        rows.back().note =
+            "component=kernel;packing=excluded;"
+            "output_allocation=excluded;shape_dispatch=excluded";
+
+        cvh::Mat b_nt = cvh::transpose(b);
+        append_array_op_row(
+            gemm_args,
+            shape,
+            "GEMM",
+            "fp32_nt_" + suffix,
+            a_bytes + b_bytes + c_bytes,
+            dst,
+            [&]() {
+                dst = cvh::gemm(
+                    a, b_nt, false, true);
+            },
+            rows);
+        rows.back().allocation_mode = "recreate";
+        rows.back().note =
+            "component=public_end_to_end;"
+            "output_allocation=included";
     }
 }
 
@@ -1188,14 +1828,19 @@ int main(int argc, char** argv)
         args.dispatch == "scalar"
             ? cvh::cpu::DispatchMode::ScalarOnly
             : cvh::cpu::DispatchMode::Auto);
+    cvh::setNumThreads(args.threads);
     const auto shapes = cvh_bench::build_shapes(args.profile);
     std::vector<cvh_bench::ResultRow> rows;
     rows.reserve(shapes.size() * 36);
 
-    for (const auto& shape : shapes)
+    if (args.ops.empty())
     {
-        cvh_bench::append_shape_rows(args, shape, rows);
+        for (const auto& shape : shapes)
+        {
+            cvh_bench::append_shape_rows(args, shape, rows);
+        }
     }
+    cvh_bench::append_gemm_rows(args, rows);
 
     cvh_bench::print_csv(rows, std::cout);
     if (!args.output_csv.empty())

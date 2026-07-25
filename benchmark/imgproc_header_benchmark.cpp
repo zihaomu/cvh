@@ -153,6 +153,39 @@ Result measure(RunFn&& run_once, cvh::Mat& dst, const Args& args)
     return Result {timing.min_ms, timing.median_ms, hash};
 }
 
+template <typename RunFn, typename ChecksumFn>
+Result measure_component(
+    RunFn&& run_once,
+    ChecksumFn&& checksum,
+    const Args& args)
+{
+    run_once();
+    const auto timing = common::measure_repeated_ms(
+        run_once, args.warmup, args.iters, args.repeats);
+    const std::uint64_t hash = checksum();
+    g_sink ^= hash;
+    return Result {timing.min_ms, timing.median_ms, hash};
+}
+
+std::uint64_t checksum_pyramid_indices(
+    const cvh::pyramid_detail::PyramidIndexTable& table)
+{
+    std::uint64_t hash = common::fnv1a64_basis();
+    for (const int value : table.x)
+    {
+        hash = common::fnv1a64_mix_u64(
+            hash, static_cast<std::uint64_t>(
+                      static_cast<std::int64_t>(value)));
+    }
+    for (const int value : table.y)
+    {
+        hash = common::fnv1a64_mix_u64(
+            hash, static_cast<std::uint64_t>(
+                      static_cast<std::int64_t>(value)));
+    }
+    return hash;
+}
+
 ResultRow make_row(const Args& args,
                    const ShapeCase& shape,
                    const std::string& op,
@@ -241,6 +274,212 @@ void print_csv(const std::vector<ResultRow>& rows, std::ostream& os)
                 row.status,
                 row.note,
             });
+    }
+}
+
+void append_pyramid_breakdown_rows(
+    const Args& args,
+    const ShapeCase& shape,
+    const cvh::Mat& gray,
+    std::vector<ResultRow>& rows)
+{
+    if (!is_matrix_anchor(shape))
+    {
+        return;
+    }
+
+    const std::size_t gray_bytes = logical_bytes(gray);
+    const int down_rows = (shape.rows + 1) / 2;
+    const int down_cols = (shape.cols + 1) / 2;
+    const int up_rows = shape.rows * 2;
+    const int up_cols = shape.cols * 2;
+
+    {
+        cvh::Mat dst;
+        const auto result = measure(
+            [&]() {
+                dst.release();
+                cvh::pyrDown(gray, dst);
+            },
+            dst,
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "PYR_DOWN",
+            "PUBLIC_RECREATE_GAUSSIAN5_U8C1",
+            CV_8UC1,
+            down_rows,
+            down_cols,
+            gray_bytes + logical_bytes(dst),
+            result);
+        row.allocation_mode = "recreate";
+        row.dispatch_path = "public_header_baseline";
+        row.note =
+            "component=public_recreate;internal_workspace=recreate";
+        rows.push_back(std::move(row));
+    }
+
+    {
+        cvh::pyramid_detail::PyramidIndexTable indices;
+        const auto result = measure_component(
+            [&]() {
+                indices =
+                    cvh::pyramid_detail::make_downsample_indices(
+                        shape.rows,
+                        shape.cols,
+                        down_rows,
+                        down_cols,
+                        cvh::BORDER_REFLECT_101);
+            },
+            [&]() { return checksum_pyramid_indices(indices); },
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "PYR_DOWN",
+            "PRECOMPUTE_GAUSSIAN5_U8C1",
+            CV_8UC1,
+            down_rows,
+            down_cols,
+            (indices.x.size() + indices.y.size()) * sizeof(int),
+            result);
+        row.allocation_mode = "precompute";
+        row.dispatch_path = "detail_precompute";
+        row.note = "component=precompute;output_allocation=excluded";
+        rows.push_back(std::move(row));
+    }
+
+    {
+        cvh::Mat dst({down_rows, down_cols}, CV_8UC1);
+        const auto indices =
+            cvh::pyramid_detail::make_downsample_indices(
+                shape.rows,
+                shape.cols,
+                down_rows,
+                down_cols,
+                cvh::BORDER_REFLECT_101);
+        std::vector<cvh::pyramid_detail::PyramidWorkType<uchar>>
+            temporary(
+                cvh::pyramid_detail::pyramid_temporary_elements(
+                    gray, dst));
+        const auto result = measure(
+            [&]() {
+                cvh::pyramid_detail::downsample_kernel<uchar>(
+                    gray, dst, indices, temporary.data());
+            },
+            dst,
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "PYR_DOWN",
+            "KERNEL_PRECOMPUTED_GAUSSIAN5_U8C1",
+            CV_8UC1,
+            down_rows,
+            down_cols,
+            gray_bytes + logical_bytes(dst),
+            result);
+        row.allocation_mode = "precomputed_workspace";
+        row.dispatch_path = "detail_kernel";
+        row.note =
+            "component=kernel;output_allocation=excluded;"
+            "index_precompute=excluded;workspace_allocation=excluded";
+        rows.push_back(std::move(row));
+    }
+
+    {
+        cvh::Mat dst;
+        const auto result = measure(
+            [&]() {
+                dst.release();
+                cvh::pyrUp(gray, dst);
+            },
+            dst,
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "PYR_UP",
+            "PUBLIC_RECREATE_GAUSSIAN5_U8C1",
+            CV_8UC1,
+            up_rows,
+            up_cols,
+            gray_bytes + logical_bytes(dst),
+            result);
+        row.allocation_mode = "recreate";
+        row.dispatch_path = "public_header_baseline";
+        row.note =
+            "component=public_recreate;internal_workspace=recreate";
+        rows.push_back(std::move(row));
+    }
+
+    {
+        cvh::pyramid_detail::PyramidIndexTable indices;
+        const auto result = measure_component(
+            [&]() {
+                indices =
+                    cvh::pyramid_detail::make_upsample_indices(
+                        shape.rows,
+                        shape.cols,
+                        up_rows,
+                        up_cols,
+                        cvh::BORDER_REFLECT_101);
+            },
+            [&]() { return checksum_pyramid_indices(indices); },
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "PYR_UP",
+            "PRECOMPUTE_GAUSSIAN5_U8C1",
+            CV_8UC1,
+            up_rows,
+            up_cols,
+            (indices.x.size() + indices.y.size()) * sizeof(int),
+            result);
+        row.allocation_mode = "precompute";
+        row.dispatch_path = "detail_precompute";
+        row.note = "component=precompute;output_allocation=excluded";
+        rows.push_back(std::move(row));
+    }
+
+    {
+        cvh::Mat dst({up_rows, up_cols}, CV_8UC1);
+        const auto indices =
+            cvh::pyramid_detail::make_upsample_indices(
+                shape.rows,
+                shape.cols,
+                up_rows,
+                up_cols,
+                cvh::BORDER_REFLECT_101);
+        std::vector<cvh::pyramid_detail::PyramidWorkType<uchar>>
+            temporary(
+                cvh::pyramid_detail::pyramid_temporary_elements(
+                    gray, dst));
+        const auto result = measure(
+            [&]() {
+                cvh::pyramid_detail::upsample_kernel<uchar>(
+                    gray, dst, indices, temporary.data());
+            },
+            dst,
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "PYR_UP",
+            "KERNEL_PRECOMPUTED_GAUSSIAN5_U8C1",
+            CV_8UC1,
+            up_rows,
+            up_cols,
+            gray_bytes + logical_bytes(dst),
+            result);
+        row.allocation_mode = "precomputed_workspace";
+        row.dispatch_path = "detail_kernel";
+        row.note =
+            "component=kernel;output_allocation=excluded;"
+            "index_precompute=excluded;workspace_allocation=excluded";
+        rows.push_back(std::move(row));
     }
 }
 
@@ -879,9 +1118,33 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             shape.cols,
             gray_bytes + logical_bytes(dst),
             result);
-        row.dispatch_path = "scalar_baseline";
-        row.note = "Not qualified as a fast path";
+        row.dispatch_path = "opencv_ui";
+        row.note = "sorting_network_3x3_5x5";
         rows.push_back(row);
+    }
+
+    {
+        cvh::Mat dst;
+        const auto result = measure(
+            [&]() {
+                cvh::stackBlur(
+                    gray, dst, cvh::Size(5, 5));
+            },
+            dst,
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "STACK_BLUR",
+            "5x5_U8C1",
+            CV_8UC1,
+            shape.rows,
+            shape.cols,
+            gray_bytes + logical_bytes(dst),
+            result);
+        row.dispatch_path = "sliding_triangular";
+        row.note = "separable_o1_sliding_sum";
+        rows.push_back(std::move(row));
     }
 
     {
@@ -908,8 +1171,11 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             shape.cols,
             gray_bytes + logical_bytes(dst),
             result);
-        row.dispatch_path = "scalar_baseline";
-        row.note = "Not qualified as a fast path";
+        row.dispatch_path = "precomputed_lut";
+        row.allocation_mode = "reuse";
+        row.note =
+            "component=public_reuse;border_indices=precomputed;"
+            "color_lut=f32";
         rows.push_back(row);
     }
 
@@ -1033,8 +1299,10 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             (shape.cols + 1) / 2,
             gray_bytes + logical_bytes(dst),
             result);
-        row.dispatch_path = "scalar_baseline";
-        row.note = "Not qualified as a fast path";
+        row.dispatch_path = "opencv_ui";
+        row.allocation_mode = "reuse";
+        row.note =
+            "component=public_reuse;workspace=ring_rows";
         rows.push_back(row);
     }
 
@@ -1054,18 +1322,118 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             shape.cols * 2,
             gray_bytes + logical_bytes(dst),
             result);
-        row.dispatch_path = "scalar_baseline";
-        row.note = "Not qualified as a fast path";
+        row.dispatch_path = "opencv_ui";
+        row.allocation_mode = "reuse";
+        row.note =
+            "component=public_reuse;workspace=ring_rows";
         rows.push_back(row);
     }
 
     {
+        cvh::Mat dst;
+        const auto result = measure(
+            [&]() { cvh::pyrDown(bgr, dst); },
+            dst,
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "PYR_DOWN",
+            "GAUSSIAN5_U8C3",
+            CV_8UC3,
+            (shape.rows + 1) / 2,
+            (shape.cols + 1) / 2,
+            bgr_bytes + logical_bytes(dst),
+            result);
+        row.dispatch_path = "opencv_ui";
+        row.note = "component=public_reuse;workspace=ring_rows";
+        rows.push_back(std::move(row));
+    }
+
+    {
+        cvh::Mat dst;
+        const auto result = measure(
+            [&]() { cvh::pyrUp(bgr, dst); },
+            dst,
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "PYR_UP",
+            "GAUSSIAN5_U8C3",
+            CV_8UC3,
+            shape.rows * 2,
+            shape.cols * 2,
+            bgr_bytes + logical_bytes(dst),
+            result);
+        row.dispatch_path = "opencv_ui";
+        row.note = "component=public_reuse;workspace=ring_rows";
+        rows.push_back(std::move(row));
+    }
+
+    {
+        constexpr int levels = 3;
+        std::vector<cvh::Mat> pyramid;
+        const auto result = measure_component(
+            [&]() {
+                cvh::buildPyramid(
+                    gray, pyramid, levels);
+            },
+            [&]() {
+                return pyramid.empty()
+                           ? common::fnv1a64_basis()
+                           : common::checksum_mat_bytes(
+                                 pyramid.back());
+            },
+            args);
+        int output_rows = shape.rows;
+        int output_cols = shape.cols;
+        std::size_t bytes_touched = gray_bytes;
+        for (int level = 0; level < levels; ++level)
+        {
+            output_rows = (output_rows + 1) / 2;
+            output_cols = (output_cols + 1) / 2;
+            bytes_touched +=
+                static_cast<std::size_t>(output_rows) *
+                static_cast<std::size_t>(output_cols);
+        }
+        auto row = make_row(
+            args,
+            shape,
+            "BUILD_PYRAMID",
+            "LEVELS3_GAUSSIAN5_U8C1",
+            CV_8UC1,
+            output_rows,
+            output_cols,
+            bytes_touched,
+            result);
+        row.dispatch_path = "opencv_ui";
+        row.allocation_mode = "reuse";
+        row.note =
+            "component=public_reuse;workspace=reused_across_levels";
+        rows.push_back(std::move(row));
+    }
+
+    append_pyramid_breakdown_rows(args, shape, gray, rows);
+
+    {
+        const int y_rows = shape.rows - shape.rows % 2;
+        const int y_cols = shape.cols - shape.cols % 2;
+        const std::string yuv_shape_name =
+            std::to_string(y_cols) + "x" + std::to_string(y_rows);
+        const ShapeCase yuv_shape {
+            yuv_shape_name.c_str(), y_rows, y_cols};
+        cvh::Mat y({y_rows, y_cols}, CV_8UC1);
         cvh::Mat uv(
-            {shape.rows / 2, shape.cols / 2}, CV_8UC2);
+            {y_rows / 2, y_cols / 2}, CV_8UC2);
+        common::fill_mat_u8_lcg(
+            y,
+            static_cast<std::uint32_t>(
+                y_rows * 23 + y_cols * 27));
         common::fill_mat_u8_lcg(
             uv,
             static_cast<std::uint32_t>(
-                shape.rows * 29 + shape.cols * 31));
+                y_rows * 29 + y_cols * 31));
         for (const auto code_and_name :
              {std::pair<int, const char*>(
                   cvh::COLOR_YUV2BGR_NV12, "NV12_TO_BGR"),
@@ -1076,22 +1444,22 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             const auto result = measure(
                 [&]() {
                     cvh::cvtColorTwoPlane(
-                        gray, uv, dst, code_and_name.first);
+                        y, uv, dst, code_and_name.first);
                 },
                 dst,
                 args);
             auto row = make_row(
                 args,
-                shape,
+                yuv_shape,
                 "CVTCOLOR_TWO_PLANE",
                 code_and_name.second,
                 CV_8UC3,
-                shape.rows,
-                shape.cols,
-                gray_bytes + logical_bytes(uv) + logical_bytes(dst),
+                y_rows,
+                y_cols,
+                logical_bytes(y) + logical_bytes(uv) + logical_bytes(dst),
                 result);
             row.dispatch_path = "scalar_baseline";
-            row.note = "Separate Y and UV planes";
+            row.note = "Separate Y and UV planes; input dimensions rounded down to even";
             rows.push_back(row);
         }
     }
@@ -1135,12 +1503,39 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
         }
         cvh::Mat fixed_coordinates;
         cvh::Mat fixed_fractions;
-        cvh::convertMaps(
-            map_x,
-            map_y,
-            fixed_coordinates,
-            fixed_fractions,
-            CV_16SC2);
+        const auto convert_result = measure_component(
+            [&]() {
+                cvh::convertMaps(
+                    map_x,
+                    map_y,
+                    fixed_coordinates,
+                    fixed_fractions,
+                    CV_16SC2);
+            },
+            [&]() {
+                return common::checksum_mat_bytes(
+                           fixed_coordinates) ^
+                       (common::checksum_mat_bytes(
+                            fixed_fractions) << 1);
+            },
+            args);
+        auto convert_row = make_row(
+            args,
+            shape,
+            "CONVERT_MAPS",
+            "F32_PAIR_TO_FIXED",
+            CV_16SC2,
+            shape.rows,
+            shape.cols,
+            logical_bytes(map_x) +
+                logical_bytes(map_y) +
+                logical_bytes(fixed_coordinates) +
+                logical_bytes(fixed_fractions),
+            convert_result);
+        convert_row.dispatch_path = "opencv_ui";
+        convert_row.note =
+            "component=public_reuse;vector_pack=coordinates_fractions";
+        rows.push_back(std::move(convert_row));
         for (const bool fixed : {false, true})
         {
             cvh::Mat dst;
@@ -1170,10 +1565,51 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
                                logical_bytes(fixed_fractions)
                          : logical_bytes(map_x) + logical_bytes(map_y)),
                 result);
-            row.dispatch_path = "public_header_scalar";
-            row.note = "No qualified SIMD fast path";
+            row.dispatch_path = "fixed_coordinate_block";
+            row.note = fixed
+                ? "component=public_reuse;map=fixed;"
+                  "sampler=shared_fixed_bilinear"
+                : "component=public_reuse;map=float_to_block;"
+                  "sampler=shared_fixed_bilinear";
             rows.push_back(row);
         }
+    }
+
+    {
+        cvh::Mat matrix({2, 3}, CV_64FC1);
+        matrix.at<double>(0, 0) = 1.0;
+        matrix.at<double>(0, 1) = 0.01;
+        matrix.at<double>(0, 2) = 0.25;
+        matrix.at<double>(1, 0) = -0.005;
+        matrix.at<double>(1, 1) = 1.0;
+        matrix.at<double>(1, 2) = 0.5;
+        cvh::Mat dst;
+        const auto result = measure(
+            [&]() {
+                cvh::warpAffine(
+                    bgr,
+                    dst,
+                    matrix,
+                    cvh::Size(shape.cols, shape.rows),
+                    cvh::INTER_LINEAR | cvh::WARP_INVERSE_MAP,
+                    cvh::BORDER_REFLECT_101);
+            },
+            dst,
+            args);
+        auto row = make_row(
+            args,
+            shape,
+            "WARP_AFFINE",
+            "AFFINE_LINEAR_U8C3",
+            CV_8UC3,
+            shape.rows,
+            shape.cols,
+            bgr_bytes + logical_bytes(dst),
+            result);
+        row.dispatch_path = "fixed_coordinate_block";
+        row.note =
+            "component=public_reuse;sampler=shared_fixed_bilinear";
+        rows.push_back(std::move(row));
     }
 
     {
@@ -1211,8 +1647,9 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             shape.cols,
             bgr_bytes + logical_bytes(dst),
             result);
-        row.dispatch_path = "public_header_scalar";
-        row.note = "No qualified SIMD fast path";
+        row.dispatch_path = "fixed_coordinate_block";
+        row.note =
+            "component=public_reuse;sampler=shared_fixed_bilinear";
         rows.push_back(row);
     }
 
@@ -1324,7 +1761,7 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             },
             dst,
             args);
-        rows.push_back(make_row(
+        auto row = make_row(
             args,
             shape,
             "SCHARR",
@@ -1333,7 +1770,11 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             shape.rows,
             shape.cols,
             gray_bytes + logical_bytes(dst),
-            result));
+            result);
+        row.dispatch_path = "opencv_ui";
+        row.note =
+            "shared_filter2d_c1;s16_vector_pack;border_rows=precomputed";
+        rows.push_back(std::move(row));
     }
 
     {
@@ -1351,7 +1792,7 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             },
             dst,
             args);
-        rows.push_back(make_row(
+        auto row = make_row(
             args,
             shape,
             "LAPLACIAN",
@@ -1360,7 +1801,11 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             shape.rows,
             shape.cols,
             gray_bytes + logical_bytes(dst),
-            result));
+            result);
+        row.dispatch_path = "opencv_ui";
+        row.note =
+            "shared_filter2d_c1;s16_vector_pack;border_rows=precomputed";
+        rows.push_back(std::move(row));
     }
 
     {
@@ -1378,7 +1823,7 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             },
             dst,
             args);
-        rows.push_back(make_row(
+        auto row = make_row(
             args,
             shape,
             "SQR_BOX_FILTER",
@@ -1387,7 +1832,11 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
             shape.rows,
             shape.cols,
             gray_bytes + logical_bytes(dst),
-            result));
+            result);
+        row.dispatch_path = "sliding_wide_sum";
+        row.note =
+            "square_u8;horizontal_vertical_rolling_sum;accumulator=s64";
+        rows.push_back(std::move(row));
     }
 
     {
@@ -1448,6 +1897,7 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
 int main(int argc, char** argv)
 {
     const auto args = cvh_bench::parse_args(argc, argv);
+    cvh::setNumThreads(1);
     const auto shapes = cvh_bench::build_shapes(args.profile);
     std::vector<cvh_bench::ResultRow> rows;
     rows.reserve(shapes.size() * 32 + 96);

@@ -190,13 +190,36 @@ double P1_BENCH_FUNCTION(Phase1OpId op,
                 iters,
                 repeats);
         }
+        case Phase1OpId::NormInf:
+        case Phase1OpId::NormL1:
         case Phase1OpId::Norm:
+        case Phase1OpId::NormDiffInf:
+        case Phase1OpId::NormDiffL1:
+        case Phase1OpId::NormDiffL2:
         {
             Mat src = p1_make_mat(rows, cols, CV_32FC1);
+            Mat zeros = p1_make_mat(rows, cols, CV_32FC1);
             p1_fill_f32(src, seed);
+            zeros.setTo(api::Scalar::all(0.0));
+            const bool difference =
+                op == Phase1OpId::NormDiffInf ||
+                op == Phase1OpId::NormDiffL1 ||
+                op == Phase1OpId::NormDiffL2;
+            const int norm_type =
+                op == Phase1OpId::NormInf ||
+                        op == Phase1OpId::NormDiffInf
+                    ? api::NORM_INF
+                    : (op == Phase1OpId::NormL1 ||
+                               op == Phase1OpId::NormDiffL1
+                           ? api::NORM_L1
+                           : api::NORM_L2);
             double result = 0.0;
             return measure_ms(
-                [&]() { result = api::norm(src, api::NORM_L2); },
+                [&]() {
+                    result = difference
+                        ? api::norm(src, zeros, norm_type)
+                        : api::norm(src, norm_type);
+                },
                 [&]() { return result; },
                 warmup,
                 iters,
@@ -253,9 +276,12 @@ double P1_BENCH_FUNCTION(Phase1OpId op,
                 repeats);
         }
         case Phase1OpId::FindNonZero:
+        case Phase1OpId::FindNonZeroAllZero:
+        case Phase1OpId::FindNonZeroSparseTail:
         {
             Mat src = p1_make_mat(rows, cols, CV_8UC1);
             p1_fill_u8(src, seed);
+            p1_prepare_find_nonzero(src, op);
             std::vector<P1_POINT_TYPE> points;
             return measure_ms(
                 [&]() { api::findNonZero(src, points); },
@@ -303,6 +329,15 @@ double P1_BENCH_FUNCTION(Phase1OpId op,
                 repeats);
         }
         case Phase1OpId::Reduce:
+        case Phase1OpId::ReduceAxis0Avg:
+        case Phase1OpId::ReduceAxis0Max:
+        case Phase1OpId::ReduceAxis0Min:
+        case Phase1OpId::ReduceAxis0Sum2:
+        case Phase1OpId::ReduceAxis1Sum:
+        case Phase1OpId::ReduceAxis1Avg:
+        case Phase1OpId::ReduceAxis1Max:
+        case Phase1OpId::ReduceAxis1Min:
+        case Phase1OpId::ReduceAxis1Sum2:
         case Phase1OpId::ReduceArgMax:
         case Phase1OpId::ReduceArgMin:
         {
@@ -310,9 +345,39 @@ double P1_BENCH_FUNCTION(Phase1OpId op,
             Mat dst;
             p1_fill_f32(src, seed);
             const auto run = [&]() {
-                if (op == Phase1OpId::Reduce)
+                if (op != Phase1OpId::ReduceArgMax &&
+                    op != Phase1OpId::ReduceArgMin)
                 {
-                    api::reduce(src, dst, 0, api::REDUCE_SUM, CV_32F);
+                    const int axis =
+                        op == Phase1OpId::Reduce ||
+                                op == Phase1OpId::ReduceAxis0Avg ||
+                                op == Phase1OpId::ReduceAxis0Max ||
+                                op == Phase1OpId::ReduceAxis0Min ||
+                                op == Phase1OpId::ReduceAxis0Sum2
+                            ? 0
+                            : 1;
+                    int rtype = api::REDUCE_SUM;
+                    if (op == Phase1OpId::ReduceAxis0Avg ||
+                        op == Phase1OpId::ReduceAxis1Avg)
+                    {
+                        rtype = api::REDUCE_AVG;
+                    }
+                    else if (op == Phase1OpId::ReduceAxis0Max ||
+                             op == Phase1OpId::ReduceAxis1Max)
+                    {
+                        rtype = api::REDUCE_MAX;
+                    }
+                    else if (op == Phase1OpId::ReduceAxis0Min ||
+                             op == Phase1OpId::ReduceAxis1Min)
+                    {
+                        rtype = api::REDUCE_MIN;
+                    }
+                    else if (op == Phase1OpId::ReduceAxis0Sum2 ||
+                             op == Phase1OpId::ReduceAxis1Sum2)
+                    {
+                        rtype = api::REDUCE_SUM2;
+                    }
+                    api::reduce(src, dst, axis, rtype, CV_32F);
                 }
                 else if (op == Phase1OpId::ReduceArgMax)
                 {
@@ -330,15 +395,30 @@ double P1_BENCH_FUNCTION(Phase1OpId op,
                 iters,
                 repeats);
         }
+        case Phase1OpId::NormalizeInf:
+        case Phase1OpId::NormalizeL1:
         case Phase1OpId::Normalize:
+        case Phase1OpId::NormalizeMinMax:
         {
             Mat src = p1_make_mat(rows, cols, CV_32FC1);
             Mat dst;
             p1_fill_f32(src, seed);
+            const int norm_type =
+                op == Phase1OpId::NormalizeInf
+                    ? api::NORM_INF
+                    : (op == Phase1OpId::NormalizeL1
+                           ? api::NORM_L1
+                           : (op == Phase1OpId::NormalizeMinMax
+                                  ? api::NORM_MINMAX
+                                  : api::NORM_L2));
+            const double alpha =
+                op == Phase1OpId::NormalizeMinMax ? -1.0 : 1.0;
+            const double beta =
+                op == Phase1OpId::NormalizeMinMax ? 1.0 : 0.0;
             return measure_ms(
                 [&]() {
                     api::normalize(
-                        src, dst, 1.0, 0.0, api::NORM_L2, CV_32F);
+                        src, dst, alpha, beta, norm_type, CV_32F);
                 },
                 [&]() { return p1_checksum(dst); },
                 warmup,

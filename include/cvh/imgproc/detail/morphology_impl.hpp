@@ -2,6 +2,8 @@
 #define CVH_IMGPROC_DETAIL_MORPHOLOGY_IMPL_HPP
 
 #include "fastpath_common.hpp"
+#include "cvh/core/detail/dispatch_control.h"
+#include "cvh/core/simd/opencv_ui.h"
 
 namespace cvh
 {
@@ -89,6 +91,157 @@ inline bool try_morph_rect3x3_fastpath(const Mat& src,
 
     std::vector<uchar> tmp(static_cast<std::size_t>(rows) * static_cast<std::size_t>(row_stride), 0);
     const bool do_parallel_h = should_parallelize_filter_rows(rows, cols, channels, 3);
+
+#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const bool use_ui =
+        cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly &&
+        channels == 1 && cols >= 18;
+    if (use_ui)
+    {
+        parallel_for_index_if(do_parallel_h, rows, [&](int y) {
+            const uchar* src_row =
+                src_ref->data +
+                static_cast<std::size_t>(y) * src_step;
+            uchar* tmp_row =
+                tmp.data() +
+                static_cast<std::size_t>(y) *
+                    static_cast<std::size_t>(cols);
+            const uchar border = border_vals[0];
+            const int left =
+                x_offsets[0] >= 0 ? x_offsets[0] : -1;
+            const int center =
+                x_offsets[1] >= 0 ? x_offsets[1] : -1;
+            const int right =
+                x_offsets[2] >= 0 ? x_offsets[2] : -1;
+            const uchar left_value =
+                left >= 0 ? src_row[left] : border;
+            const uchar center_value =
+                center >= 0 ? src_row[center] : border;
+            const uchar right_value =
+                right >= 0 ? src_row[right] : border;
+            tmp_row[0] =
+                is_erode
+                    ? std::min(
+                          left_value,
+                          std::min(center_value, right_value))
+                    : std::max(
+                          left_value,
+                          std::max(center_value, right_value));
+            int x = 1;
+            for (; x + 16 <= cols - 1; x += 16)
+            {
+                const cv::v_uint8x16 first =
+                    cv::v_load(src_row + x - 1);
+                const cv::v_uint8x16 second =
+                    cv::v_load(src_row + x);
+                const cv::v_uint8x16 third =
+                    cv::v_load(src_row + x + 1);
+                cv::v_store(
+                    tmp_row + x,
+                    is_erode
+                        ? cv::v_min(first, cv::v_min(second, third))
+                        : cv::v_max(first, cv::v_max(second, third)));
+            }
+            for (; x < cols - 1; ++x)
+            {
+                tmp_row[x] =
+                    is_erode
+                        ? std::min(
+                              src_row[x - 1],
+                              std::min(src_row[x], src_row[x + 1]))
+                        : std::max(
+                              src_row[x - 1],
+                              std::max(src_row[x], src_row[x + 1]));
+            }
+            const int last = cols - 1;
+            const int* last_offsets =
+                x_offsets.data() +
+                static_cast<std::size_t>(last) * 3u;
+            const uchar value0 =
+                last_offsets[0] >= 0
+                    ? src_row[last_offsets[0]]
+                    : border;
+            const uchar value1 =
+                last_offsets[1] >= 0
+                    ? src_row[last_offsets[1]]
+                    : border;
+            const uchar value2 =
+                last_offsets[2] >= 0
+                    ? src_row[last_offsets[2]]
+                    : border;
+            tmp_row[last] =
+                is_erode
+                    ? std::min(value0, std::min(value1, value2))
+                    : std::max(value0, std::max(value1, value2));
+        });
+
+        dst.create(
+            std::vector<int>{rows, cols}, src_ref->type());
+        const std::size_t dst_step = dst.step(0);
+        const bool do_parallel_v =
+            should_parallelize_filter_rows(rows, cols, 1, 3);
+        parallel_for_index_if(do_parallel_v, rows, [&](int y) {
+            uchar* dst_row =
+                dst.data +
+                static_cast<std::size_t>(y) * dst_step;
+            const int* y_idx =
+                y_indices.data() +
+                static_cast<std::size_t>(y) * 3u;
+            const uchar* row0 =
+                y_idx[0] >= 0
+                    ? tmp.data() +
+                          static_cast<std::size_t>(y_idx[0]) *
+                              static_cast<std::size_t>(cols)
+                    : nullptr;
+            const uchar* row1 =
+                y_idx[1] >= 0
+                    ? tmp.data() +
+                          static_cast<std::size_t>(y_idx[1]) *
+                              static_cast<std::size_t>(cols)
+                    : nullptr;
+            const uchar* row2 =
+                y_idx[2] >= 0
+                    ? tmp.data() +
+                          static_cast<std::size_t>(y_idx[2]) *
+                              static_cast<std::size_t>(cols)
+                    : nullptr;
+            const cv::v_uint8x16 border =
+                cv::v_setall_u8(border_vals[0]);
+            int x = 0;
+            for (; x + 16 <= cols; x += 16)
+            {
+                const cv::v_uint8x16 first =
+                    row0 ? cv::v_load(row0 + x) : border;
+                const cv::v_uint8x16 second =
+                    row1 ? cv::v_load(row1 + x) : border;
+                const cv::v_uint8x16 third =
+                    row2 ? cv::v_load(row2 + x) : border;
+                cv::v_store(
+                    dst_row + x,
+                    is_erode
+                        ? cv::v_min(first, cv::v_min(second, third))
+                        : cv::v_max(first, cv::v_max(second, third)));
+            }
+            for (; x < cols; ++x)
+            {
+                const uchar first =
+                    row0 ? row0[x] : border_vals[0];
+                const uchar second =
+                    row1 ? row1[x] : border_vals[0];
+                const uchar third =
+                    row2 ? row2[x] : border_vals[0];
+                dst_row[x] =
+                    is_erode
+                        ? std::min(first, std::min(second, third))
+                        : std::max(first, std::max(second, third));
+            }
+        });
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return true;
+    }
+#endif
+
     parallel_for_index_if(do_parallel_h, rows, [&](int y) {
         const uchar* src_row = src_ref->data + static_cast<std::size_t>(y) * src_step;
         uchar* tmp_row = tmp.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(row_stride);

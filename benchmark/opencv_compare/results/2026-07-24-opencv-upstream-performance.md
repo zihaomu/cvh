@@ -1,6 +1,6 @@
 # cvh vs OpenCV Benchmark Report (full)
 
-生成时间（UTC）：`2026-07-24 09:24:36Z`
+生成时间（UTC）：`2026-07-24 16:16:32Z`
 
 ## 当前项目状态
 
@@ -11,9 +11,15 @@
 - Core 的 `add/subtract/multiply/divide/transpose/GEMM` 已迁入 ODR-safe headers；本报告通过公共 API 测量，不链接 legacy core 对象。
 - OpenCV Universal Intrinsics 是默认 SIMD 方言，kernel 直接使用 OpenCV UI；项目已移除 xsimd 性能路径。
 - Core F32 `patchNaNs/exp/log/pow` 已接入 UI；`pow` 分离整数指数与通用指数，特殊值 block 保留 scalar fallback。
+- Core `countNonZero/hasNonZero` 已接入 UI；计数使用分段 widen 归约，存在性检测按块 early-exit。
+- Core `findNonZero` 已接入稀疏感知 UI；全零 block 直接跳过，连续稠密 block 自适应切回 typed lane 枚举，并保持 row-major 坐标顺序。
+- Core `sum/mean/meanStdDev` 已接入 C1-C4 channel-aware UI；`sum/mean` 共享 widen sum/count，`meanStdDev` 使用中心化 block statistics 与 Chan merge。
+- Core `minMaxIdx/minMaxLoc/reduceArgMin/reduceArgMax` 已接入 UI；极值与索引在同一遍扫描中更新，并保留 first/last tie 语义。
+- Core `norm/normalize` 已接入 UI；`norm` 覆盖 U8/F32 单/双输入的 L1/L2/Inf，`normalize` 复用 norm/minmax 归约并向量化 F32 apply-scale。
+- P-ACC-2 至 P-ACC-7 已完成 Apple ARM 收尾，覆盖 Core 归约、布局、通道与 GEMM，以及 Imgproc 滤波、几何、非线性、形态学、累积和强度变换；真实 x86 SSE/AVX 运行验证仍是外部 gate。
 - ARM 当前关注 NEON，本次实测平台为 Apple ARM；x86 目标是 SSE/AVX 系列，RVV 因 scalable vector 设计问题暂缓。
-- Imgproc legacy `.cpp` fast-path 已迁入 ODR-safe detail headers；resize/cvtColor UI、filter、LUT、border、Sobel、Canny 和 morphology 均从公共 header API 进入。
-- 第一阶段新增的 `79` 个操作族已全部进入 Mode B，本报告包含 `92` 个 P1 性能 case。
+- Imgproc legacy `.cpp` fast-path 已迁入 ODR-safe detail headers；resize/cvtColor、共享 filter、几何采样、morphology、threshold、LUT/histogram 和 accumulate family 均从公共 header API 进入。
+- 第一阶段新增的 `79` 个操作族已全部进入 Mode B，本报告包含 `111` 个 P1 性能 case。
 - `full` profile 覆盖代表性的 `CV_8U` / `CV_32F`、C1/C3/C4、尺寸、布局与非连续 ROI 扩展。
 
 ## 第一阶段新增算子
@@ -44,7 +50,7 @@
 | --- | --- | --- |
 | 公共 API | OpenCV-compatible header API | 所有 case 均从 `cvh::headers_fast` 公共入口调用 |
 | SIMD 方言 | OpenCV Universal Intrinsics | 在 Apple ARM 上映射到 NEON |
-| 专用 kernel | `cvtColor`、特定 `resize`、core 逐元素与 F32 数学 UI kernel | 实际命中时记录为 `dispatch_path=opencv_ui` |
+| 专用 kernel | `cvtColor`、特定 `resize`、core 逐元素、统计/非零归约与 F32 数学 UI kernel | 实际命中时记录为 `dispatch_path=opencv_ui` |
 | Header fast-path | 行并行 filter、LUT、border、Sobel、Canny、morphology | 记录为 `dispatch_path=header_fastpath` |
 | 通用实现 | `cvh::headers` 中的 header baseline | 无专用 fast-path 时自动继承，记录为 `headers_baseline` 或 `public_header_scalar` |
 | 对照实现 | upstream OpenCV `core` / `imgproc` | 相同输入、尺寸、border 和线程配置 |
@@ -53,27 +59,27 @@
 
 - Profile：`full`
 - CVH 实现：`cvh_headers_fast`
-- 采样：`warmup=1, iters=10, repeats=3`
+- 采样：`warmup=2, iters=100, repeats=3`
 - 线程数：`1`
 - OpenMP：`dynamic=false, proc_bind=close`
 - 主机：`Darwin arm64`
 - CPU：`Apple M5`
 - 编译器：`Apple clang version 21.0.0 (clang-2100.0.123.102)`
 - 构建类型：`Release`
-- CVH commit：`81044e01064a2a5867b8da80f7181552ffa09860` + dirty
+- CVH commit：`ab40a0865afbfc1e07070b411fca54379cd0bf70` + dirty
 - OpenCV：`4.14.0`，commit `d48bf69f65444a13f8a34b8982b083c1b78fa0e8` + dirty
 - 原始数据：`2026-07-24-opencv-upstream-performance.csv`；元数据：`2026-07-24-opencv-upstream-performance.csv.meta.json`
 
 ## 汇总
 
-- 总 case：`321`；有效：`320`；不支持：`1`。
-- `OpenCV/CVH` 几何平均：`0.2509`；中位数：`0.4653`。
-- CVH 更快：`30` 个；OpenCV 更快或相当：`290` 个。
+- 总 case：`340`；有效：`339`；不支持：`1`。
+- `OpenCV/CVH` 几何平均：`0.5563`；中位数：`0.7136`。
+- CVH 更快：`58` 个；OpenCV 更快或相当：`281` 个。
 
 | Suite | Cases | 几何平均 OpenCV/CVH | 中位数 | CVH 更快 | OpenCV 更快/相当 |
 | --- | --- | --- | --- | --- | --- |
-| core_mat | 153 | 0.2943 | 0.7401 | 14 | 139 |
-| imgproc | 167 | 0.2168 | 0.2738 | 16 | 151 |
+| core_mat | 172 | 0.6659 | 0.7827 | 29 | 143 |
+| imgproc | 167 | 0.4623 | 0.4550 | 29 | 138 |
 
 ## 算子级概览
 
@@ -81,116 +87,116 @@
 
 | Op | 阶段 | CVH dispatch | Cases | 几何平均 OpenCV/CVH | 领先方 |
 | --- | --- | --- | --- | --- | --- |
-| ABSDIFF | P1 新增 | opencv_ui | 1 | 0.7673 | OpenCV `1.30x` |
-| ADD | 既有 | opencv_ui | 16 | 0.7725 | OpenCV `1.29x` |
-| BITWISE_AND | P1 新增 | opencv_ui | 1 | 0.5290 | OpenCV `1.89x` |
-| BITWISE_NOT | P1 新增 | opencv_ui | 1 | 0.4972 | OpenCV `2.01x` |
-| BITWISE_OR | P1 新增 | opencv_ui | 1 | 0.7093 | OpenCV `1.41x` |
-| BITWISE_XOR | P1 新增 | opencv_ui | 1 | 0.7091 | OpenCV `1.41x` |
-| BORDER_INTERPOLATE | P1 新增 | public_header_baseline | 1 | 0.8862 | OpenCV `1.13x` |
-| BROADCAST | P1 新增 | public_header_baseline | 1 | 0.0002 | OpenCV `4329.00x` |
-| CHECK_RANGE | P1 新增 | public_header_baseline | 1 | 0.5965 | OpenCV `1.68x` |
-| CONVERT_FP16 | P1 新增 | opencv_ui | 1 | 1.2128 | CVH `1.21x` |
-| CONVERT_SCALE_ABS | P1 新增 | opencv_ui | 1 | 0.8271 | OpenCV `1.21x` |
-| COPY_TO | P1 新增 | public_header_baseline | 1 | 0.0066 | OpenCV `152.02x` |
-| COUNT_NON_ZERO | P1 新增 | public_header_baseline | 1 | 0.0333 | OpenCV `29.99x` |
-| DIVIDE | 既有 | opencv_ui, scalar | 16 | 0.5007 | OpenCV `2.00x` |
-| EXP | P1 新增 | opencv_ui | 1 | 0.4785 | OpenCV `2.09x` |
-| EXTRACT_CHANNEL | P1 新增 | public_header_baseline | 1 | 0.0138 | OpenCV `72.71x` |
-| FIND_NON_ZERO | P1 新增 | public_header_baseline | 1 | 0.3399 | OpenCV `2.94x` |
-| FLIP | P1 新增 | public_header_baseline | 1 | 0.0048 | OpenCV `206.65x` |
-| FLIP_ND | P1 新增 | public_header_baseline | 1 | 0.0103 | OpenCV `97.45x` |
-| GEMM | 既有 | headers_baseline | 6 | 0.0127 | OpenCV `78.84x` |
-| HAS_NON_ZERO | P1 新增 | public_header_baseline | 1 | 0.0000 | OpenCV `22222.22x` |
-| HCONCAT | P1 新增 | public_header_baseline | 1 | 0.5305 | OpenCV `1.89x` |
-| INSERT_CHANNEL | P1 新增 | public_header_baseline | 1 | 0.0137 | OpenCV `72.83x` |
-| IN_RANGE | P1 新增 | opencv_ui | 1 | 0.6192 | OpenCV `1.61x` |
-| LOG | P1 新增 | opencv_ui | 1 | 0.5823 | OpenCV `1.72x` |
-| MAT_CLONE | 既有 | headers_baseline | 4 | 0.9826 | OpenCV `1.02x` |
-| MAT_CONVERTTO | 既有 | headers_baseline | 4 | 0.9878 | OpenCV `1.01x` |
-| MAT_COPYTO | 既有 | headers_baseline | 4 | 1.0038 | CVH `1.00x` |
-| MAT_CREATE | 既有 | headers_baseline | 4 | 0.0683 | OpenCV `14.63x` |
-| MAT_RESHAPE | 既有 | headers_baseline | 4 | 0.3380 | OpenCV `2.96x` |
-| MAT_SETTO | 既有 | headers_baseline | 4 | 0.0119 | OpenCV `83.90x` |
-| MAX | P1 新增 | opencv_ui | 1 | 0.6540 | OpenCV `1.53x` |
-| MEAN | P1 新增 | public_header_baseline | 1 | 0.1756 | OpenCV `5.70x` |
-| MEAN_STD_DEV | P1 新增 | public_header_baseline | 1 | 0.1049 | OpenCV `9.53x` |
-| MIN | P1 新增 | opencv_ui | 1 | 0.6467 | OpenCV `1.55x` |
-| MIN_MAX_IDX | P1 新增 | public_header_baseline | 1 | 0.0558 | OpenCV `17.92x` |
-| MIN_MAX_LOC | P1 新增 | public_header_baseline | 1 | 0.0556 | OpenCV `17.98x` |
-| MIX_CHANNELS | P1 新增 | public_header_baseline | 1 | 0.0136 | OpenCV `73.64x` |
-| MULTIPLY | 既有 | opencv_ui | 16 | 0.7689 | OpenCV `1.30x` |
-| NORM | P1 新增 | public_header_baseline | 1 | 0.0673 | OpenCV `14.85x` |
-| NORMALIZE | P1 新增 | public_header_baseline | 1 | 0.0467 | OpenCV `21.40x` |
-| PATCH_NANS | P1 新增 | opencv_ui | 1 | 0.8092 | OpenCV `1.24x` |
-| POW | P1 新增 | opencv_ui | 1 | 0.6147 | OpenCV `1.63x` |
-| REDUCE | P1 新增 | public_header_baseline | 1 | 0.0199 | OpenCV `50.29x` |
-| REDUCE_ARG_MAX | P1 新增 | public_header_baseline | 1 | 0.1562 | OpenCV `6.40x` |
-| REDUCE_ARG_MIN | P1 新增 | public_header_baseline | 1 | 0.1621 | OpenCV `6.17x` |
-| REPEAT | P1 新增 | public_header_baseline | 1 | 0.0015 | OpenCV `667.56x` |
-| ROTATE | P1 新增 | public_header_baseline | 1 | 0.0290 | OpenCV `34.48x` |
-| SCALE_ADD | P1 新增 | scalar | 1 | 0.8201 | OpenCV `1.22x` |
-| SQRT | P1 新增 | scalar | 1 | 0.9686 | OpenCV `1.03x` |
-| SUBTRACT | 既有 | opencv_ui | 16 | 0.7735 | OpenCV `1.29x` |
-| SUM | P1 新增 | public_header_baseline | 1 | 0.1598 | OpenCV `6.26x` |
-| SWAP | P1 新增 | public_header_baseline | 1 | 0.2077 | OpenCV `4.81x` |
-| TRANSPOSE | 既有 | headers_baseline | 16 | 0.5511 | OpenCV `1.81x` |
-| VCONCAT | P1 新增 | public_header_baseline | 1 | 0.5137 | OpenCV `1.95x` |
+| ABSDIFF | P1 新增 | opencv_ui | 1 | 0.7602 | OpenCV `1.32x` |
+| ADD | 既有 | opencv_ui | 16 | 0.7594 | OpenCV `1.32x` |
+| BITWISE_AND | P1 新增 | opencv_ui | 1 | 0.7030 | OpenCV `1.42x` |
+| BITWISE_NOT | P1 新增 | opencv_ui | 1 | 0.4704 | OpenCV `2.13x` |
+| BITWISE_OR | P1 新增 | opencv_ui | 1 | 0.7092 | OpenCV `1.41x` |
+| BITWISE_XOR | P1 新增 | opencv_ui | 1 | 0.7068 | OpenCV `1.41x` |
+| BORDER_INTERPOLATE | P1 新增 | public_header_baseline | 1 | 0.9706 | OpenCV `1.03x` |
+| BROADCAST | P1 新增 | scalar | 1 | 0.7817 | OpenCV `1.28x` |
+| CHECK_RANGE | P1 新增 | public_header_baseline | 1 | 0.6064 | OpenCV `1.65x` |
+| CONVERT_FP16 | P1 新增 | opencv_ui | 1 | 1.2198 | CVH `1.22x` |
+| CONVERT_SCALE_ABS | P1 新增 | opencv_ui | 1 | 0.8177 | OpenCV `1.22x` |
+| COPY_TO | P1 新增 | opencv_ui | 1 | 0.9911 | OpenCV `1.01x` |
+| COUNT_NON_ZERO | P1 新增 | opencv_ui | 1 | 0.9951 | OpenCV `1.00x` |
+| DIVIDE | 既有 | opencv_ui, scalar | 16 | 0.4977 | OpenCV `2.01x` |
+| EXP | P1 新增 | opencv_ui | 1 | 0.4781 | OpenCV `2.09x` |
+| EXTRACT_CHANNEL | P1 新增 | opencv_ui | 1 | 2.7621 | CVH `2.76x` |
+| FIND_NON_ZERO | P1 新增 | opencv_ui | 3 | 2.6159 | CVH `2.62x` |
+| FLIP | P1 新增 | opencv_ui | 1 | 0.9978 | OpenCV `1.00x` |
+| FLIP_ND | P1 新增 | opencv_ui | 1 | 7.7684 | CVH `7.77x` |
+| GEMM | 既有 | opencv_ui | 6 | 0.0842 | OpenCV `11.87x` |
+| HAS_NON_ZERO | P1 新增 | opencv_ui | 1 | 0.9520 | OpenCV `1.05x` |
+| HCONCAT | P1 新增 | scalar | 1 | 1.3762 | CVH `1.38x` |
+| INSERT_CHANNEL | P1 新增 | opencv_ui | 1 | 1.7068 | CVH `1.71x` |
+| IN_RANGE | P1 新增 | opencv_ui | 1 | 0.6176 | OpenCV `1.62x` |
+| LOG | P1 新增 | opencv_ui | 1 | 0.5760 | OpenCV `1.74x` |
+| MAT_CLONE | 既有 | headers_baseline | 4 | 0.9657 | OpenCV `1.04x` |
+| MAT_CONVERTTO | 既有 | headers_baseline | 4 | 1.0045 | CVH `1.00x` |
+| MAT_COPYTO | 既有 | headers_baseline | 4 | 0.9859 | OpenCV `1.01x` |
+| MAT_CREATE | 既有 | headers_baseline | 4 | 0.0728 | OpenCV `13.73x` |
+| MAT_RESHAPE | 既有 | headers_baseline | 4 | 0.3408 | OpenCV `2.93x` |
+| MAT_SETTO | 既有 | headers_baseline | 4 | 0.9412 | OpenCV `1.06x` |
+| MAX | P1 新增 | opencv_ui | 1 | 0.6333 | OpenCV `1.58x` |
+| MEAN | P1 新增 | opencv_ui | 1 | 1.9977 | CVH `2.00x` |
+| MEAN_STD_DEV | P1 新增 | opencv_ui | 1 | 0.3214 | OpenCV `3.11x` |
+| MIN | P1 新增 | opencv_ui | 1 | 0.6438 | OpenCV `1.55x` |
+| MIN_MAX_IDX | P1 新增 | opencv_ui | 1 | 0.7136 | OpenCV `1.40x` |
+| MIN_MAX_LOC | P1 新增 | opencv_ui | 1 | 0.7054 | OpenCV `1.42x` |
+| MIX_CHANNELS | P1 新增 | opencv_ui | 1 | 3.6253 | CVH `3.63x` |
+| MULTIPLY | 既有 | opencv_ui | 16 | 0.7813 | OpenCV `1.28x` |
+| NORM | P1 新增 | opencv_ui | 6 | 0.2616 | OpenCV `3.82x` |
+| NORMALIZE | P1 新增 | opencv_ui | 4 | 0.4045 | OpenCV `2.47x` |
+| PATCH_NANS | P1 新增 | opencv_ui | 1 | 0.9526 | OpenCV `1.05x` |
+| POW | P1 新增 | opencv_ui | 1 | 0.5857 | OpenCV `1.71x` |
+| REDUCE | P1 新增 | opencv_ui | 10 | 0.4663 | OpenCV `2.14x` |
+| REDUCE_ARG_MAX | P1 新增 | opencv_ui | 1 | 0.9653 | OpenCV `1.04x` |
+| REDUCE_ARG_MIN | P1 新增 | opencv_ui | 1 | 0.9537 | OpenCV `1.05x` |
+| REPEAT | P1 新增 | scalar | 1 | 1.0403 | CVH `1.04x` |
+| ROTATE | P1 新增 | opencv_ui | 1 | 0.7453 | OpenCV `1.34x` |
+| SCALE_ADD | P1 新增 | scalar | 1 | 0.8233 | OpenCV `1.21x` |
+| SQRT | P1 新增 | scalar | 1 | 0.9928 | OpenCV `1.01x` |
+| SUBTRACT | 既有 | opencv_ui | 16 | 0.7811 | OpenCV `1.28x` |
+| SUM | P1 新增 | opencv_ui | 1 | 1.9993 | CVH `2.00x` |
+| SWAP | P1 新增 | public_header_baseline | 1 | 1.0000 | OpenCV `1.00x` |
+| TRANSPOSE | 既有 | opencv_ui, scalar | 16 | 1.1254 | CVH `1.13x` |
+| VCONCAT | P1 新增 | scalar | 1 | 1.0383 | CVH `1.04x` |
 
 ### `imgproc`
 
 | Op | 阶段 | CVH dispatch | Cases | 几何平均 OpenCV/CVH | 领先方 |
 | --- | --- | --- | --- | --- | --- |
-| ACCUMULATE | P1 新增 | public_header_baseline | 1 | 0.0781 | OpenCV `12.81x` |
-| ACCUMULATE_PRODUCT | P1 新增 | public_header_baseline | 1 | 0.0689 | OpenCV `14.52x` |
-| ACCUMULATE_SQUARE | P1 新增 | public_header_baseline | 1 | 0.0706 | OpenCV `14.16x` |
-| ACCUMULATE_WEIGHTED | P1 新增 | public_header_baseline | 1 | 0.0701 | OpenCV `14.27x` |
-| ADAPTIVE_THRESHOLD | P1 新增 | public_header_baseline | 1 | 0.5265 | OpenCV `1.90x` |
-| APPLY_COLOR_MAP | P1 新增 | public_header_baseline | 1 | 0.3266 | OpenCV `3.06x` |
-| BILATERAL_FILTER | P1 新增 | public_header_baseline | 1 | 0.0412 | OpenCV `24.28x` |
-| BLEND_LINEAR | P1 新增 | public_header_baseline | 1 | 0.3942 | OpenCV `2.54x` |
-| BOX_FILTER | 既有 | box3x3, header_fastpath | 10 | 0.2961 | OpenCV `3.38x` |
-| BUILD_PYRAMID | P1 新增 | public_header_baseline | 1 | 0.0065 | OpenCV `153.42x` |
-| CANNY | 既有 | header_fastpath | 4 | 0.9434 | OpenCV `1.06x` |
-| CONVERT_MAPS | P1 新增 | public_header_baseline | 1 | 0.0049 | OpenCV `203.50x` |
-| COPY_MAKE_BORDER | 既有 | header_fastpath | 9 | 0.3703 | OpenCV `2.70x` |
-| CREATE_HANNING_WINDOW | P1 新增 | public_header_baseline | 1 | 0.0286 | OpenCV `35.00x` |
-| CVTCOLOR | 既有 | header_fastpath, opencv_ui | 17 | 0.5534 | OpenCV `1.81x` |
-| CVT_COLOR_TWO_PLANE | P1 新增 | public_header_baseline | 1 | 0.1589 | OpenCV `6.29x` |
-| DEMOSAICING | P1 新增 | public_header_baseline | 1 | 0.0014 | OpenCV `723.59x` |
-| DILATE | 既有 | header_fastpath | 6 | 0.1166 | OpenCV `8.58x` |
-| EQUALIZE_HIST | P1 新增 | public_header_baseline | 1 | 0.4953 | OpenCV `2.02x` |
-| ERODE | 既有 | header_fastpath | 6 | 0.1131 | OpenCV `8.84x` |
-| FILTER2D | 既有 | header_fastpath | 10 | 0.3689 | OpenCV `2.71x` |
-| GAUSSIAN | 既有 | gauss_separable, header_fastpath | 10 | 0.2800 | OpenCV `3.57x` |
-| GET_AFFINE_TRANSFORM | P1 新增 | public_header_baseline | 1 | 1.9186 | CVH `1.92x` |
-| GET_DERIV_KERNELS | P1 新增 | public_header_baseline | 1 | 0.4383 | OpenCV `2.28x` |
-| GET_GABOR_KERNEL | P1 新增 | public_header_baseline | 1 | 0.3271 | OpenCV `3.06x` |
-| GET_GAUSSIAN_KERNEL | P1 新增 | public_header_baseline | 1 | 3.8778 | CVH `3.88x` |
-| GET_PERSPECTIVE_TRANSFORM | P1 新增 | public_header_baseline | 1 | 2.3457 | CVH `2.35x` |
-| GET_RECT_SUB_PIX | P1 新增 | public_header_scalar | 4 | 0.0215 | OpenCV `46.51x` |
-| GET_ROTATION_MATRIX_2D | P1 新增 | public_header_baseline | 1 | 0.9722 | OpenCV `1.03x` |
-| GET_ROTATION_MATRIX_2D_ | P1 新增 | public_header_baseline | 1 | 1.1173 | CVH `1.12x` |
-| GET_STRUCTURING_ELEMENT | P1 新增 | public_header_baseline | 1 | 0.1842 | OpenCV `5.43x` |
-| INTEGRAL | P1 新增 | public_header_baseline | 1 | 0.0276 | OpenCV `36.23x` |
-| INVERT_AFFINE_TRANSFORM | P1 新增 | public_header_baseline | 1 | 0.4635 | OpenCV `2.16x` |
-| LAPLACIAN | P1 新增 | public_header_baseline | 1 | 0.0128 | OpenCV `77.97x` |
-| LUT | 既有 | header_fastpath | 6 | 0.5922 | OpenCV `1.69x` |
-| MEDIAN_BLUR | P1 新增 | public_header_baseline | 1 | 0.0048 | OpenCV `208.07x` |
-| PYR_DOWN | P1 新增 | public_header_baseline | 1 | 0.0076 | OpenCV `132.26x` |
-| PYR_UP | P1 新增 | public_header_baseline | 1 | 0.0071 | OpenCV `139.92x` |
-| REMAP | P1 新增 | public_header_scalar | 8 | 0.0494 | OpenCV `20.25x` |
-| RESIZE | 既有 | header_fastpath, headers_baseline, opencv_ui | 10 | 0.6733 | OpenCV `1.49x` |
-| SCHARR | P1 新增 | public_header_baseline | 1 | 0.0121 | OpenCV `82.75x` |
-| SEP_FILTER2D | 既有 | header_fastpath | 10 | 0.4564 | OpenCV `2.19x` |
-| SOBEL | 既有 | header_fastpath | 6 | 1.5897 | CVH `1.59x` |
-| SPATIAL_GRADIENT | P1 新增 | public_header_baseline | 1 | 0.1571 | OpenCV `6.37x` |
-| SQR_BOX_FILTER | P1 新增 | public_header_baseline | 1 | 0.0221 | OpenCV `45.29x` |
-| STACK_BLUR | P1 新增 | public_header_baseline | 1 | 0.0800 | OpenCV `12.51x` |
-| THRESHOLD | 既有 | header_fastpath, headers_baseline | 5 | 0.0449 | OpenCV `22.25x` |
-| THRESHOLD_WITH_MASK | P1 新增 | public_header_baseline | 1 | 1.0440 | CVH `1.04x` |
-| WARP_AFFINE | 既有 | headers_baseline | 9 | 0.0862 | OpenCV `11.59x` |
-| WARP_PERSPECTIVE | P1 新增 | public_header_scalar | 4 | 0.0925 | OpenCV `10.81x` |
+| ACCUMULATE | P1 新增 | opencv_ui | 1 | 0.3117 | OpenCV `3.21x` |
+| ACCUMULATE_PRODUCT | P1 新增 | opencv_ui | 1 | 0.2598 | OpenCV `3.85x` |
+| ACCUMULATE_SQUARE | P1 新增 | opencv_ui | 1 | 0.3104 | OpenCV `3.22x` |
+| ACCUMULATE_WEIGHTED | P1 新增 | opencv_ui | 1 | 0.3438 | OpenCV `2.91x` |
+| ADAPTIVE_THRESHOLD | P1 新增 | opencv_ui | 1 | 0.7748 | OpenCV `1.29x` |
+| APPLY_COLOR_MAP | P1 新增 | public_header_baseline | 1 | 0.3482 | OpenCV `2.87x` |
+| BILATERAL_FILTER | P1 新增 | public_header_baseline | 1 | 0.0522 | OpenCV `19.15x` |
+| BLEND_LINEAR | P1 新增 | public_header_baseline | 1 | 0.4260 | OpenCV `2.35x` |
+| BOX_FILTER | 既有 | box3x3, header_fastpath | 10 | 0.2869 | OpenCV `3.49x` |
+| BUILD_PYRAMID | P1 新增 | public_header_baseline | 1 | 0.0756 | OpenCV `13.23x` |
+| CANNY | 既有 | header_fastpath | 4 | 0.9343 | OpenCV `1.07x` |
+| CONVERT_MAPS | P1 新增 | opencv_ui | 1 | 0.1595 | OpenCV `6.27x` |
+| COPY_MAKE_BORDER | 既有 | header_fastpath | 9 | 0.3840 | OpenCV `2.60x` |
+| CREATE_HANNING_WINDOW | P1 新增 | opencv_ui | 1 | 1.8557 | CVH `1.86x` |
+| CVTCOLOR | 既有 | header_fastpath, opencv_ui | 17 | 0.5595 | OpenCV `1.79x` |
+| CVT_COLOR_TWO_PLANE | P1 新增 | public_header_baseline | 1 | 0.2017 | OpenCV `4.96x` |
+| DEMOSAICING | P1 新增 | public_header_baseline | 1 | 0.0964 | OpenCV `10.37x` |
+| DILATE | 既有 | header_fastpath | 6 | 0.2384 | OpenCV `4.19x` |
+| EQUALIZE_HIST | P1 新增 | opencv_ui | 1 | 1.0446 | CVH `1.04x` |
+| ERODE | 既有 | header_fastpath | 6 | 0.2333 | OpenCV `4.29x` |
+| FILTER2D | 既有 | header_fastpath | 10 | 0.4177 | OpenCV `2.39x` |
+| GAUSSIAN | 既有 | gauss_separable, header_fastpath | 10 | 0.2779 | OpenCV `3.60x` |
+| GET_AFFINE_TRANSFORM | P1 新增 | public_header_baseline | 1 | 1.9316 | CVH `1.93x` |
+| GET_DERIV_KERNELS | P1 新增 | public_header_baseline | 1 | 0.6667 | OpenCV `1.50x` |
+| GET_GABOR_KERNEL | P1 新增 | public_header_baseline | 1 | 0.9652 | OpenCV `1.04x` |
+| GET_GAUSSIAN_KERNEL | P1 新增 | public_header_baseline | 1 | 3.8745 | CVH `3.87x` |
+| GET_PERSPECTIVE_TRANSFORM | P1 新增 | public_header_baseline | 1 | 2.5103 | CVH `2.51x` |
+| GET_RECT_SUB_PIX | P1 新增 | public_header_scalar | 4 | 11.7642 | CVH `11.76x` |
+| GET_ROTATION_MATRIX_2D | P1 新增 | public_header_baseline | 1 | 0.9331 | OpenCV `1.07x` |
+| GET_ROTATION_MATRIX_2D_ | P1 新增 | public_header_baseline | 1 | 1.1010 | CVH `1.10x` |
+| GET_STRUCTURING_ELEMENT | P1 新增 | public_header_baseline | 1 | 0.7549 | OpenCV `1.32x` |
+| INTEGRAL | P1 新增 | opencv_ui | 1 | 0.5577 | OpenCV `1.79x` |
+| INVERT_AFFINE_TRANSFORM | P1 新增 | public_header_baseline | 1 | 1.3611 | CVH `1.36x` |
+| LAPLACIAN | P1 新增 | opencv_ui | 1 | 0.4192 | OpenCV `2.39x` |
+| LUT | 既有 | header_fastpath | 6 | 0.8608 | OpenCV `1.16x` |
+| MEDIAN_BLUR | P1 新增 | public_header_baseline | 1 | 0.0302 | OpenCV `33.13x` |
+| PYR_DOWN | P1 新增 | public_header_baseline | 1 | 0.1234 | OpenCV `8.10x` |
+| PYR_UP | P1 新增 | public_header_baseline | 1 | 0.1416 | OpenCV `7.06x` |
+| REMAP | P1 新增 | public_header_scalar | 8 | 0.2761 | OpenCV `3.62x` |
+| RESIZE | 既有 | header_fastpath, headers_baseline, opencv_ui | 10 | 0.6657 | OpenCV `1.50x` |
+| SCHARR | P1 新增 | opencv_ui | 1 | 0.3202 | OpenCV `3.12x` |
+| SEP_FILTER2D | 既有 | header_fastpath | 10 | 0.5240 | OpenCV `1.91x` |
+| SOBEL | 既有 | header_fastpath | 6 | 1.5768 | CVH `1.58x` |
+| SPATIAL_GRADIENT | P1 新增 | opencv_ui | 1 | 0.4362 | OpenCV `2.29x` |
+| SQR_BOX_FILTER | P1 新增 | opencv_ui | 1 | 0.8076 | OpenCV `1.24x` |
+| STACK_BLUR | P1 新增 | public_header_baseline | 1 | 0.0984 | OpenCV `10.17x` |
+| THRESHOLD | 既有 | header_fastpath, headers_baseline | 5 | 0.9754 | OpenCV `1.03x` |
+| THRESHOLD_WITH_MASK | P1 新增 | public_header_baseline | 1 | 0.9336 | OpenCV `1.07x` |
+| WARP_AFFINE | 既有 | headers_baseline | 9 | 0.1575 | OpenCV `6.35x` |
+| WARP_PERSPECTIVE | P1 新增 | public_header_scalar | 4 | 0.3444 | OpenCV `2.90x` |
 
 ## 详细结果
 
@@ -198,331 +204,350 @@
 
 | Op | 阶段 | Variant | CVH dispatch | Depth | Ch | Layout | Shape | CVH ms | OpenCV ms | OpenCV/CVH | Note |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ABSDIFF | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.033642 | 0.025812 | 0.7673 | phase1_representative_case |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 1080x1920 | 0.280062 | 0.214517 | 0.7660 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 479x641 | 0.043075 | 0.031950 | 0.7417 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.042754 | 0.031329 | 0.7328 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 720x1280 | 0.127446 | 0.101638 | 0.7975 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 1080x1920 | 0.801962 | 0.644042 | 0.8031 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 479x641 | 0.126575 | 0.099192 | 0.7837 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.120571 | 0.092271 | 0.7653 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 720x1280 | 0.355783 | 0.288587 | 0.8111 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 1080x1920 | 0.062854 | 0.050238 | 0.7993 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 479x641 | 0.009417 | 0.006829 | 0.7252 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.009783 | 0.007050 | 0.7206 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 720x1280 | 0.030067 | 0.023767 | 0.7905 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 1080x1920 | 0.203554 | 0.160871 | 0.7903 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 479x641 | 0.032317 | 0.024429 | 0.7559 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.027204 | 0.022150 | 0.8142 | correctness=upstream_pass |
-| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 720x1280 | 0.092633 | 0.071546 | 0.7724 | correctness=upstream_pass |
-| BITWISE_AND | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.048696 | 0.025758 | 0.5290 | phase1_representative_case |
-| BITWISE_NOT | P1 新增 | u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.034987 | 0.017396 | 0.4972 | phase1_representative_case |
-| BITWISE_OR | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.036396 | 0.025817 | 0.7093 | phase1_representative_case |
-| BITWISE_XOR | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.036383 | 0.025800 | 0.7091 | phase1_representative_case |
-| BORDER_INTERPOLATE | P1 新增 | reflect101_batch4096 | public_header_baseline | S32 | 1 | continuous | micro_batch | 0.006288 | 0.005572 | 0.8862 | phase1_representative_case;micro_iterations=10000 |
-| BROADCAST | P1 新增 | row_to_image_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 12.355787 | 0.002850 | 0.0002 | phase1_representative_case |
-| CHECK_RANGE | P1 新增 | quiet_f32c1 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 0.166558 | 0.099354 | 0.5965 | phase1_representative_case |
-| CONVERT_FP16 | P1 新增 | f32c1_to_fp16 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.017092 | 0.020729 | 1.2128 | phase1_representative_case |
-| CONVERT_SCALE_ABS | P1 新增 | f32c3_to_u8c3 | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.085588 | 0.070792 | 0.8271 | phase1_representative_case |
-| COPY_TO | P1 新增 | masked_u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 3.639454 | 0.023942 | 0.0066 | phase1_representative_case |
-| COUNT_NON_ZERO | P1 新增 | u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.286433 | 0.009550 | 0.0333 | phase1_representative_case |
-| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 1080x1920 | 0.270737 | 0.219367 | 0.8103 | correctness=upstream_pass |
-| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 479x641 | 0.043146 | 0.031725 | 0.7353 | correctness=upstream_pass |
-| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.042729 | 0.032050 | 0.7501 | correctness=upstream_pass |
-| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 720x1280 | 0.123675 | 0.099854 | 0.8074 | correctness=upstream_pass |
-| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 1080x1920 | 0.777433 | 0.644617 | 0.8292 | correctness=upstream_pass |
-| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 479x641 | 0.122417 | 0.094925 | 0.7754 | correctness=upstream_pass |
-| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.120417 | 0.098825 | 0.8207 | correctness=upstream_pass |
-| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 720x1280 | 0.353538 | 0.291996 | 0.8259 | correctness=upstream_pass |
-| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 1 | continuous | 1080x1920 | 1.923642 | 0.486058 | 0.2527 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
-| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 1 | continuous | 479x641 | 0.279963 | 0.074529 | 0.2662 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
-| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 1 | continuous | 480x640 | 0.260517 | 0.067054 | 0.2574 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
-| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 1 | continuous | 720x1280 | 0.812237 | 0.204767 | 0.2521 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
-| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 3 | continuous | 1080x1920 | 3.857200 | 1.473575 | 0.3820 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
-| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 3 | continuous | 479x641 | 0.590208 | 0.215529 | 0.3652 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
-| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 3 | continuous | 480x640 | 0.546687 | 0.216079 | 0.3953 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
-| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 3 | continuous | 720x1280 | 1.635046 | 0.674146 | 0.4123 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
-| EXP | P1 新增 | bounded_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.170333 | 0.081513 | 0.4785 | phase1_representative_case |
-| EXTRACT_CHANNEL | P1 新增 | channel1_u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 3.320725 | 0.045671 | 0.0138 | phase1_representative_case |
-| FIND_NON_ZERO | P1 新增 | u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.598533 | 0.203412 | 0.3399 | phase1_representative_case |
-| FLIP | P1 新增 | horizontal_u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 3.413933 | 0.016521 | 0.0048 | phase1_representative_case |
-| FLIP_ND | P1 新增 | axis1_u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 12.479850 | 0.128071 | 0.0103 | phase1_representative_case |
-| GEMM | 既有 | fp32_nn_end_to_end | headers_baseline | CV_32F | 1 | continuous | 128x128x128 | 0.210547 | 0.003661 | 0.0174 | correctness=upstream_pass;iters=8 |
-| GEMM | 既有 | fp32_nn_end_to_end | headers_baseline | CV_32F | 1 | continuous | 256x256x256 | 1.997291 | 0.025208 | 0.0126 | correctness=upstream_pass;iters=1 |
-| GEMM | 既有 | fp32_nn_end_to_end | headers_baseline | CV_32F | 1 | continuous | 512x512x512 | 17.384375 | 0.170000 | 0.0098 | correctness=upstream_pass;iters=1 |
-| GEMM | 既有 | fp32_nn_pack_once | headers_baseline | CV_32F | 1 | continuous | 128x128x128 | 0.215859 | 0.003703 | 0.0172 | correctness=upstream_pass;opencv_reuses_B_without_public_pack_handle;iters=8 |
-| GEMM | 既有 | fp32_nn_pack_once | headers_baseline | CV_32F | 1 | continuous | 256x256x256 | 2.297709 | 0.025208 | 0.0110 | correctness=upstream_pass;opencv_reuses_B_without_public_pack_handle;iters=1 |
-| GEMM | 既有 | fp32_nn_pack_once | headers_baseline | CV_32F | 1 | continuous | 512x512x512 | 17.147583 | 0.176709 | 0.0103 | correctness=upstream_pass;opencv_reuses_B_without_public_pack_handle;iters=1 |
-| HAS_NON_ZERO | P1 新增 | u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.280704 | 0.000013 | 0.0000 | phase1_representative_case |
-| HCONCAT | P1 新增 | two_halves_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.013196 | 0.007000 | 0.5305 | phase1_representative_case |
-| INSERT_CHANNEL | P1 新增 | channel1_u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 3.187396 | 0.043767 | 0.0137 | phase1_representative_case |
-| IN_RANGE | P1 新增 | scalar_bounds_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.206033 | 0.127575 | 0.6192 | phase1_representative_case |
-| LOG | P1 新增 | positive_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.233167 | 0.135783 | 0.5823 | phase1_representative_case |
-| MAT_CLONE | 既有 | full_copy | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.024800 | 0.025450 | 1.0262 |  |
-| MAT_CLONE | 既有 | full_copy | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.003829 | 0.004054 | 1.0588 |  |
-| MAT_CLONE | 既有 | full_copy | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.009200 | 0.008567 | 0.9312 |  |
-| MAT_CLONE | 既有 | full_copy | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.015867 | 0.014617 | 0.9212 |  |
-| MAT_CONVERTTO | 既有 | CV_8U_to_CV_32F | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.087908 | 0.078425 | 0.8921 |  |
-| MAT_CONVERTTO | 既有 | CV_8U_to_CV_32F | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.011371 | 0.013112 | 1.1532 |  |
-| MAT_CONVERTTO | 既有 | CV_8U_to_CV_32F | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.020338 | 0.020421 | 1.0041 |  |
-| MAT_CONVERTTO | 既有 | CV_8U_to_CV_32F | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.037604 | 0.034658 | 0.9217 |  |
-| MAT_COPYTO | 既有 | continuous_reuse | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.024054 | 0.024438 | 1.0159 |  |
-| MAT_COPYTO | 既有 | continuous_reuse | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.003767 | 0.003379 | 0.8971 |  |
-| MAT_COPYTO | 既有 | continuous_reuse | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.008217 | 0.009004 | 1.0958 |  |
-| MAT_COPYTO | 既有 | continuous_reuse | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.014183 | 0.014417 | 1.0164 |  |
-| MAT_CREATE | 既有 | reuse_same_shape | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.000014 | 0.000001 | 0.0750 | cvh_headers_fast_inherits_cvh_headers;micro_iters_x1000 |
-| MAT_CREATE | 既有 | reuse_same_shape | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.000014 | 0.000001 | 0.0807 | cvh_headers_fast_inherits_cvh_headers;micro_iters_x1000 |
-| MAT_CREATE | 既有 | reuse_same_shape | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.000046 | 0.000002 | 0.0537 | cvh_headers_fast_inherits_cvh_headers;micro_iters_x1000 |
-| MAT_CREATE | 既有 | reuse_same_shape | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.000024 | 0.000002 | 0.0672 | cvh_headers_fast_inherits_cvh_headers;micro_iters_x1000 |
-| MAT_RESHAPE | 既有 | to_column_view | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.000046 | 0.000015 | 0.3361 | micro_iters_x1000 |
-| MAT_RESHAPE | 既有 | to_column_view | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.000046 | 0.000015 | 0.3347 | micro_iters_x1000 |
-| MAT_RESHAPE | 既有 | to_column_view | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.000068 | 0.000024 | 0.3443 | micro_iters_x1000 |
-| MAT_RESHAPE | 既有 | to_column_view | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.000045 | 0.000015 | 0.3368 | micro_iters_x1000 |
-| MAT_SETTO | 既有 | scalar_all | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 1.994700 | 0.024413 | 0.0122 |  |
-| MAT_SETTO | 既有 | scalar_all | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.288475 | 0.003858 | 0.0134 |  |
-| MAT_SETTO | 既有 | scalar_all | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.617629 | 0.007367 | 0.0119 |  |
-| MAT_SETTO | 既有 | scalar_all | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 1.173492 | 0.012133 | 0.0103 |  |
-| MAX | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.039904 | 0.026096 | 0.6540 | phase1_representative_case |
-| MEAN | P1 新增 | f32c3 | public_header_baseline | CV_32F | 3 | continuous | 480x640 | 1.189979 | 0.208913 | 0.1756 | phase1_representative_case |
-| MEAN_STD_DEV | P1 新增 | f32c3 | public_header_baseline | CV_32F | 3 | continuous | 480x640 | 1.358846 | 0.142596 | 0.1049 | phase1_representative_case |
-| MIN | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.040250 | 0.026029 | 0.6467 | phase1_representative_case |
-| MIN_MAX_IDX | P1 新增 | f32c1 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 0.616596 | 0.034404 | 0.0558 | phase1_representative_case |
-| MIN_MAX_LOC | P1 新增 | f32c1 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 0.617758 | 0.034354 | 0.0556 | phase1_representative_case |
-| MIX_CHANNELS | P1 新增 | reverse_u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 9.602342 | 0.130392 | 0.0136 | phase1_representative_case |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 1080x1920 | 0.271017 | 0.216771 | 0.7998 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 479x641 | 0.043267 | 0.031721 | 0.7331 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.042996 | 0.031854 | 0.7409 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 720x1280 | 0.123029 | 0.097950 | 0.7962 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 1080x1920 | 0.797596 | 0.665942 | 0.8349 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 479x641 | 0.122500 | 0.096113 | 0.7846 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.120358 | 0.098062 | 0.8148 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 720x1280 | 0.353596 | 0.303925 | 0.8595 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 1080x1920 | 0.062583 | 0.047829 | 0.7642 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 479x641 | 0.009575 | 0.007042 | 0.7354 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.009429 | 0.007046 | 0.7472 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 720x1280 | 0.029592 | 0.023813 | 0.8047 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 1080x1920 | 0.205908 | 0.159696 | 0.7756 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 479x641 | 0.031179 | 0.018546 | 0.5948 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.027192 | 0.021988 | 0.8086 | correctness=upstream_pass |
-| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 720x1280 | 0.090038 | 0.067117 | 0.7454 | correctness=upstream_pass |
-| NORM | P1 新增 | l2_f32c1 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 0.557163 | 0.037512 | 0.0673 | phase1_representative_case |
-| NORMALIZE | P1 新增 | l2_f32c1 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 1.233183 | 0.057637 | 0.0467 | phase1_representative_case |
-| PATCH_NANS | P1 新增 | one_nan_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.020838 | 0.016862 | 0.8092 | phase1_representative_case |
-| POW | P1 新增 | power_1_75_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.548958 | 0.337462 | 0.6147 | phase1_representative_case |
-| REDUCE | P1 新增 | axis0_sum_f32c1 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 0.774913 | 0.015408 | 0.0199 | phase1_representative_case |
-| REDUCE_ARG_MAX | P1 新增 | axis0_f32c1 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 0.978446 | 0.152846 | 0.1562 | phase1_representative_case |
-| REDUCE_ARG_MIN | P1 新增 | axis0_f32c1 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 0.929617 | 0.150721 | 0.1621 | phase1_representative_case |
-| REPEAT | P1 新增 | two_by_two_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 3.430013 | 0.005137 | 0.0015 | phase1_representative_case |
-| ROTATE | P1 新增 | clockwise90_u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 3.495613 | 0.101383 | 0.0290 | phase1_representative_case |
-| SCALE_ADD | P1 新增 | f32c3 | scalar | CV_32F | 3 | continuous | 480x640 | 0.125754 | 0.103125 | 0.8201 | phase1_representative_case |
-| SQRT | P1 新增 | positive_f32c1 | scalar | CV_32F | 1 | continuous | 480x640 | 0.043546 | 0.042179 | 0.9686 | phase1_representative_case |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 1080x1920 | 0.271246 | 0.215271 | 0.7936 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 479x641 | 0.043158 | 0.032000 | 0.7415 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.042812 | 0.032262 | 0.7536 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 720x1280 | 0.127575 | 0.101096 | 0.7924 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 1080x1920 | 0.805521 | 0.617596 | 0.7667 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 479x641 | 0.126700 | 0.095113 | 0.7507 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.120171 | 0.097725 | 0.8132 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 720x1280 | 0.354783 | 0.288304 | 0.8126 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 1080x1920 | 0.062646 | 0.050296 | 0.8029 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 479x641 | 0.009417 | 0.007071 | 0.7509 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.009408 | 0.007033 | 0.7476 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 720x1280 | 0.032250 | 0.023767 | 0.7370 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 1080x1920 | 0.209267 | 0.160867 | 0.7687 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 479x641 | 0.030762 | 0.024658 | 0.8016 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.027217 | 0.022033 | 0.8096 | correctness=upstream_pass |
-| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 720x1280 | 0.092992 | 0.068992 | 0.7419 | correctness=upstream_pass |
-| SUM | P1 新增 | f32c3 | public_header_baseline | CV_32F | 3 | continuous | 480x640 | 1.307183 | 0.208883 | 0.1598 | phase1_representative_case |
-| SWAP | P1 新增 | mat_headers | public_header_baseline | CV_8U | 1 | continuous | micro_batch | 0.000024 | 0.000005 | 0.2077 | phase1_representative_case;micro_iterations=10000 |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_32F | 1 | continuous | 1080x1920 | 0.787963 | 0.583175 | 0.7401 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_32F | 1 | continuous | 479x641 | 0.164917 | 0.035133 | 0.2130 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_32F | 1 | continuous | 480x640 | 0.157858 | 0.075533 | 0.4785 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_32F | 1 | continuous | 720x1280 | 0.377904 | 0.317304 | 0.8396 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_32F | 3 | continuous | 1080x1920 | 0.698125 | 1.463533 | 2.0964 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_32F | 3 | continuous | 479x641 | 0.119225 | 0.126412 | 1.0603 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_32F | 3 | continuous | 480x640 | 0.120633 | 0.162121 | 1.3439 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_32F | 3 | continuous | 720x1280 | 0.279829 | 0.564050 | 2.0157 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.575071 | 0.131412 | 0.2285 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.145608 | 0.010583 | 0.0727 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.140187 | 0.006729 | 0.0480 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.297463 | 0.028571 | 0.0960 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_8U | 3 | continuous | 1080x1920 | 0.407712 | 0.778746 | 1.9100 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_8U | 3 | continuous | 479x641 | 0.109508 | 0.087358 | 0.7977 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_8U | 3 | continuous | 480x640 | 0.108363 | 0.088908 | 0.8205 | correctness=upstream_pass |
-| TRANSPOSE | 既有 | continuous | headers_baseline | CV_8U | 3 | continuous | 720x1280 | 0.206062 | 0.408083 | 1.9804 | correctness=upstream_pass |
-| VCONCAT | P1 新增 | two_halves_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.007942 | 0.004079 | 0.5137 | phase1_representative_case |
+| ABSDIFF | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.035855 | 0.027258 | 0.7602 | phase1_representative_case |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 1080x1920 | 0.272887 | 0.204326 | 0.7488 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 479x641 | 0.043362 | 0.032026 | 0.7386 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.042847 | 0.032082 | 0.7488 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 720x1280 | 0.122948 | 0.097324 | 0.7916 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 1080x1920 | 0.743440 | 0.609550 | 0.8199 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 479x641 | 0.116797 | 0.090731 | 0.7768 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.113989 | 0.091602 | 0.8036 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 720x1280 | 0.333234 | 0.269315 | 0.8082 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 1080x1920 | 0.061712 | 0.049827 | 0.8074 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 479x641 | 0.009415 | 0.004893 | 0.5196 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.009412 | 0.007022 | 0.7461 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 720x1280 | 0.029498 | 0.023790 | 0.8065 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 1080x1920 | 0.191113 | 0.149488 | 0.7822 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 479x641 | 0.029015 | 0.022123 | 0.7625 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.027311 | 0.021423 | 0.7844 | correctness=upstream_pass |
+| ADD | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 720x1280 | 0.086253 | 0.065886 | 0.7639 | correctness=upstream_pass |
+| BITWISE_AND | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.038489 | 0.027056 | 0.7030 | phase1_representative_case |
+| BITWISE_NOT | P1 新增 | u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.037828 | 0.017795 | 0.4704 | phase1_representative_case |
+| BITWISE_OR | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.038811 | 0.027527 | 0.7092 | phase1_representative_case |
+| BITWISE_XOR | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.036356 | 0.025697 | 0.7068 | phase1_representative_case |
+| BORDER_INTERPOLATE | P1 新增 | reflect101_batch4096 | public_header_baseline | S32 | 1 | continuous | micro_batch | 0.005391 | 0.005233 | 0.9706 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| BROADCAST | P1 新增 | row_to_image_u8c1 | scalar | CV_8U | 1 | continuous | 480x640 | 0.004528 | 0.003540 | 0.7817 | phase1_representative_case |
+| CHECK_RANGE | P1 新增 | quiet_f32c1 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 0.153048 | 0.092803 | 0.6064 | phase1_representative_case |
+| CONVERT_FP16 | P1 新增 | f32c1_to_fp16 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.016317 | 0.019903 | 1.2198 | phase1_representative_case |
+| CONVERT_SCALE_ABS | P1 新增 | f32c3_to_u8c3 | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.082386 | 0.067366 | 0.8177 | phase1_representative_case |
+| COPY_TO | P1 新增 | masked_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.022429 | 0.022230 | 0.9911 | phase1_representative_case |
+| COUNT_NON_ZERO | P1 新增 | u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.008906 | 0.008863 | 0.9951 | phase1_representative_case |
+| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 1080x1920 | 0.253682 | 0.214904 | 0.8471 | correctness=upstream_pass |
+| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 479x641 | 0.043392 | 0.031793 | 0.7327 | correctness=upstream_pass |
+| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.042808 | 0.032579 | 0.7610 | correctness=upstream_pass |
+| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 720x1280 | 0.114409 | 0.090865 | 0.7942 | correctness=upstream_pass |
+| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 1080x1920 | 0.752416 | 0.662448 | 0.8804 | correctness=upstream_pass |
+| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 479x641 | 0.114558 | 0.090244 | 0.7878 | correctness=upstream_pass |
+| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.112182 | 0.090765 | 0.8091 | correctness=upstream_pass |
+| DIVIDE | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 720x1280 | 0.331697 | 0.276908 | 0.8348 | correctness=upstream_pass |
+| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 1 | continuous | 1080x1920 | 1.767860 | 0.454995 | 0.2574 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
+| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 1 | continuous | 479x641 | 0.264792 | 0.067341 | 0.2543 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
+| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 1 | continuous | 480x640 | 0.264437 | 0.067019 | 0.2534 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
+| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 1 | continuous | 720x1280 | 0.785392 | 0.201271 | 0.2563 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
+| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 3 | continuous | 1080x1920 | 3.723175 | 1.364743 | 0.3666 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
+| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 3 | continuous | 479x641 | 0.569285 | 0.204583 | 0.3594 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
+| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 3 | continuous | 480x640 | 0.531567 | 0.200971 | 0.3781 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
+| DIVIDE | 既有 | mat_mat_continuous | scalar | CV_8U | 3 | continuous | 720x1280 | 1.590010 | 0.606184 | 0.3812 | correctness=upstream_pass;u8_divide_abs_tolerance=1 |
+| EXP | P1 新增 | bounded_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.157918 | 0.075501 | 0.4781 | phase1_representative_case |
+| EXTRACT_CHANNEL | P1 新增 | channel1_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.015267 | 0.042170 | 2.7621 | phase1_representative_case |
+| FIND_NON_ZERO | P1 新增 | all_zero_u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.010797 | 0.073244 | 6.7840 | phase1_representative_case |
+| FIND_NON_ZERO | P1 新增 | random_dense_u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.505757 | 0.191388 | 0.3784 | phase1_representative_case |
+| FIND_NON_ZERO | P1 新增 | sparse_tail_u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.010545 | 0.073528 | 6.9725 | phase1_representative_case |
+| FLIP | P1 新增 | horizontal_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.016407 | 0.016371 | 0.9978 | phase1_representative_case |
+| FLIP_ND | P1 新增 | axis1_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.016413 | 0.127506 | 7.7684 | phase1_representative_case |
+| GEMM | 既有 | fp32_nn_end_to_end | opencv_ui | CV_32F | 1 | continuous | 128x128x128 | 0.083161 | 0.003635 | 0.0437 | correctness=upstream_pass;iters=8 |
+| GEMM | 既有 | fp32_nn_end_to_end | opencv_ui | CV_32F | 1 | continuous | 256x256x256 | 0.213709 | 0.022875 | 0.1070 | correctness=upstream_pass;iters=1 |
+| GEMM | 既有 | fp32_nn_end_to_end | opencv_ui | CV_32F | 1 | continuous | 512x512x512 | 1.321375 | 0.178916 | 0.1354 | correctness=upstream_pass;iters=1 |
+| GEMM | 既有 | fp32_nn_pack_once | opencv_ui | CV_32F | 1 | continuous | 128x128x128 | 0.083505 | 0.003620 | 0.0433 | correctness=upstream_pass;opencv_reuses_B_without_public_pack_handle;iters=8 |
+| GEMM | 既有 | fp32_nn_pack_once | opencv_ui | CV_32F | 1 | continuous | 256x256x256 | 0.222708 | 0.022959 | 0.1031 | correctness=upstream_pass;opencv_reuses_B_without_public_pack_handle;iters=1 |
+| GEMM | 既有 | fp32_nn_pack_once | opencv_ui | CV_32F | 1 | continuous | 512x512x512 | 1.348000 | 0.170208 | 0.1263 | correctness=upstream_pass;opencv_reuses_B_without_public_pack_handle;iters=1 |
+| HAS_NON_ZERO | P1 新增 | u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.000009 | 0.000008 | 0.9520 | phase1_representative_case |
+| HCONCAT | P1 新增 | two_halves_u8c1 | scalar | CV_8U | 1 | continuous | 480x640 | 0.005030 | 0.006922 | 1.3762 | phase1_representative_case |
+| INSERT_CHANNEL | P1 新增 | channel1_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.025145 | 0.042919 | 1.7068 | phase1_representative_case |
+| IN_RANGE | P1 新增 | scalar_bounds_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.197542 | 0.121997 | 0.6176 | phase1_representative_case |
+| LOG | P1 新增 | positive_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.218912 | 0.126099 | 0.5760 | phase1_representative_case |
+| MAT_CLONE | 既有 | full_copy | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.024691 | 0.024186 | 0.9795 |  |
+| MAT_CLONE | 既有 | full_copy | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.003723 | 0.003653 | 0.9812 |  |
+| MAT_CLONE | 既有 | full_copy | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.007856 | 0.006988 | 0.8895 |  |
+| MAT_CLONE | 既有 | full_copy | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.011004 | 0.011193 | 1.0172 |  |
+| MAT_CONVERTTO | 既有 | CV_8U_to_CV_32F | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.077985 | 0.078788 | 1.0103 |  |
+| MAT_CONVERTTO | 既有 | CV_8U_to_CV_32F | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.012328 | 0.013190 | 1.0700 |  |
+| MAT_CONVERTTO | 既有 | CV_8U_to_CV_32F | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.016406 | 0.015330 | 0.9344 |  |
+| MAT_CONVERTTO | 既有 | CV_8U_to_CV_32F | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.034127 | 0.034392 | 1.0078 |  |
+| MAT_COPYTO | 既有 | continuous_reuse | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.024600 | 0.023632 | 0.9607 |  |
+| MAT_COPYTO | 既有 | continuous_reuse | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.003344 | 0.003353 | 1.0027 |  |
+| MAT_COPYTO | 既有 | continuous_reuse | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.006522 | 0.006555 | 1.0050 |  |
+| MAT_COPYTO | 既有 | continuous_reuse | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.010776 | 0.010518 | 0.9760 |  |
+| MAT_CREATE | 既有 | reuse_same_shape | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.000014 | 0.000001 | 0.0807 | cvh_headers_fast_inherits_cvh_headers;micro_iters_x1000 |
+| MAT_CREATE | 既有 | reuse_same_shape | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.000015 | 0.000001 | 0.0769 | cvh_headers_fast_inherits_cvh_headers;micro_iters_x1000 |
+| MAT_CREATE | 既有 | reuse_same_shape | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.000044 | 0.000003 | 0.0593 | cvh_headers_fast_inherits_cvh_headers;micro_iters_x1000 |
+| MAT_CREATE | 既有 | reuse_same_shape | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.000016 | 0.000001 | 0.0765 | cvh_headers_fast_inherits_cvh_headers;micro_iters_x1000 |
+| MAT_RESHAPE | 既有 | to_column_view | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.000041 | 0.000015 | 0.3730 | micro_iters_x1000 |
+| MAT_RESHAPE | 既有 | to_column_view | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.000043 | 0.000015 | 0.3540 | micro_iters_x1000 |
+| MAT_RESHAPE | 既有 | to_column_view | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.000059 | 0.000018 | 0.3011 | micro_iters_x1000 |
+| MAT_RESHAPE | 既有 | to_column_view | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.000045 | 0.000015 | 0.3391 | micro_iters_x1000 |
+| MAT_SETTO | 既有 | scalar_all | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.025261 | 0.023828 | 0.9433 |  |
+| MAT_SETTO | 既有 | scalar_all | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.004193 | 0.003791 | 0.9043 |  |
+| MAT_SETTO | 既有 | scalar_all | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.006868 | 0.006599 | 0.9608 |  |
+| MAT_SETTO | 既有 | scalar_all | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.011373 | 0.010888 | 0.9574 |  |
+| MAX | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.038686 | 0.024502 | 0.6333 | phase1_representative_case |
+| MEAN | P1 新增 | f32c3 | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.097292 | 0.194363 | 1.9977 | phase1_representative_case |
+| MEAN_STD_DEV | P1 新增 | f32c3 | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.412755 | 0.132653 | 0.3214 | phase1_representative_case |
+| MIN | P1 新增 | mat_mat_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.038610 | 0.024859 | 0.6438 | phase1_representative_case |
+| MIN_MAX_IDX | P1 新增 | f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.044768 | 0.031948 | 0.7136 | phase1_representative_case |
+| MIN_MAX_LOC | P1 新增 | f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.044910 | 0.031681 | 0.7054 | phase1_representative_case |
+| MIX_CHANNELS | P1 新增 | reverse_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.035953 | 0.130340 | 3.6253 | phase1_representative_case |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 1080x1920 | 0.254305 | 0.202716 | 0.7971 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 479x641 | 0.042947 | 0.031569 | 0.7351 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.042870 | 0.031743 | 0.7405 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 720x1280 | 0.114309 | 0.091126 | 0.7972 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 1080x1920 | 0.750265 | 0.628616 | 0.8379 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 479x641 | 0.114312 | 0.089530 | 0.7832 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.112412 | 0.090487 | 0.8050 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 720x1280 | 0.331674 | 0.271584 | 0.8188 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 1080x1920 | 0.061337 | 0.049830 | 0.8124 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 479x641 | 0.009545 | 0.007048 | 0.7384 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.009745 | 0.006938 | 0.7120 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 720x1280 | 0.029548 | 0.023509 | 0.7956 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 1080x1920 | 0.192291 | 0.149746 | 0.7787 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 479x641 | 0.027744 | 0.022075 | 0.7957 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.027532 | 0.022175 | 0.8054 | correctness=upstream_pass |
+| MULTIPLY | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 720x1280 | 0.087487 | 0.066496 | 0.7601 | correctness=upstream_pass |
+| NORM | P1 新增 | inf_diff_zero_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.092333 | 0.019926 | 0.2158 | phase1_representative_case |
+| NORM | P1 新增 | inf_single_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.087587 | 0.010065 | 0.1149 | phase1_representative_case |
+| NORM | P1 新增 | l1_diff_zero_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.094951 | 0.027542 | 0.2901 | phase1_representative_case |
+| NORM | P1 新增 | l1_single_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.087580 | 0.023049 | 0.2632 | phase1_representative_case |
+| NORM | P1 新增 | l2_diff_zero_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.095771 | 0.035426 | 0.3699 | phase1_representative_case |
+| NORM | P1 新增 | l2_single_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.078451 | 0.035944 | 0.4582 | phase1_representative_case |
+| NORMALIZE | P1 新增 | inf_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.129340 | 0.031286 | 0.2419 | phase1_representative_case |
+| NORMALIZE | P1 新增 | l1_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.129282 | 0.043424 | 0.3359 | phase1_representative_case |
+| NORMALIZE | P1 新增 | l2_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.113349 | 0.054038 | 0.4767 | phase1_representative_case |
+| NORMALIZE | P1 新增 | minmax_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.080571 | 0.055711 | 0.6915 | phase1_representative_case |
+| PATCH_NANS | P1 新增 | one_nan_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.019336 | 0.018419 | 0.9526 | phase1_representative_case |
+| POW | P1 新增 | power_1_75_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.504910 | 0.295720 | 0.5857 | phase1_representative_case |
+| REDUCE | P1 新增 | axis0_avg_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.065409 | 0.014117 | 0.2158 | phase1_representative_case |
+| REDUCE | P1 新增 | axis0_max_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.037597 | 0.017174 | 0.4568 | phase1_representative_case |
+| REDUCE | P1 新增 | axis0_min_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.037389 | 0.017073 | 0.4566 | phase1_representative_case |
+| REDUCE | P1 新增 | axis0_sum2_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.064597 | 0.017389 | 0.2692 | phase1_representative_case |
+| REDUCE | P1 新增 | axis0_sum_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.065760 | 0.013670 | 0.2079 | phase1_representative_case |
+| REDUCE | P1 新增 | axis1_avg_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.051094 | 0.009952 | 0.1948 | phase1_representative_case |
+| REDUCE | P1 新增 | axis1_max_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.127485 | 0.148436 | 1.1643 | phase1_representative_case |
+| REDUCE | P1 新增 | axis1_min_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.127204 | 0.149376 | 1.1743 | phase1_representative_case |
+| REDUCE | P1 新增 | axis1_sum2_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.066918 | 0.242868 | 3.6293 | phase1_representative_case |
+| REDUCE | P1 新增 | axis1_sum_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.050653 | 0.010103 | 0.1994 | phase1_representative_case |
+| REDUCE_ARG_MAX | P1 新增 | axis0_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.160054 | 0.154495 | 0.9653 | phase1_representative_case |
+| REDUCE_ARG_MIN | P1 新增 | axis0_f32c1 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.150324 | 0.143366 | 0.9537 | phase1_representative_case |
+| REPEAT | P1 新增 | two_by_two_u8c1 | scalar | CV_8U | 1 | continuous | 480x640 | 0.004966 | 0.005166 | 1.0403 | phase1_representative_case |
+| ROTATE | P1 新增 | clockwise90_u8c3 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.142425 | 0.106149 | 0.7453 | phase1_representative_case |
+| SCALE_ADD | P1 新增 | f32c3 | scalar | CV_32F | 3 | continuous | 480x640 | 0.120117 | 0.098893 | 0.8233 | phase1_representative_case |
+| SQRT | P1 新增 | positive_f32c1 | scalar | CV_32F | 1 | continuous | 480x640 | 0.041017 | 0.040722 | 0.9928 | phase1_representative_case |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 1080x1920 | 0.253928 | 0.202143 | 0.7961 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 479x641 | 0.043093 | 0.032009 | 0.7428 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.042761 | 0.032034 | 0.7491 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 1 | continuous | 720x1280 | 0.117052 | 0.091225 | 0.7794 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 1080x1920 | 0.746063 | 0.640395 | 0.8584 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 479x641 | 0.113588 | 0.088500 | 0.7791 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.112483 | 0.090240 | 0.8023 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_32F | 3 | continuous | 720x1280 | 0.331299 | 0.269668 | 0.8140 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 1080x1920 | 0.061473 | 0.049698 | 0.8084 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 479x641 | 0.009405 | 0.007076 | 0.7524 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.009466 | 0.007030 | 0.7426 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 1 | continuous | 720x1280 | 0.031851 | 0.023778 | 0.7465 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 1080x1920 | 0.191262 | 0.148185 | 0.7748 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 479x641 | 0.027582 | 0.021929 | 0.7950 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.027342 | 0.022062 | 0.8069 | correctness=upstream_pass |
+| SUBTRACT | 既有 | mat_mat_continuous | opencv_ui | CV_8U | 3 | continuous | 720x1280 | 0.087332 | 0.066391 | 0.7602 | correctness=upstream_pass |
+| SUM | P1 新增 | f32c3 | opencv_ui | CV_32F | 3 | continuous | 480x640 | 0.097240 | 0.194414 | 1.9993 | phase1_representative_case |
+| SWAP | P1 新增 | mat_headers | public_header_baseline | CV_8U | 1 | continuous | micro_batch | 0.000005 | 0.000005 | 1.0000 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| TRANSPOSE | 既有 | continuous | opencv_ui | CV_32F | 1 | continuous | 1080x1920 | 0.587035 | 0.539773 | 0.9195 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | opencv_ui | CV_32F | 1 | continuous | 479x641 | 0.034822 | 0.034215 | 0.9826 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.076709 | 0.076496 | 0.9972 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | opencv_ui | CV_32F | 1 | continuous | 720x1280 | 0.287098 | 0.285175 | 0.9933 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | scalar | CV_32F | 3 | continuous | 1080x1920 | 0.658357 | 1.404071 | 2.1327 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | scalar | CV_32F | 3 | continuous | 479x641 | 0.123402 | 0.127931 | 1.0367 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | scalar | CV_32F | 3 | continuous | 480x640 | 0.122564 | 0.162768 | 1.3280 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | scalar | CV_32F | 3 | continuous | 720x1280 | 0.281140 | 0.555900 | 1.9773 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | opencv_ui | CV_8U | 1 | continuous | 1080x1920 | 0.094948 | 0.118547 | 1.2485 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | opencv_ui | CV_8U | 1 | continuous | 479x641 | 0.010243 | 0.009869 | 0.9635 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.006753 | 0.006774 | 1.0031 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | opencv_ui | CV_8U | 1 | continuous | 720x1280 | 0.053249 | 0.026802 | 0.5033 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | scalar | CV_8U | 3 | continuous | 1080x1920 | 0.392958 | 0.755913 | 1.9236 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | scalar | CV_8U | 3 | continuous | 479x641 | 0.112919 | 0.088036 | 0.7796 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | scalar | CV_8U | 3 | continuous | 480x640 | 0.117037 | 0.089878 | 0.7679 | correctness=upstream_pass |
+| TRANSPOSE | 既有 | continuous | scalar | CV_8U | 3 | continuous | 720x1280 | 0.216266 | 0.394157 | 1.8226 | correctness=upstream_pass |
+| VCONCAT | P1 新增 | two_halves_u8c1 | scalar | CV_8U | 1 | continuous | 480x640 | 0.003675 | 0.003816 | 1.0383 | phase1_representative_case |
 
 ### `imgproc`
 
 | Op | 阶段 | Variant | CVH dispatch | Depth | Ch | Layout | Shape | CVH ms | OpenCV ms | OpenCV/CVH | Note |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ACCUMULATE | P1 新增 | u8c1_to_f32 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.251962 | 0.019667 | 0.0781 | phase1_representative_case |
-| ACCUMULATE_PRODUCT | P1 新增 | u8c1_to_f32 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.312421 | 0.021521 | 0.0689 | phase1_representative_case |
-| ACCUMULATE_SQUARE | P1 新增 | u8c1_to_f32 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.278896 | 0.019696 | 0.0706 | phase1_representative_case |
-| ACCUMULATE_WEIGHTED | P1 新增 | alpha0_1_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.310567 | 0.021758 | 0.0701 | phase1_representative_case |
-| ADAPTIVE_THRESHOLD | P1 新增 | mean11_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.435633 | 0.229371 | 0.5265 | phase1_representative_case |
-| APPLY_COLOR_MAP | P1 新增 | jet_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.731842 | 0.238996 | 0.3266 | phase1_representative_case |
-| BILATERAL_FILTER | P1 新增 | d5_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 23.485558 | 0.967396 | 0.0412 | phase1_representative_case |
-| BLEND_LINEAR | P1 新增 | u8c3_f32_weights | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 0.559571 | 0.220608 | 0.3942 | phase1_representative_case |
-| BOX_FILTER | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 1.493362 | 0.298371 | 0.1998 |  |
-| BOX_FILTER | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.276658 | 0.046483 | 0.1680 |  |
-| BOX_FILTER | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.280458 | 0.047787 | 0.1704 |  |
-| BOX_FILTER | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.703979 | 0.134154 | 0.1906 |  |
-| BOX_FILTER | 既有 | 3x3_replicate_f32c1 | box3x3 | CV_32F | 1 | continuous | 480x640 | 0.179629 | 0.106925 | 0.5953 |  |
-| BOX_FILTER | 既有 | 3x3_replicate_f32c3 | box3x3 | CV_32F | 3 | continuous | 480x640 | 0.317142 | 0.314371 | 0.9913 |  |
-| BOX_FILTER | 既有 | 3x3_replicate_f32c4 | box3x3 | CV_32F | 4 | continuous | 480x640 | 0.415517 | 0.414746 | 0.9981 |  |
-| BOX_FILTER | 既有 | 3x3_replicate_u8c3 | box3x3 | CV_8U | 3 | continuous | 480x640 | 0.691658 | 0.140233 | 0.2028 |  |
-| BOX_FILTER | 既有 | 3x3_replicate_u8c3_roi | box3x3 | CV_8U | 3 | roi | 479x641 | 0.699588 | 0.133304 | 0.1905 |  |
-| BOX_FILTER | 既有 | 3x3_replicate_u8c4 | box3x3 | CV_8U | 4 | continuous | 480x640 | 0.846738 | 0.176679 | 0.2087 |  |
-| BUILD_PYRAMID | P1 新增 | levels3_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 3.013962 | 0.019646 | 0.0065 | phase1_representative_case |
-| CANNY | 既有 | aperture3_l1 | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 29.630275 | 28.240812 | 0.9531 |  |
-| CANNY | 既有 | aperture3_l1 | header_fastpath | CV_8U | 1 | continuous | 479x641 | 4.472446 | 4.323150 | 0.9666 |  |
-| CANNY | 既有 | aperture3_l1 | header_fastpath | CV_8U | 1 | continuous | 480x640 | 4.850563 | 4.463533 | 0.9202 |  |
-| CANNY | 既有 | aperture3_l1 | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 13.589783 | 12.698400 | 0.9344 |  |
-| CONVERT_MAPS | P1 新增 | f32_pair_to_fixed | public_header_baseline | CV_32F | 2 | continuous | 480x640 | 12.453646 | 0.061192 | 0.0049 | phase1_representative_case |
-| COPY_MAKE_BORDER | 既有 | 2px_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 0.071758 | 0.044913 | 0.6259 |  |
-| COPY_MAKE_BORDER | 既有 | 2px_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.068217 | 0.006950 | 0.1019 |  |
-| COPY_MAKE_BORDER | 既有 | 2px_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.060867 | 0.007258 | 0.1192 |  |
-| COPY_MAKE_BORDER | 既有 | 2px_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.067333 | 0.020233 | 0.3005 |  |
-| COPY_MAKE_BORDER | 既有 | 2px_replicate_f32c1 | header_fastpath | CV_32F | 1 | continuous | 480x640 | 0.068542 | 0.026354 | 0.3845 |  |
-| COPY_MAKE_BORDER | 既有 | 2px_replicate_f32c3 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.081533 | 0.087242 | 1.0700 |  |
-| COPY_MAKE_BORDER | 既有 | 2px_replicate_f32c4 | header_fastpath | CV_32F | 4 | continuous | 480x640 | 0.088825 | 0.103304 | 1.1630 |  |
-| COPY_MAKE_BORDER | 既有 | 2px_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.073013 | 0.022496 | 0.3081 |  |
-| COPY_MAKE_BORDER | 既有 | 2px_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.070671 | 0.027454 | 0.3885 |  |
-| CREATE_HANNING_WINDOW | P1 新增 | 64x64_f32 | public_header_baseline | CV_32F | 1 | continuous | 480x640 | 0.040100 | 0.001146 | 0.0286 | phase1_representative_case |
-| CVTCOLOR | 既有 | BGR2BGRA_u8 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.114308 | 0.020842 | 0.1823 |  |
-| CVTCOLOR | 既有 | BGR2GRAY_f32 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.079304 | 0.048188 | 0.6076 |  |
-| CVTCOLOR | 既有 | BGR2GRAY_u8 | opencv_ui | CV_8U | 3 | continuous | 1080x1920 | 0.221246 | 0.219350 | 0.9914 |  |
-| CVTCOLOR | 既有 | BGR2GRAY_u8 | opencv_ui | CV_8U | 3 | continuous | 479x641 | 0.030687 | 0.030600 | 0.9971 |  |
-| CVTCOLOR | 既有 | BGR2GRAY_u8 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.041642 | 0.033725 | 0.8099 |  |
-| CVTCOLOR | 既有 | BGR2GRAY_u8 | opencv_ui | CV_8U | 3 | continuous | 720x1280 | 0.092363 | 0.091917 | 0.9952 |  |
-| CVTCOLOR | 既有 | BGR2GRAY_u8_roi | opencv_ui | CV_8U | 3 | roi | 479x641 | 0.035204 | 0.035146 | 0.9983 |  |
-| CVTCOLOR | 既有 | BGR2I420_u8 | header_fastpath | CV_8U | 3 | yuv420_i420 | 480x640 | 0.129158 | 0.061262 | 0.4743 |  |
-| CVTCOLOR | 既有 | BGR2RGB_f32 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.090621 | 0.063750 | 0.7035 |  |
-| CVTCOLOR | 既有 | BGR2RGB_u8 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.088862 | 0.017208 | 0.1937 |  |
-| CVTCOLOR | 既有 | BGR2YUV_u8 | header_fastpath | CV_8U | 3 | yuv444_interleaved | 480x640 | 0.118317 | 0.081008 | 0.6847 |  |
-| CVTCOLOR | 既有 | BGR2YUY2_u8 | header_fastpath | CV_8U | 3 | yuv422_yuy2 | 480x640 | 0.131346 | 0.066771 | 0.5084 |  |
-| CVTCOLOR | 既有 | BGRA2GRAY_u8 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.099538 | 0.041537 | 0.4173 |  |
-| CVTCOLOR | 既有 | I420_TO_BGR_u8 | header_fastpath | CV_8U | 1 | yuv420_i420 | 480x640 | 0.226783 | 0.076121 | 0.3357 |  |
-| CVTCOLOR | 既有 | NV12_TO_BGR_u8 | header_fastpath | CV_8U | 1 | yuv420_nv12 | 480x640 | 0.136458 | 0.074592 | 0.5466 |  |
-| CVTCOLOR | 既有 | YUV2BGR_u8 | header_fastpath | CV_8U | 3 | yuv444_interleaved | 480x640 | 0.116396 | 0.061313 | 0.5268 |  |
-| CVTCOLOR | 既有 | YUY2_TO_BGR_u8 | header_fastpath | CV_8U | 2 | yuv422_yuy2 | 480x640 | 0.134308 | 0.071971 | 0.5359 |  |
-| CVT_COLOR_TWO_PLANE | P1 新增 | nv12_to_bgr | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.413038 | 0.065625 | 0.1589 | phase1_representative_case |
-| DEMOSAICING | P1 新增 | bayer_bg_to_bgr | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 28.250308 | 0.039046 | 0.0014 | phase1_representative_case |
-| DILATE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 1.096337 | 0.147663 | 0.1347 |  |
-| DILATE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.273308 | 0.022867 | 0.0837 |  |
-| DILATE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.275738 | 0.024967 | 0.0905 |  |
-| DILATE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.574292 | 0.069992 | 0.1219 |  |
-| DILATE | 既有 | 3x3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.493950 | 0.068396 | 0.1385 |  |
-| DILATE | 既有 | 3x3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.615371 | 0.089762 | 0.1459 |  |
-| EQUALIZE_HIST | P1 新增 | u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.200163 | 0.099142 | 0.4953 | phase1_representative_case |
-| ERODE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 1.127700 | 0.147454 | 0.1308 |  |
-| ERODE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.276129 | 0.022808 | 0.0826 |  |
-| ERODE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.284438 | 0.023367 | 0.0822 |  |
-| ERODE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.582358 | 0.069812 | 0.1199 |  |
-| ERODE | 既有 | 3x3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.501504 | 0.068029 | 0.1356 |  |
-| ERODE | 既有 | 3x3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.604279 | 0.087871 | 0.1454 |  |
-| FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 2.398654 | 0.670025 | 0.2793 |  |
-| FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.444183 | 0.094121 | 0.2119 |  |
-| FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.409321 | 0.103696 | 0.2533 |  |
-| FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 1.108188 | 0.303383 | 0.2738 |  |
-| FILTER2D | 既有 | 3x3_replicate_f32c1 | header_fastpath | CV_32F | 1 | continuous | 480x640 | 0.428062 | 0.079212 | 0.1850 |  |
-| FILTER2D | 既有 | 3x3_replicate_f32c3 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.466525 | 0.211875 | 0.4542 |  |
-| FILTER2D | 既有 | 3x3_replicate_f32c4 | header_fastpath | CV_32F | 4 | continuous | 480x640 | 0.434063 | 0.270725 | 0.6237 |  |
-| FILTER2D | 既有 | 3x3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.563092 | 0.287300 | 0.5102 |  |
-| FILTER2D | 既有 | 3x3_replicate_u8c3_roi | header_fastpath | CV_8U | 3 | roi | 479x641 | 0.522867 | 0.304908 | 0.5831 |  |
-| FILTER2D | 既有 | 3x3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.551675 | 0.402579 | 0.7297 |  |
-| GAUSSIAN | 既有 | 5x5_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 1.577429 | 0.226562 | 0.1436 |  |
-| GAUSSIAN | 既有 | 5x5_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.353617 | 0.031983 | 0.0904 |  |
-| GAUSSIAN | 既有 | 5x5_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.352271 | 0.033013 | 0.0937 |  |
-| GAUSSIAN | 既有 | 5x5_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.788583 | 0.098450 | 0.1248 |  |
-| GAUSSIAN | 既有 | 5x5_replicate_f32c1 | gauss_separable | CV_32F | 1 | continuous | 480x640 | 0.305554 | 0.115671 | 0.3786 |  |
-| GAUSSIAN | 既有 | 5x5_replicate_f32c3 | gauss_separable | CV_32F | 3 | continuous | 480x640 | 0.390604 | 0.338717 | 0.8672 |  |
-| GAUSSIAN | 既有 | 5x5_replicate_f32c4 | gauss_separable | CV_32F | 4 | continuous | 480x640 | 0.367879 | 0.443646 | 1.2060 |  |
-| GAUSSIAN | 既有 | 5x5_replicate_u8c3 | gauss_separable | CV_8U | 3 | continuous | 480x640 | 0.510938 | 0.108621 | 0.2126 |  |
-| GAUSSIAN | 既有 | 5x5_replicate_u8c3_roi | gauss_separable | CV_8U | 3 | roi | 479x641 | 0.511321 | 0.361867 | 0.7077 |  |
-| GAUSSIAN | 既有 | 5x5_replicate_u8c4 | gauss_separable | CV_8U | 4 | continuous | 480x640 | 0.421571 | 0.137742 | 0.3267 |  |
-| GET_AFFINE_TRANSFORM | P1 新增 | three_points | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000135 | 0.000258 | 1.9186 | phase1_representative_case;micro_iterations=10000 |
-| GET_DERIV_KERNELS | P1 新增 | dx1_ksize5_f32 | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000204 | 0.000089 | 0.4383 | phase1_representative_case;micro_iterations=10000 |
-| GET_GABOR_KERNEL | P1 新增 | 15x15_f32 | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.003022 | 0.000989 | 0.3271 | phase1_representative_case;micro_iterations=10000 |
-| GET_GAUSSIAN_KERNEL | P1 新增 | ksize15_f32 | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000240 | 0.000932 | 3.8778 | phase1_representative_case;micro_iterations=10000 |
-| GET_PERSPECTIVE_TRANSFORM | P1 新增 | four_points_lu | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000294 | 0.000691 | 2.3457 | phase1_representative_case;micro_iterations=10000 |
-| GET_RECT_SUB_PIX | P1 新增 | full_frame_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 1080x1920 | 48.213408 | 0.985242 | 0.0204 | no qualified SIMD fast path |
-| GET_RECT_SUB_PIX | P1 新增 | full_frame_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 479x641 | 7.081371 | 0.160642 | 0.0227 | no qualified SIMD fast path |
-| GET_RECT_SUB_PIX | P1 新增 | full_frame_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 480x640 | 6.995679 | 0.148792 | 0.0213 | no qualified SIMD fast path |
-| GET_RECT_SUB_PIX | P1 新增 | full_frame_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 720x1280 | 21.428517 | 0.464596 | 0.0217 | no qualified SIMD fast path |
-| GET_ROTATION_MATRIX_2D | P1 新增 | point_angle_scale | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000077 | 0.000075 | 0.9722 | phase1_representative_case;micro_iterations=10000 |
-| GET_ROTATION_MATRIX_2D_ | P1 新增 | matx23d | public_header_baseline | CV_64F | 1 | continuous | micro_batch | 0.000004 | 0.000005 | 1.1173 | phase1_representative_case;micro_iterations=10000 |
-| GET_STRUCTURING_ELEMENT | P1 新增 | ellipse7x7 | public_header_baseline | CV_8U | 1 | continuous | micro_batch | 0.000421 | 0.000078 | 0.1842 | phase1_representative_case;micro_iterations=10000 |
-| INTEGRAL | P1 新增 | u8c1_to_s32 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 1.503288 | 0.041496 | 0.0276 | phase1_representative_case |
-| INVERT_AFFINE_TRANSFORM | P1 新增 | f64_2x3 | public_header_baseline | CV_64F | 1 | continuous | micro_batch | 0.000135 | 0.000062 | 0.4635 | phase1_representative_case;micro_iterations=10000 |
-| LAPLACIAN | P1 新增 | ksize3_u8_to_f32 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 9.276821 | 0.118987 | 0.0128 | phase1_representative_case |
-| LUT | 既有 | invert_u8 | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 0.200783 | 0.194513 | 0.9688 |  |
-| LUT | 既有 | invert_u8 | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.092050 | 0.028579 | 0.3105 |  |
-| LUT | 既有 | invert_u8 | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.085500 | 0.029825 | 0.3488 |  |
-| LUT | 既有 | invert_u8 | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.128763 | 0.089154 | 0.6924 |  |
-| LUT | 既有 | invert_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.117392 | 0.085583 | 0.7290 |  |
-| LUT | 既有 | invert_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.140104 | 0.114133 | 0.8146 |  |
-| MEDIAN_BLUR | P1 新增 | ksize5_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 51.672300 | 0.248317 | 0.0048 | phase1_representative_case |
-| PYR_DOWN | P1 新增 | u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 7.735775 | 0.058492 | 0.0076 | phase1_representative_case |
-| PYR_UP | P1 新增 | u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 20.233700 | 0.144613 | 0.0071 | phase1_representative_case |
-| REMAP | P1 新增 | fixed_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 1080x1920 | 100.476200 | 4.868079 | 0.0485 | no qualified SIMD fast path |
-| REMAP | P1 新增 | fixed_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 479x641 | 14.834537 | 0.719092 | 0.0485 | no qualified SIMD fast path |
-| REMAP | P1 新增 | fixed_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 480x640 | 14.908117 | 0.737054 | 0.0494 | no qualified SIMD fast path |
-| REMAP | P1 新增 | fixed_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 720x1280 | 44.223546 | 2.247162 | 0.0508 | no qualified SIMD fast path |
-| REMAP | P1 新增 | float_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 1080x1920 | 105.409700 | 5.525533 | 0.0524 | no qualified SIMD fast path |
-| REMAP | P1 新增 | float_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 479x641 | 15.499408 | 0.762304 | 0.0492 | no qualified SIMD fast path |
-| REMAP | P1 新增 | float_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 480x640 | 15.568858 | 0.756117 | 0.0486 | no qualified SIMD fast path |
-| REMAP | P1 新增 | float_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 720x1280 | 46.988662 | 2.245287 | 0.0478 | no qualified SIMD fast path |
-| RESIZE | 既有 | linear_0.75_f32c1 | headers_baseline | CV_32F | 1 | continuous | 480x640 | 0.200263 | 0.093537 | 0.4671 |  |
-| RESIZE | 既有 | linear_0.75_f32c3 | headers_baseline | CV_32F | 3 | continuous | 480x640 | 0.449021 | 0.279092 | 0.6216 |  |
-| RESIZE | 既有 | linear_0.75_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.144504 | 0.065062 | 0.4502 |  |
-| RESIZE | 既有 | linear_0.75_u8c3_roi | header_fastpath | CV_8U | 3 | roi | 479x641 | 0.141554 | 0.064562 | 0.4561 |  |
-| RESIZE | 既有 | linear_half_u8c1 | opencv_ui | CV_8U | 1 | continuous | 1080x1920 | 0.130438 | 0.087246 | 0.6689 |  |
-| RESIZE | 既有 | linear_half_u8c1 | opencv_ui | CV_8U | 1 | continuous | 479x641 | 0.018733 | 0.012279 | 0.6555 |  |
-| RESIZE | 既有 | linear_half_u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.019667 | 0.015450 | 0.7856 |  |
-| RESIZE | 既有 | linear_half_u8c1 | opencv_ui | CV_8U | 1 | continuous | 720x1280 | 0.055025 | 0.036212 | 0.6581 |  |
-| RESIZE | 既有 | nearest_0.75_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.087242 | 0.099317 | 1.1384 |  |
-| RESIZE | 既有 | nearest_exact_0.75_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.082588 | 0.102763 | 1.2443 |  |
-| SCHARR | P1 新增 | dx1_u8_to_f32 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 9.029246 | 0.109117 | 0.0121 | phase1_representative_case |
-| SEP_FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 1.587254 | 0.658525 | 0.4149 |  |
-| SEP_FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.373196 | 0.094512 | 0.2533 |  |
-| SEP_FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.362717 | 0.103537 | 0.2854 |  |
-| SEP_FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.807071 | 0.287192 | 0.3558 |  |
-| SEP_FILTER2D | 既有 | 3x3_replicate_f32c1 | header_fastpath | CV_32F | 1 | continuous | 480x640 | 0.356162 | 0.086508 | 0.2429 |  |
-| SEP_FILTER2D | 既有 | 3x3_replicate_f32c3 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.444517 | 0.239683 | 0.5392 |  |
-| SEP_FILTER2D | 既有 | 3x3_replicate_f32c4 | header_fastpath | CV_32F | 4 | continuous | 480x640 | 0.422421 | 0.311529 | 0.7375 |  |
-| SEP_FILTER2D | 既有 | 3x3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.462579 | 0.285175 | 0.6165 |  |
-| SEP_FILTER2D | 既有 | 3x3_replicate_u8c3_roi | header_fastpath | CV_8U | 3 | roi | 479x641 | 0.449604 | 0.302071 | 0.6719 |  |
-| SEP_FILTER2D | 既有 | 3x3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.416754 | 0.382587 | 0.9180 |  |
-| SOBEL | 既有 | dx1_ksize3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 0.394767 | 0.897413 | 2.2733 |  |
-| SOBEL | 既有 | dx1_ksize3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.116871 | 0.120838 | 1.0339 |  |
-| SOBEL | 既有 | dx1_ksize3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.115696 | 0.134438 | 1.1620 |  |
-| SOBEL | 既有 | dx1_ksize3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.211175 | 0.359450 | 1.7021 |  |
-| SOBEL | 既有 | dx1_ksize3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.181462 | 0.335050 | 1.8464 |  |
-| SOBEL | 既有 | dx1_ksize3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.235071 | 0.441925 | 1.8800 |  |
-| SPATIAL_GRADIENT | P1 新增 | ksize3_u8_to_s16 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.228750 | 0.035933 | 0.1571 | phase1_representative_case |
-| SQR_BOX_FILTER | P1 新增 | 3x3_u8_to_f32 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 8.807829 | 0.194487 | 0.0221 | phase1_representative_case |
-| STACK_BLUR | P1 新增 | 5x5_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 1.664133 | 0.133063 | 0.0800 | phase1_representative_case |
-| THRESHOLD | 既有 | binary_f32c3_roi | header_fastpath | CV_32F | 3 | roi | 479x641 | 0.386412 | 0.068483 | 0.1772 |  |
-| THRESHOLD | 既有 | binary_u8 | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 1.232258 | 0.035950 | 0.0292 |  |
-| THRESHOLD | 既有 | binary_u8 | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.147067 | 0.004833 | 0.0329 |  |
-| THRESHOLD | 既有 | binary_u8 | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.162892 | 0.005417 | 0.0333 |  |
-| THRESHOLD | 既有 | binary_u8 | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.436050 | 0.014154 | 0.0325 |  |
-| THRESHOLD_WITH_MASK | P1 新增 | binary_masked_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.182900 | 0.190954 | 1.0440 | phase1_representative_case |
-| WARP_AFFINE | 既有 | linear_inverse_replicate | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 23.388938 | 1.979058 | 0.0846 |  |
-| WARP_AFFINE | 既有 | linear_inverse_replicate | headers_baseline | CV_8U | 1 | continuous | 479x641 | 3.426446 | 0.319479 | 0.0932 |  |
-| WARP_AFFINE | 既有 | linear_inverse_replicate | headers_baseline | CV_8U | 1 | continuous | 480x640 | 3.573788 | 0.310921 | 0.0870 |  |
-| WARP_AFFINE | 既有 | linear_inverse_replicate | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 10.379383 | 0.879300 | 0.0847 |  |
-| WARP_AFFINE | 既有 | linear_inverse_replicate_f32c1 | headers_baseline | CV_32F | 1 | continuous | 480x640 | 3.045150 | 0.531892 | 0.1747 |  |
-| WARP_AFFINE | 既有 | linear_inverse_replicate_f32c3 | headers_baseline | CV_32F | 3 | continuous | 480x640 | 7.503913 | 0.730312 | 0.0973 |  |
-| WARP_AFFINE | 既有 | linear_inverse_replicate_f32c4 | headers_baseline | CV_32F | 4 | continuous | 480x640 | 9.872117 | 0.796779 | 0.0807 |  |
-| WARP_AFFINE | 既有 | linear_inverse_replicate_u8c3 | headers_baseline | CV_8U | 3 | continuous | 480x640 | 9.878000 | 0.813888 | 0.0824 |  |
-| WARP_AFFINE | 既有 | linear_inverse_replicate_u8c4 | headers_baseline | CV_8U | 4 | continuous | 480x640 | 12.911888 | 0.518721 | 0.0402 |  |
-| WARP_PERSPECTIVE | P1 新增 | projective_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 1080x1920 | 72.383375 | 6.530242 | 0.0902 | no qualified SIMD fast path |
-| WARP_PERSPECTIVE | P1 新增 | projective_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 479x641 | 10.558842 | 0.981829 | 0.0930 | no qualified SIMD fast path |
-| WARP_PERSPECTIVE | P1 新增 | projective_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 480x640 | 10.657783 | 1.017833 | 0.0955 | no qualified SIMD fast path |
-| WARP_PERSPECTIVE | P1 新增 | projective_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 720x1280 | 31.992367 | 2.923429 | 0.0914 | no qualified SIMD fast path |
+| ACCUMULATE | P1 新增 | u8c1_to_f32 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.059493 | 0.018544 | 0.3117 | phase1_representative_case |
+| ACCUMULATE_PRODUCT | P1 新增 | u8c1_to_f32 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.077666 | 0.020174 | 0.2598 | phase1_representative_case |
+| ACCUMULATE_SQUARE | P1 新增 | u8c1_to_f32 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.058417 | 0.018130 | 0.3104 | phase1_representative_case |
+| ACCUMULATE_WEIGHTED | P1 新增 | alpha0_1_u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.058878 | 0.020243 | 0.3438 | phase1_representative_case |
+| ADAPTIVE_THRESHOLD | P1 新增 | mean11_u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.287030 | 0.222398 | 0.7748 | phase1_representative_case |
+| APPLY_COLOR_MAP | P1 新增 | jet_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.658571 | 0.229320 | 0.3482 | phase1_representative_case |
+| BILATERAL_FILTER | P1 新增 | d5_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 17.891886 | 0.934158 | 0.0522 | phase1_representative_case |
+| BLEND_LINEAR | P1 新增 | u8c3_f32_weights | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 0.519843 | 0.221467 | 0.4260 | phase1_representative_case |
+| BOX_FILTER | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 1.485114 | 0.285010 | 0.1919 |  |
+| BOX_FILTER | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.283218 | 0.046357 | 0.1637 |  |
+| BOX_FILTER | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.289234 | 0.046120 | 0.1595 |  |
+| BOX_FILTER | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.712530 | 0.129226 | 0.1814 |  |
+| BOX_FILTER | 既有 | 3x3_replicate_f32c1 | box3x3 | CV_32F | 1 | continuous | 480x640 | 0.182288 | 0.105086 | 0.5765 |  |
+| BOX_FILTER | 既有 | 3x3_replicate_f32c3 | box3x3 | CV_32F | 3 | continuous | 480x640 | 0.319472 | 0.301066 | 0.9424 |  |
+| BOX_FILTER | 既有 | 3x3_replicate_f32c4 | box3x3 | CV_32F | 4 | continuous | 480x640 | 0.387389 | 0.404495 | 1.0442 |  |
+| BOX_FILTER | 既有 | 3x3_replicate_u8c3 | box3x3 | CV_8U | 3 | continuous | 480x640 | 0.674183 | 0.128320 | 0.1903 |  |
+| BOX_FILTER | 既有 | 3x3_replicate_u8c3_roi | box3x3 | CV_8U | 3 | roi | 479x641 | 0.656598 | 0.128486 | 0.1957 |  |
+| BOX_FILTER | 既有 | 3x3_replicate_u8c4 | box3x3 | CV_8U | 4 | continuous | 480x640 | 0.864891 | 0.170445 | 0.1971 |  |
+| BUILD_PYRAMID | P1 新增 | levels3_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.261025 | 0.019733 | 0.0756 | phase1_representative_case |
+| CANNY | 既有 | aperture3_l1 | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 28.800815 | 27.760340 | 0.9639 |  |
+| CANNY | 既有 | aperture3_l1 | header_fastpath | CV_8U | 1 | continuous | 479x641 | 4.248430 | 3.864982 | 0.9097 |  |
+| CANNY | 既有 | aperture3_l1 | header_fastpath | CV_8U | 1 | continuous | 480x640 | 4.269565 | 3.868716 | 0.9061 |  |
+| CANNY | 既有 | aperture3_l1 | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 12.731111 | 12.208492 | 0.9589 |  |
+| CONVERT_MAPS | P1 新增 | f32_pair_to_fixed | opencv_ui | CV_32F | 2 | continuous | 480x640 | 0.394950 | 0.063009 | 0.1595 | phase1_representative_case |
+| COPY_MAKE_BORDER | 既有 | 2px_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 0.069052 | 0.044762 | 0.6482 |  |
+| COPY_MAKE_BORDER | 既有 | 2px_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.059997 | 0.006978 | 0.1163 |  |
+| COPY_MAKE_BORDER | 既有 | 2px_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.058788 | 0.007010 | 0.1192 |  |
+| COPY_MAKE_BORDER | 既有 | 2px_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.064694 | 0.020168 | 0.3117 |  |
+| COPY_MAKE_BORDER | 既有 | 2px_replicate_f32c1 | header_fastpath | CV_32F | 1 | continuous | 480x640 | 0.067879 | 0.026485 | 0.3902 |  |
+| COPY_MAKE_BORDER | 既有 | 2px_replicate_f32c3 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.076955 | 0.083882 | 1.0900 |  |
+| COPY_MAKE_BORDER | 既有 | 2px_replicate_f32c4 | header_fastpath | CV_32F | 4 | continuous | 480x640 | 0.083008 | 0.099765 | 1.2019 |  |
+| COPY_MAKE_BORDER | 既有 | 2px_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.063941 | 0.020277 | 0.3171 |  |
+| COPY_MAKE_BORDER | 既有 | 2px_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.066192 | 0.026455 | 0.3997 |  |
+| CREATE_HANNING_WINDOW | P1 新增 | 64x64_f32 | opencv_ui | CV_32F | 1 | continuous | 480x640 | 0.000644 | 0.001195 | 1.8557 | phase1_representative_case |
+| CVTCOLOR | 既有 | BGR2BGRA_u8 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.109206 | 0.020036 | 0.1835 |  |
+| CVTCOLOR | 既有 | BGR2GRAY_f32 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.079633 | 0.045100 | 0.5663 |  |
+| CVTCOLOR | 既有 | BGR2GRAY_u8 | opencv_ui | CV_8U | 3 | continuous | 1080x1920 | 0.205732 | 0.204214 | 0.9926 |  |
+| CVTCOLOR | 既有 | BGR2GRAY_u8 | opencv_ui | CV_8U | 3 | continuous | 479x641 | 0.030540 | 0.030397 | 0.9953 |  |
+| CVTCOLOR | 既有 | BGR2GRAY_u8 | opencv_ui | CV_8U | 3 | continuous | 480x640 | 0.033737 | 0.033740 | 1.0001 |  |
+| CVTCOLOR | 既有 | BGR2GRAY_u8 | opencv_ui | CV_8U | 3 | continuous | 720x1280 | 0.091396 | 0.091121 | 0.9970 |  |
+| CVTCOLOR | 既有 | BGR2GRAY_u8_roi | opencv_ui | CV_8U | 3 | roi | 479x641 | 0.035261 | 0.035195 | 0.9981 |  |
+| CVTCOLOR | 既有 | BGR2I420_u8 | header_fastpath | CV_8U | 3 | yuv420_i420 | 480x640 | 0.126837 | 0.061641 | 0.4860 |  |
+| CVTCOLOR | 既有 | BGR2RGB_f32 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.091346 | 0.065964 | 0.7221 |  |
+| CVTCOLOR | 既有 | BGR2RGB_u8 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.089565 | 0.016780 | 0.1874 |  |
+| CVTCOLOR | 既有 | BGR2YUV_u8 | header_fastpath | CV_8U | 3 | yuv444_interleaved | 480x640 | 0.121196 | 0.085977 | 0.7094 |  |
+| CVTCOLOR | 既有 | BGR2YUY2_u8 | header_fastpath | CV_8U | 3 | yuv422_yuy2 | 480x640 | 0.126651 | 0.063431 | 0.5008 |  |
+| CVTCOLOR | 既有 | BGRA2GRAY_u8 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.094420 | 0.041695 | 0.4416 |  |
+| CVTCOLOR | 既有 | I420_TO_BGR_u8 | header_fastpath | CV_8U | 1 | yuv420_i420 | 480x640 | 0.233233 | 0.073156 | 0.3137 |  |
+| CVTCOLOR | 既有 | NV12_TO_BGR_u8 | header_fastpath | CV_8U | 1 | yuv420_nv12 | 480x640 | 0.140262 | 0.073824 | 0.5263 |  |
+| CVTCOLOR | 既有 | YUV2BGR_u8 | header_fastpath | CV_8U | 3 | yuv444_interleaved | 480x640 | 0.117641 | 0.065138 | 0.5537 |  |
+| CVTCOLOR | 既有 | YUY2_TO_BGR_u8 | header_fastpath | CV_8U | 2 | yuv422_yuy2 | 480x640 | 0.135929 | 0.072715 | 0.5349 |  |
+| CVT_COLOR_TWO_PLANE | P1 新增 | nv12_to_bgr | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.326700 | 0.065890 | 0.2017 | phase1_representative_case |
+| DEMOSAICING | P1 新增 | bayer_bg_to_bgr | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.449826 | 0.043370 | 0.0964 | phase1_representative_case |
+| DILATE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 0.179570 | 0.147540 | 0.8216 |  |
+| DILATE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.124685 | 0.021525 | 0.1726 |  |
+| DILATE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.124994 | 0.021036 | 0.1683 |  |
+| DILATE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.144196 | 0.063646 | 0.4414 |  |
+| DILATE | 既有 | 3x3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.530661 | 0.065615 | 0.1236 |  |
+| DILATE | 既有 | 3x3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.636955 | 0.089800 | 0.1410 |  |
+| EQUALIZE_HIST | P1 新增 | u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.082852 | 0.086550 | 1.0446 | phase1_representative_case |
+| ERODE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 0.180160 | 0.142140 | 0.7890 |  |
+| ERODE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.124900 | 0.020734 | 0.1660 |  |
+| ERODE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.127605 | 0.020812 | 0.1631 |  |
+| ERODE | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.151042 | 0.065085 | 0.4309 |  |
+| ERODE | 既有 | 3x3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.523515 | 0.065685 | 0.1255 |  |
+| ERODE | 既有 | 3x3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.642063 | 0.089703 | 0.1397 |  |
+| FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 1.797298 | 0.634288 | 0.3529 |  |
+| FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.341287 | 0.105048 | 0.3078 |  |
+| FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.322773 | 0.096120 | 0.2978 |  |
+| FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.827983 | 0.288991 | 0.3490 |  |
+| FILTER2D | 既有 | 3x3_replicate_f32c1 | header_fastpath | CV_32F | 1 | continuous | 480x640 | 0.374379 | 0.074282 | 0.1984 |  |
+| FILTER2D | 既有 | 3x3_replicate_f32c3 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.440218 | 0.200931 | 0.4564 |  |
+| FILTER2D | 既有 | 3x3_replicate_f32c4 | header_fastpath | CV_32F | 4 | continuous | 480x640 | 0.435117 | 0.268514 | 0.6171 |  |
+| FILTER2D | 既有 | 3x3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.509580 | 0.298012 | 0.5848 |  |
+| FILTER2D | 既有 | 3x3_replicate_u8c3_roi | header_fastpath | CV_8U | 3 | roi | 479x641 | 0.524527 | 0.326416 | 0.6223 |  |
+| FILTER2D | 既有 | 3x3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.543192 | 0.382840 | 0.7048 |  |
+| GAUSSIAN | 既有 | 5x5_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 1.369823 | 0.235075 | 0.1716 |  |
+| GAUSSIAN | 既有 | 5x5_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.346238 | 0.033333 | 0.0963 |  |
+| GAUSSIAN | 既有 | 5x5_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.342030 | 0.032172 | 0.0941 |  |
+| GAUSSIAN | 既有 | 5x5_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.703577 | 0.099251 | 0.1411 |  |
+| GAUSSIAN | 既有 | 5x5_replicate_f32c1 | gauss_separable | CV_32F | 1 | continuous | 480x640 | 0.436786 | 0.119837 | 0.2744 |  |
+| GAUSSIAN | 既有 | 5x5_replicate_f32c3 | gauss_separable | CV_32F | 3 | continuous | 480x640 | 0.432962 | 0.336403 | 0.7770 |  |
+| GAUSSIAN | 既有 | 5x5_replicate_f32c4 | gauss_separable | CV_32F | 4 | continuous | 480x640 | 0.389323 | 0.443909 | 1.1402 |  |
+| GAUSSIAN | 既有 | 5x5_replicate_u8c3 | gauss_separable | CV_8U | 3 | continuous | 480x640 | 0.506507 | 0.109213 | 0.2156 |  |
+| GAUSSIAN | 既有 | 5x5_replicate_u8c3_roi | gauss_separable | CV_8U | 3 | roi | 479x641 | 0.495577 | 0.359588 | 0.7256 |  |
+| GAUSSIAN | 既有 | 5x5_replicate_u8c4 | gauss_separable | CV_8U | 4 | continuous | 480x640 | 0.444000 | 0.146122 | 0.3291 |  |
+| GET_AFFINE_TRANSFORM | P1 新增 | three_points | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000140 | 0.000270 | 1.9316 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| GET_DERIV_KERNELS | P1 新增 | dx1_ksize5_f32 | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000140 | 0.000093 | 0.6667 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| GET_GABOR_KERNEL | P1 新增 | 15x15_f32 | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.001043 | 0.001007 | 0.9652 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| GET_GAUSSIAN_KERNEL | P1 新增 | ksize15_f32 | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000266 | 0.001030 | 3.8745 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| GET_PERSPECTIVE_TRANSFORM | P1 新增 | four_points_lu | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000282 | 0.000709 | 2.5103 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| GET_RECT_SUB_PIX | P1 新增 | full_frame_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 1080x1920 | 0.076875 | 0.978862 | 12.7332 | no qualified SIMD fast path |
+| GET_RECT_SUB_PIX | P1 新增 | full_frame_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 479x641 | 0.017125 | 0.144877 | 8.4600 | no qualified SIMD fast path |
+| GET_RECT_SUB_PIX | P1 新增 | full_frame_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 480x640 | 0.010809 | 0.144940 | 13.4095 | no qualified SIMD fast path |
+| GET_RECT_SUB_PIX | P1 新增 | full_frame_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 720x1280 | 0.032674 | 0.433246 | 13.2596 | no qualified SIMD fast path |
+| GET_ROTATION_MATRIX_2D | P1 新增 | point_angle_scale | public_header_baseline | CV_32F | 1 | continuous | micro_batch | 0.000081 | 0.000075 | 0.9331 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| GET_ROTATION_MATRIX_2D_ | P1 新增 | matx23d | public_header_baseline | CV_64F | 1 | continuous | micro_batch | 0.000004 | 0.000005 | 1.1010 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| GET_STRUCTURING_ELEMENT | P1 新增 | ellipse7x7 | public_header_baseline | CV_8U | 1 | continuous | micro_batch | 0.000107 | 0.000081 | 0.7549 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| INTEGRAL | P1 新增 | u8c1_to_s32 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.078041 | 0.043520 | 0.5577 | phase1_representative_case |
+| INVERT_AFFINE_TRANSFORM | P1 新增 | f64_2x3 | public_header_baseline | CV_64F | 1 | continuous | micro_batch | 0.000045 | 0.000061 | 1.3611 | phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3 |
+| LAPLACIAN | P1 新增 | ksize3_u8_to_f32 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.392297 | 0.164468 | 0.4192 | phase1_representative_case |
+| LUT | 既有 | invert_u8 | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 0.116675 | 0.193182 | 1.6557 |  |
+| LUT | 既有 | invert_u8 | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.065136 | 0.028682 | 0.4403 |  |
+| LUT | 既有 | invert_u8 | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.065173 | 0.028619 | 0.4391 |  |
+| LUT | 既有 | invert_u8 | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.083930 | 0.085824 | 1.0226 |  |
+| LUT | 既有 | invert_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.081345 | 0.080524 | 0.9899 |  |
+| LUT | 既有 | invert_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.091145 | 0.114397 | 1.2551 |  |
+| MEDIAN_BLUR | P1 新增 | ksize5_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 8.339531 | 0.251741 | 0.0302 | phase1_representative_case |
+| PYR_DOWN | P1 新增 | u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 0.495427 | 0.061135 | 0.1234 | phase1_representative_case |
+| PYR_UP | P1 新增 | u8c3 | public_header_baseline | CV_8U | 3 | continuous | 480x640 | 1.187725 | 0.168134 | 0.1416 | phase1_representative_case |
+| REMAP | P1 新增 | fixed_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 1080x1920 | 16.906364 | 4.650673 | 0.2751 | no qualified SIMD fast path |
+| REMAP | P1 新增 | fixed_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 479x641 | 2.549038 | 0.710612 | 0.2788 | no qualified SIMD fast path |
+| REMAP | P1 新增 | fixed_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 480x640 | 2.518281 | 0.689061 | 0.2736 | no qualified SIMD fast path |
+| REMAP | P1 新增 | fixed_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 720x1280 | 7.396841 | 2.060846 | 0.2786 | no qualified SIMD fast path |
+| REMAP | P1 新增 | float_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 1080x1920 | 17.405460 | 4.871064 | 0.2799 | no qualified SIMD fast path |
+| REMAP | P1 新增 | float_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 479x641 | 2.571131 | 0.707037 | 0.2750 | no qualified SIMD fast path |
+| REMAP | P1 新增 | float_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 480x640 | 2.584781 | 0.704912 | 0.2727 | no qualified SIMD fast path |
+| REMAP | P1 新增 | float_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 720x1280 | 7.696427 | 2.117215 | 0.2751 | no qualified SIMD fast path |
+| RESIZE | 既有 | linear_0.75_f32c1 | headers_baseline | CV_32F | 1 | continuous | 480x640 | 0.204069 | 0.092855 | 0.4550 |  |
+| RESIZE | 既有 | linear_0.75_f32c3 | headers_baseline | CV_32F | 3 | continuous | 480x640 | 0.434336 | 0.267655 | 0.6162 |  |
+| RESIZE | 既有 | linear_0.75_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.142617 | 0.069398 | 0.4866 |  |
+| RESIZE | 既有 | linear_0.75_u8c3_roi | header_fastpath | CV_8U | 3 | roi | 479x641 | 0.146430 | 0.068699 | 0.4692 |  |
+| RESIZE | 既有 | linear_half_u8c1 | opencv_ui | CV_8U | 1 | continuous | 1080x1920 | 0.122040 | 0.081335 | 0.6665 |  |
+| RESIZE | 既有 | linear_half_u8c1 | opencv_ui | CV_8U | 1 | continuous | 479x641 | 0.018474 | 0.012349 | 0.6685 |  |
+| RESIZE | 既有 | linear_half_u8c1 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.020348 | 0.013320 | 0.6546 |  |
+| RESIZE | 既有 | linear_half_u8c1 | opencv_ui | CV_8U | 1 | continuous | 720x1280 | 0.057000 | 0.037601 | 0.6597 |  |
+| RESIZE | 既有 | nearest_0.75_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.086744 | 0.099641 | 1.1487 |  |
+| RESIZE | 既有 | nearest_exact_0.75_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.085720 | 0.103585 | 1.2084 |  |
+| SCHARR | P1 新增 | dx1_u8_to_f32 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.388145 | 0.124288 | 0.3202 | phase1_representative_case |
+| SEP_FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 0.983865 | 0.663190 | 0.6741 |  |
+| SEP_FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.267242 | 0.098897 | 0.3701 |  |
+| SEP_FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.277635 | 0.098626 | 0.3552 |  |
+| SEP_FILTER2D | 既有 | 3x3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.510041 | 0.289688 | 0.5680 |  |
+| SEP_FILTER2D | 既有 | 3x3_replicate_f32c1 | header_fastpath | CV_32F | 1 | continuous | 480x640 | 0.321534 | 0.082818 | 0.2576 |  |
+| SEP_FILTER2D | 既有 | 3x3_replicate_f32c3 | header_fastpath | CV_32F | 3 | continuous | 480x640 | 0.439789 | 0.217937 | 0.4955 |  |
+| SEP_FILTER2D | 既有 | 3x3_replicate_f32c4 | header_fastpath | CV_32F | 4 | continuous | 480x640 | 0.429456 | 0.281175 | 0.6547 |  |
+| SEP_FILTER2D | 既有 | 3x3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.467965 | 0.286097 | 0.6114 |  |
+| SEP_FILTER2D | 既有 | 3x3_replicate_u8c3_roi | header_fastpath | CV_8U | 3 | roi | 479x641 | 0.480582 | 0.323272 | 0.6727 |  |
+| SEP_FILTER2D | 既有 | 3x3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.424433 | 0.383286 | 0.9031 |  |
+| SOBEL | 既有 | dx1_ksize3_replicate | header_fastpath | CV_8U | 1 | continuous | 1080x1920 | 0.396272 | 0.855694 | 2.1594 |  |
+| SOBEL | 既有 | dx1_ksize3_replicate | header_fastpath | CV_8U | 1 | continuous | 479x641 | 0.108397 | 0.121370 | 1.1197 |  |
+| SOBEL | 既有 | dx1_ksize3_replicate | header_fastpath | CV_8U | 1 | continuous | 480x640 | 0.110284 | 0.125046 | 1.1339 |  |
+| SOBEL | 既有 | dx1_ksize3_replicate | header_fastpath | CV_8U | 1 | continuous | 720x1280 | 0.213697 | 0.345413 | 1.6164 |  |
+| SOBEL | 既有 | dx1_ksize3_replicate_u8c3 | header_fastpath | CV_8U | 3 | continuous | 480x640 | 0.184477 | 0.334792 | 1.8148 |  |
+| SOBEL | 既有 | dx1_ksize3_replicate_u8c4 | header_fastpath | CV_8U | 4 | continuous | 480x640 | 0.238489 | 0.455743 | 1.9110 |  |
+| SPATIAL_GRADIENT | P1 新增 | ksize3_u8_to_s16 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.106058 | 0.046267 | 0.4362 | phase1_representative_case |
+| SQR_BOX_FILTER | P1 新增 | 3x3_u8_to_f32 | opencv_ui | CV_8U | 1 | continuous | 480x640 | 0.268983 | 0.217228 | 0.8076 | phase1_representative_case |
+| STACK_BLUR | P1 新增 | 5x5_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 1.245217 | 0.122481 | 0.0984 | phase1_representative_case |
+| THRESHOLD | 既有 | binary_f32c3_roi | header_fastpath | CV_32F | 3 | roi | 479x641 | 0.074447 | 0.068977 | 0.9265 |  |
+| THRESHOLD | 既有 | binary_u8 | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 0.033439 | 0.033568 | 1.0038 |  |
+| THRESHOLD | 既有 | binary_u8 | headers_baseline | CV_8U | 1 | continuous | 479x641 | 0.004769 | 0.004844 | 1.0158 |  |
+| THRESHOLD | 既有 | binary_u8 | headers_baseline | CV_8U | 1 | continuous | 480x640 | 0.005334 | 0.005071 | 0.9508 |  |
+| THRESHOLD | 既有 | binary_u8 | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 0.014570 | 0.014320 | 0.9828 |  |
+| THRESHOLD_WITH_MASK | P1 新增 | binary_masked_u8c1 | public_header_baseline | CV_8U | 1 | continuous | 480x640 | 0.176443 | 0.164734 | 0.9336 | phase1_representative_case |
+| WARP_AFFINE | 既有 | linear_inverse_replicate | headers_baseline | CV_8U | 1 | continuous | 1080x1920 | 12.195618 | 1.949046 | 0.1598 |  |
+| WARP_AFFINE | 既有 | linear_inverse_replicate | headers_baseline | CV_8U | 1 | continuous | 479x641 | 1.824500 | 0.321812 | 0.1764 |  |
+| WARP_AFFINE | 既有 | linear_inverse_replicate | headers_baseline | CV_8U | 1 | continuous | 480x640 | 1.754134 | 0.289563 | 0.1651 |  |
+| WARP_AFFINE | 既有 | linear_inverse_replicate | headers_baseline | CV_8U | 1 | continuous | 720x1280 | 5.255021 | 0.867743 | 0.1651 |  |
+| WARP_AFFINE | 既有 | linear_inverse_replicate_f32c1 | headers_baseline | CV_32F | 1 | continuous | 480x640 | 2.829979 | 0.495016 | 0.1749 |  |
+| WARP_AFFINE | 既有 | linear_inverse_replicate_f32c3 | headers_baseline | CV_32F | 3 | continuous | 480x640 | 7.229236 | 0.653560 | 0.0904 |  |
+| WARP_AFFINE | 既有 | linear_inverse_replicate_f32c4 | headers_baseline | CV_32F | 4 | continuous | 480x640 | 9.422207 | 0.710360 | 0.0754 |  |
+| WARP_AFFINE | 既有 | linear_inverse_replicate_u8c3 | headers_baseline | CV_8U | 3 | continuous | 480x640 | 2.177542 | 0.733157 | 0.3367 |  |
+| WARP_AFFINE | 既有 | linear_inverse_replicate_u8c4 | headers_baseline | CV_8U | 4 | continuous | 480x640 | 2.502986 | 0.484169 | 0.1934 |  |
+| WARP_PERSPECTIVE | P1 新增 | projective_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 1080x1920 | 19.119465 | 6.445113 | 0.3371 | no qualified SIMD fast path |
+| WARP_PERSPECTIVE | P1 新增 | projective_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 479x641 | 2.753244 | 0.967045 | 0.3512 | no qualified SIMD fast path |
+| WARP_PERSPECTIVE | P1 新增 | projective_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 480x640 | 2.742277 | 0.952276 | 0.3473 | no qualified SIMD fast path |
+| WARP_PERSPECTIVE | P1 新增 | projective_linear_u8c3 | public_header_scalar | CV_8U | 3 | continuous | 720x1280 | 8.351536 | 2.859247 | 0.3424 | no qualified SIMD fast path |
 
 ## 不支持用例
 

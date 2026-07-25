@@ -3,6 +3,7 @@
 
 #include "detail/common.h"
 
+#include <cstdint>
 #include <type_traits>
 #include <vector>
 
@@ -10,6 +11,163 @@ namespace cvh
 {
 namespace stack_blur_detail
 {
+
+inline void run_u8(const Mat& src, Mat& dst, Size ksize)
+{
+    const int rows = src.size.p[0];
+    const int cols = src.size.p[1];
+    const int channels = src.channels();
+    const int radius_x = ksize.width / 2;
+    const int radius_y = ksize.height / 2;
+    const int row_width = cols * channels;
+    const std::int64_t divisor_x =
+        static_cast<std::int64_t>(radius_x + 1) *
+        static_cast<std::int64_t>(radius_x + 1);
+    const std::int64_t divisor_y =
+        static_cast<std::int64_t>(radius_y + 1) *
+        static_cast<std::int64_t>(radius_y + 1);
+    const std::int64_t divisor = divisor_x * divisor_y;
+    std::vector<std::int64_t> temporary(
+        static_cast<size_t>(rows) *
+        static_cast<size_t>(row_width));
+    for (int y = 0; y < rows; ++y)
+    {
+        const uchar* input =
+            src.data + static_cast<size_t>(y) * src.step(0);
+        std::int64_t* output =
+            temporary.data() +
+            static_cast<size_t>(y) * static_cast<size_t>(row_width);
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            const auto read = [&](int x) -> std::int64_t {
+                const int source_x =
+                    std::clamp(x, 0, cols - 1);
+                return input[
+                    static_cast<size_t>(source_x) *
+                        static_cast<size_t>(channels) +
+                    static_cast<size_t>(channel)];
+            };
+            std::int64_t weighted_sum = 0;
+            std::int64_t left_sum = 0;
+            std::int64_t right_sum = 0;
+            for (int offset = -radius_x;
+                 offset <= radius_x;
+                 ++offset)
+            {
+                weighted_sum +=
+                    static_cast<std::int64_t>(
+                        radius_x + 1 - std::abs(offset)) *
+                    read(offset);
+            }
+            for (int offset = -radius_x;
+                 offset <= 0;
+                 ++offset)
+            {
+                left_sum += read(offset);
+            }
+            for (int offset = 1;
+                 offset <= radius_x + 1;
+                 ++offset)
+            {
+                right_sum += read(offset);
+            }
+
+            for (int x = 0; x < cols; ++x)
+            {
+                output[x * channels + channel] = weighted_sum;
+                if (x + 1 == cols)
+                {
+                    continue;
+                }
+                weighted_sum += right_sum - left_sum;
+                const std::int64_t next_center = read(x + 1);
+                left_sum +=
+                    next_center - read(x - radius_x);
+                right_sum +=
+                    read(x + radius_x + 2) - next_center;
+            }
+        }
+    }
+
+    std::vector<std::int64_t> weighted_sum(
+        static_cast<size_t>(row_width), 0);
+    std::vector<std::int64_t> left_sum(
+        static_cast<size_t>(row_width), 0);
+    std::vector<std::int64_t> right_sum(
+        static_cast<size_t>(row_width), 0);
+    const auto temporary_row = [&](int y) {
+        const int source_y =
+            std::clamp(y, 0, rows - 1);
+        return temporary.data() +
+               static_cast<size_t>(source_y) *
+                   static_cast<size_t>(row_width);
+    };
+    for (int offset = -radius_y;
+         offset <= radius_y;
+         ++offset)
+    {
+        const std::int64_t* input = temporary_row(offset);
+        const std::int64_t weight =
+            radius_y + 1 - std::abs(offset);
+        for (int index = 0; index < row_width; ++index)
+        {
+            weighted_sum[static_cast<size_t>(index)] +=
+                weight * input[index];
+        }
+    }
+    for (int offset = -radius_y; offset <= 0; ++offset)
+    {
+        const std::int64_t* input = temporary_row(offset);
+        for (int index = 0; index < row_width; ++index)
+        {
+            left_sum[static_cast<size_t>(index)] += input[index];
+        }
+    }
+    for (int offset = 1;
+         offset <= radius_y + 1;
+         ++offset)
+    {
+        const std::int64_t* input = temporary_row(offset);
+        for (int index = 0; index < row_width; ++index)
+        {
+            right_sum[static_cast<size_t>(index)] += input[index];
+        }
+    }
+
+    for (int y = 0; y < rows; ++y)
+    {
+        uchar* output =
+            dst.data + static_cast<size_t>(y) * dst.step(0);
+        for (int index = 0; index < row_width; ++index)
+        {
+            output[index] =
+                saturate_cast<uchar>(
+                    static_cast<double>(
+                        weighted_sum[static_cast<size_t>(index)]) /
+                    static_cast<double>(divisor));
+        }
+        if (y + 1 == rows)
+        {
+            continue;
+        }
+        const std::int64_t* next_center =
+            temporary_row(y + 1);
+        const std::int64_t* leaving_left =
+            temporary_row(y - radius_y);
+        const std::int64_t* entering_right =
+            temporary_row(y + radius_y + 2);
+        for (int index = 0; index < row_width; ++index)
+        {
+            const size_t position = static_cast<size_t>(index);
+            weighted_sum[position] +=
+                right_sum[position] - left_sum[position];
+            left_sum[position] +=
+                next_center[index] - leaving_left[index];
+            right_sum[position] +=
+                entering_right[index] - next_center[index];
+        }
+    }
+}
 
 template<typename T>
 inline T cast_value(double value)
@@ -114,7 +272,7 @@ inline void stackBlur(const Mat& src, Mat& dst, Size ksize)
     dst.create(source.shape(), source.type());
     if (source.depth() == CV_8U)
     {
-        stack_blur_detail::run<uchar>(source, dst, ksize);
+        stack_blur_detail::run_u8(source, dst, ksize);
     }
     else
     {

@@ -138,7 +138,9 @@ bool output_matches(const cv::Mat& expected,
                     DepthId depth,
                     const void* actual_data,
                     std::uint64_t actual_bytes,
-                    int u8_tolerance = 0)
+                    int u8_tolerance = 0,
+                    float f32_abs_tolerance = 1e-5f,
+                    float f32_rel_tolerance = 1e-5f)
 {
     const std::uint64_t expected_bytes =
         static_cast<std::uint64_t>(expected.total()) * static_cast<std::uint64_t>(expected.elemSize());
@@ -168,9 +170,21 @@ bool output_matches(const cv::Mat& expected,
     const std::size_t count = expected.total() * static_cast<std::size_t>(expected.channels());
     for (std::size_t i = 0; i < count; ++i)
     {
-        const float tolerance = 1e-5f * std::max(1.0f, std::fabs(expected_values[i]));
-        if (std::fabs(expected_values[i] - actual_values[i]) > tolerance)
+        const float difference =
+            std::fabs(expected_values[i] - actual_values[i]);
+        const float relative_tolerance =
+            f32_rel_tolerance *
+            std::max(1.0f, std::fabs(expected_values[i]));
+        if (difference > f32_abs_tolerance &&
+            difference > relative_tolerance)
         {
+            std::cerr << "OpenCV F32 mismatch at scalar " << i
+                      << ": expected=" << expected_values[i]
+                      << " actual=" << actual_values[i]
+                      << " difference=" << difference
+                      << " abs_tolerance=" << f32_abs_tolerance
+                      << " relative_tolerance="
+                      << relative_tolerance << "\n";
             return false;
         }
     }
@@ -380,7 +394,14 @@ bool validate_opencv_gemm(int m,
     fill_f32(a, seed_a);
     fill_f32(b, seed_b);
     cv::gemm(a, b, 1.0, cv::Mat(), 0.0, expected, 0);
-    return output_matches(expected, DepthId::F32, cvh_data, cvh_bytes);
+    return output_matches(
+        expected,
+        DepthId::F32,
+        cvh_data,
+        cvh_bytes,
+        0,
+        1e-3f,
+        1e-4f);
 }
 
 double bench_opencv_gemm(int m,

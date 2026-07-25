@@ -4,6 +4,7 @@
 #include "detail/geometric_sampling.hpp"
 
 #include <cmath>
+#include <cstring>
 
 namespace cvh {
 namespace detail {
@@ -19,26 +20,74 @@ inline void rect_sub_pix_typed(const Mat& source,
     const double origin_y =
         static_cast<double>(center.y) -
         (static_cast<double>(patch.size[0]) - 1.0) * 0.5;
+    const int origin_integer_x =
+        static_cast<int>(std::floor(origin_x));
+    const int origin_integer_y =
+        static_cast<int>(std::floor(origin_y));
+    const double fraction_x =
+        origin_x - static_cast<double>(origin_integer_x);
+    const double fraction_y =
+        origin_y - static_cast<double>(origin_integer_y);
+
+    if constexpr (std::is_same<SourceT, DestinationT>::value)
+    {
+        if (fraction_x == 0.0 && fraction_y == 0.0 &&
+            origin_integer_x >= 0 && origin_integer_y >= 0 &&
+            origin_integer_x + patch.size[1] <= source.size[1] &&
+            origin_integer_y + patch.size[0] <= source.size[0])
+        {
+            const size_t row_bytes =
+                static_cast<size_t>(patch.size[1]) *
+                static_cast<size_t>(source.channels()) *
+                sizeof(SourceT);
+            for (int row = 0; row < patch.size[0]; ++row)
+            {
+                std::memcpy(
+                    patch.data +
+                        static_cast<size_t>(row) * patch.step(0),
+                    source.data +
+                        static_cast<size_t>(origin_integer_y + row) *
+                            source.step(0) +
+                        static_cast<size_t>(origin_integer_x) *
+                            source.elemSize(),
+                    row_bytes);
+            }
+            return;
+        }
+    }
+
     for (int row = 0; row < patch.size[0]; ++row)
     {
         DestinationT* output = reinterpret_cast<DestinationT*>(
             patch.data + static_cast<size_t>(row) * patch.step(0));
         for (int col = 0; col < patch.size[1]; ++col)
         {
-            const double source_x = origin_x + col;
-            const double source_y = origin_y + row;
-            const int integer_x =
-                static_cast<int>(std::floor(source_x));
-            const int integer_y =
-                static_cast<int>(std::floor(source_y));
+            const int integer_x = origin_integer_x + col;
+            const int integer_y = origin_integer_y + row;
+            if constexpr (
+                std::is_same<SourceT, uchar>::value &&
+                std::is_same<DestinationT, uchar>::value)
+            {
+                geometric_write_linear_u8(
+                    source,
+                    output +
+                        static_cast<size_t>(col) * source.channels(),
+                    integer_x,
+                    integer_y,
+                    fraction_x,
+                    fraction_y,
+                    BORDER_REPLICATE,
+                    Scalar());
+                continue;
+            }
             geometric_write_linear_as<SourceT, DestinationT>(
                 source,
                 output +
                     static_cast<size_t>(col) * source.channels(),
                 integer_x,
                 integer_y,
-                source_x - integer_x,
-                source_y - integer_y,
+                fraction_x,
+                fraction_y,
                 BORDER_REPLICATE,
                 Scalar());
         }

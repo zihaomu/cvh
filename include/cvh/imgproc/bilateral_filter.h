@@ -16,7 +16,7 @@ struct OffsetWeight
 {
     int x;
     int y;
-    double weight;
+    float weight;
 };
 
 inline std::vector<OffsetWeight> spatial_weights(int radius,
@@ -39,11 +39,142 @@ inline std::vector<OffsetWeight> spatial_weights(int radius,
             weights.push_back(
                 {x,
                  y,
-                 std::exp(static_cast<double>(distance_squared) *
-                          coefficient)});
+                 static_cast<float>(
+                     std::exp(
+                         static_cast<double>(distance_squared) *
+                         coefficient))});
         }
     }
     return weights;
+}
+
+inline void run_u8(
+    const Mat& src,
+    Mat& dst,
+    const std::vector<OffsetWeight>& spatial,
+    double sigma_color,
+    int border_type)
+{
+    const int rows = src.size.p[0];
+    const int cols = src.size.p[1];
+    const int channels = src.channels();
+    const int count = static_cast<int>(spatial.size());
+    const float color_coefficient =
+        static_cast<float>(
+            -0.5 / (sigma_color * sigma_color));
+    std::vector<float> color_weights(
+        static_cast<size_t>(channels * 255 + 1));
+    for (size_t difference = 0;
+         difference < color_weights.size();
+         ++difference)
+    {
+        const float value = static_cast<float>(difference);
+        color_weights[difference] =
+            std::exp(value * value * color_coefficient);
+    }
+
+    std::vector<int> x_indices(
+        static_cast<size_t>(count) *
+        static_cast<size_t>(cols));
+    std::vector<int> y_indices(
+        static_cast<size_t>(count) *
+        static_cast<size_t>(rows));
+    for (int index = 0; index < count; ++index)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            const int source_x = detail::border_interpolate(
+                x + spatial[static_cast<size_t>(index)].x,
+                cols,
+                border_type);
+            x_indices[
+                static_cast<size_t>(index) *
+                    static_cast<size_t>(cols) +
+                static_cast<size_t>(x)] =
+                source_x < 0 ? -1 : source_x * channels;
+        }
+        for (int y = 0; y < rows; ++y)
+        {
+            y_indices[
+                static_cast<size_t>(index) *
+                    static_cast<size_t>(rows) +
+                static_cast<size_t>(y)] =
+                detail::border_interpolate(
+                    y + spatial[static_cast<size_t>(index)].y,
+                    rows,
+                    border_type);
+        }
+    }
+
+    for (int y = 0; y < rows; ++y)
+    {
+        const uchar* center_row =
+            src.data + static_cast<size_t>(y) * src.step(0);
+        uchar* output =
+            dst.data + static_cast<size_t>(y) * dst.step(0);
+        for (int x = 0; x < cols; ++x)
+        {
+            const uchar* center =
+                center_row + static_cast<size_t>(x) * channels;
+            float weighted_sum[3] = {0.0f, 0.0f, 0.0f};
+            float weight_sum = 0.0f;
+            for (int index = 0; index < count; ++index)
+            {
+                const int source_y =
+                    y_indices[
+                        static_cast<size_t>(index) *
+                            static_cast<size_t>(rows) +
+                        static_cast<size_t>(y)];
+                const int source_x =
+                    x_indices[
+                        static_cast<size_t>(index) *
+                            static_cast<size_t>(cols) +
+                        static_cast<size_t>(x)];
+                if (source_y < 0 || source_x < 0)
+                {
+                    continue;
+                }
+                const uchar* sample =
+                    src.data +
+                    static_cast<size_t>(source_y) * src.step(0) +
+                    static_cast<size_t>(source_x);
+                int difference = 0;
+                for (int channel = 0;
+                     channel < channels;
+                     ++channel)
+                {
+                    difference += std::abs(
+                        static_cast<int>(sample[channel]) -
+                        static_cast<int>(center[channel]));
+                }
+                const float weight =
+                    spatial[static_cast<size_t>(index)].weight *
+                    color_weights[static_cast<size_t>(difference)];
+                weight_sum += weight;
+                for (int channel = 0;
+                     channel < channels;
+                     ++channel)
+                {
+                    weighted_sum[channel] +=
+                        weight * sample[channel];
+                }
+            }
+            const float inverse_weight =
+                weight_sum > 0.0f ? 1.0f / weight_sum : 0.0f;
+            for (int channel = 0; channel < channels; ++channel)
+            {
+                output[
+                    static_cast<size_t>(x) *
+                        static_cast<size_t>(channels) +
+                    static_cast<size_t>(channel)] =
+                    weight_sum > 0.0f
+                        ? saturate_cast<uchar>(
+                              weighted_sum[channel] *
+                              inverse_weight)
+                        : center[channel];
+            }
+        }
+    }
 }
 
 template<typename T>
@@ -58,6 +189,21 @@ inline void run(const Mat& src,
     const int channels = src.channels();
     const double color_coefficient =
         -0.5 / (sigma_color * sigma_color);
+    std::vector<double> color_weights;
+    if constexpr (std::is_same<T, uchar>::value)
+    {
+        color_weights.resize(
+            static_cast<size_t>(channels * 255 + 1));
+        for (size_t difference = 0;
+             difference < color_weights.size();
+             ++difference)
+        {
+            color_weights[difference] =
+                std::exp(
+                    static_cast<double>(difference * difference) *
+                    color_coefficient);
+        }
+    }
 
     for (int y = 0; y < rows; ++y)
     {
@@ -87,16 +233,33 @@ inline void run(const Mat& src,
                 const T* sample =
                     sample_row + static_cast<size_t>(source_x) * channels;
                 double color_distance = 0.0;
-                for (int ch = 0; ch < channels; ++ch)
+                if constexpr (std::is_same<T, uchar>::value)
                 {
-                    color_distance += std::fabs(
-                        static_cast<double>(sample[ch]) -
-                        static_cast<double>(center[ch]));
+                    int difference = 0;
+                    for (int ch = 0; ch < channels; ++ch)
+                    {
+                        difference += std::abs(
+                            static_cast<int>(sample[ch]) -
+                            static_cast<int>(center[ch]));
+                    }
+                    color_distance =
+                        color_weights[static_cast<size_t>(difference)];
+                }
+                else
+                {
+                    for (int ch = 0; ch < channels; ++ch)
+                    {
+                        color_distance += std::fabs(
+                            static_cast<double>(sample[ch]) -
+                            static_cast<double>(center[ch]));
+                    }
+                    color_distance =
+                        std::exp(
+                            color_distance * color_distance *
+                            color_coefficient);
                 }
                 const double weight =
-                    offset.weight *
-                    std::exp(color_distance * color_distance *
-                             color_coefficient);
+                    offset.weight * color_distance;
                 weight_sum += weight;
                 for (int ch = 0; ch < channels; ++ch)
                 {
@@ -167,7 +330,7 @@ inline void bilateralFilter(const Mat& src,
         bilateral_filter_detail::spatial_weights(radius, sigmaSpace);
     if (src.depth() == CV_8U)
     {
-        bilateral_filter_detail::run<uchar>(
+        bilateral_filter_detail::run_u8(
             src, dst, spatial, sigmaColor, border_type);
     }
     else

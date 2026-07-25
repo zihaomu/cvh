@@ -95,6 +95,70 @@ inline void warp_perspective_typed(const Mat& source,
         T* output = reinterpret_cast<T*>(
             destination.data +
             static_cast<size_t>(row) * destination.step(0));
+        if constexpr (std::is_same<T, uchar>::value)
+        {
+            if (interpolation == INTER_LINEAR)
+            {
+                constexpr int block_size = 64;
+                int coordinates[block_size * 2];
+                ushort fractions[block_size];
+                for (int block_start = 0;
+                     block_start < destination.size[1];
+                     block_start += block_size)
+                {
+                    const int count = std::min(
+                        block_size,
+                        destination.size[1] - block_start);
+                    for (int index = 0; index < count; ++index)
+                    {
+                        const int col = block_start + index;
+                        const double denominator =
+                            matrix[6] * col +
+                            matrix[7] * row +
+                            matrix[8];
+                        const double reciprocal =
+                            denominator != 0.0
+                                ? 1.0 / denominator
+                                : 0.0;
+                        const double source_x =
+                            (matrix[0] * col +
+                             matrix[1] * row +
+                             matrix[2]) *
+                            reciprocal;
+                        const double source_y =
+                            (matrix[3] * col +
+                             matrix[4] * row +
+                             matrix[5]) *
+                            reciprocal;
+                        int fraction_x = 0;
+                        int fraction_y = 0;
+                        geometric_fixed_linear_coordinate(
+                            source_x,
+                            coordinates[index * 2],
+                            fraction_x);
+                        geometric_fixed_linear_coordinate(
+                            source_y,
+                            coordinates[index * 2 + 1],
+                            fraction_y);
+                        fractions[index] =
+                            geometric_pack_linear_fraction(
+                                fraction_x,
+                                fraction_y);
+                    }
+                    geometric_write_linear_u8_fixed_row(
+                        source,
+                        output +
+                            static_cast<size_t>(block_start) *
+                                source.channels(),
+                        coordinates,
+                        fractions,
+                        count,
+                        border_type,
+                        border_value);
+                }
+                continue;
+            }
+        }
         for (int col = 0; col < destination.size[1]; ++col)
         {
             const double denominator =
@@ -107,9 +171,39 @@ inline void warp_perspective_typed(const Mat& source,
             const double source_y =
                 (matrix[3] * col + matrix[4] * row + matrix[5]) *
                 reciprocal;
+            T* pixel =
+                output + static_cast<size_t>(col) * source.channels();
+            if constexpr (std::is_same<T, uchar>::value)
+            {
+                if (interpolation == INTER_LINEAR)
+                {
+                    int integer_x = 0;
+                    int integer_y = 0;
+                    int fraction_x = 0;
+                    int fraction_y = 0;
+                    geometric_fixed_linear_coordinate(
+                        source_x,
+                        integer_x,
+                        fraction_x);
+                    geometric_fixed_linear_coordinate(
+                        source_y,
+                        integer_y,
+                        fraction_y);
+                    geometric_write_linear_u8_fixed(
+                        source,
+                        pixel,
+                        integer_x,
+                        integer_y,
+                        fraction_x,
+                        fraction_y,
+                        border_type,
+                        border_value);
+                    continue;
+                }
+            }
             geometric_write_coordinate(
                 source,
-                output + static_cast<size_t>(col) * source.channels(),
+                pixel,
                 source_x,
                 source_y,
                 interpolation,

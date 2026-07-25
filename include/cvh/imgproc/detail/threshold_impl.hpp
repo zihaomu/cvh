@@ -2,6 +2,8 @@
 #define CVH_IMGPROC_DETAIL_THRESHOLD_IMPL_HPP
 
 #include "fastpath_common.hpp"
+#include "cvh/core/detail/dispatch_control.h"
+#include "cvh/core/simd/opencv_ui.h"
 
 namespace cvh
 {
@@ -10,6 +12,264 @@ namespace detail
 
 namespace threshold_fastpath
 {
+inline bool ui_enabled()
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    return cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly;
+#else
+    return false;
+#endif
+}
+
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+
+template<int ThresholdType, typename Vector>
+inline Vector apply_threshold_vector(const Vector& value,
+                                     const Vector& threshold,
+                                     const Vector& maximum,
+                                     const Vector& zero)
+{
+    const Vector above = cv::v_lt(threshold, value);
+    if constexpr (ThresholdType == THRESH_BINARY)
+    {
+        return cv::v_select(above, maximum, zero);
+    }
+    else if constexpr (ThresholdType == THRESH_BINARY_INV)
+    {
+        return cv::v_select(above, zero, maximum);
+    }
+    else if constexpr (ThresholdType == THRESH_TRUNC)
+    {
+        return cv::v_select(above, threshold, value);
+    }
+    else if constexpr (ThresholdType == THRESH_TOZERO)
+    {
+        return cv::v_select(above, value, zero);
+    }
+    else
+    {
+        return cv::v_select(above, zero, value);
+    }
+}
+
+template<int ThresholdType, typename T>
+inline T apply_threshold_scalar(T value, T threshold, T maximum)
+{
+    const bool above = value > threshold;
+    if constexpr (ThresholdType == THRESH_BINARY)
+    {
+        return above ? maximum : T(0);
+    }
+    else if constexpr (ThresholdType == THRESH_BINARY_INV)
+    {
+        return above ? T(0) : maximum;
+    }
+    else if constexpr (ThresholdType == THRESH_TRUNC)
+    {
+        return above ? threshold : value;
+    }
+    else if constexpr (ThresholdType == THRESH_TOZERO)
+    {
+        return above ? value : T(0);
+    }
+    else
+    {
+        return above ? T(0) : value;
+    }
+}
+
+template<int ThresholdType>
+inline void threshold_rows_u8(const Mat& src,
+                              Mat& dst,
+                              uchar threshold,
+                              uchar maximum)
+{
+    const cv::v_uint8 threshold_vector = cv::vx_setall_u8(threshold);
+    const cv::v_uint8 maximum_vector = cv::vx_setall_u8(maximum);
+    const cv::v_uint8 zero_vector = cv::vx_setzero_u8();
+    const size_t lanes =
+        static_cast<size_t>(cv::VTraits<cv::v_uint8>::vlanes());
+
+    const bool continuous = src.isContinuous() && dst.isContinuous();
+    const int rows = continuous ? 1 : src.size.p[0];
+    const size_t row_scalars =
+        continuous
+            ? src.total() * static_cast<size_t>(src.channels())
+            : static_cast<size_t>(src.size.p[1]) *
+                  static_cast<size_t>(src.channels());
+
+    for (int y = 0; y < rows; ++y)
+    {
+        const uchar* input =
+            src.data + static_cast<size_t>(y) * src.step(0);
+        uchar* output =
+            dst.data + static_cast<size_t>(y) * dst.step(0);
+        size_t x = 0;
+        for (; x + lanes <= row_scalars; x += lanes)
+        {
+            cv::vx_store(
+                output + x,
+                apply_threshold_vector<ThresholdType>(
+                    cv::vx_load(input + x),
+                    threshold_vector,
+                    maximum_vector,
+                    zero_vector));
+        }
+        for (; x < row_scalars; ++x)
+        {
+            output[x] = apply_threshold_scalar<ThresholdType>(
+                input[x], threshold, maximum);
+        }
+    }
+}
+
+template<int ThresholdType>
+inline void threshold_rows_f32(const Mat& src,
+                               Mat& dst,
+                               float threshold,
+                               float maximum)
+{
+    const cv::v_float32 threshold_vector =
+        cv::vx_setall_f32(threshold);
+    const cv::v_float32 maximum_vector =
+        cv::vx_setall_f32(maximum);
+    const cv::v_float32 zero_vector = cv::vx_setzero_f32();
+    const size_t lanes =
+        static_cast<size_t>(cv::VTraits<cv::v_float32>::vlanes());
+
+    const bool continuous = src.isContinuous() && dst.isContinuous();
+    const int rows = continuous ? 1 : src.size.p[0];
+    const size_t row_scalars =
+        continuous
+            ? src.total() * static_cast<size_t>(src.channels())
+            : static_cast<size_t>(src.size.p[1]) *
+                  static_cast<size_t>(src.channels());
+
+    for (int y = 0; y < rows; ++y)
+    {
+        const float* input = reinterpret_cast<const float*>(
+            src.data + static_cast<size_t>(y) * src.step(0));
+        float* output = reinterpret_cast<float*>(
+            dst.data + static_cast<size_t>(y) * dst.step(0));
+        size_t x = 0;
+        for (; x + lanes <= row_scalars; x += lanes)
+        {
+            cv::vx_store(
+                output + x,
+                apply_threshold_vector<ThresholdType>(
+                    cv::vx_load(input + x),
+                    threshold_vector,
+                    maximum_vector,
+                    zero_vector));
+        }
+        for (; x < row_scalars; ++x)
+        {
+            output[x] = apply_threshold_scalar<ThresholdType>(
+                input[x], threshold, maximum);
+        }
+    }
+}
+
+template<typename Run>
+inline bool dispatch_threshold_type(int threshold_type, Run&& run)
+{
+    switch (threshold_type)
+    {
+        case THRESH_BINARY:
+            run(std::integral_constant<int, THRESH_BINARY>());
+            return true;
+        case THRESH_BINARY_INV:
+            run(std::integral_constant<int, THRESH_BINARY_INV>());
+            return true;
+        case THRESH_TRUNC:
+            run(std::integral_constant<int, THRESH_TRUNC>());
+            return true;
+        case THRESH_TOZERO:
+            run(std::integral_constant<int, THRESH_TOZERO>());
+            return true;
+        case THRESH_TOZERO_INV:
+            run(std::integral_constant<int, THRESH_TOZERO_INV>());
+            return true;
+        default:
+            return false;
+    }
+}
+
+#endif
+
+inline bool try_threshold_fastpath_u8(const Mat& src,
+                                      Mat& dst,
+                                      double thresh,
+                                      double maxval,
+                                      int type,
+                                      double* out_ret)
+{
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    if (!ui_enabled() || out_ret == nullptr || src.empty() ||
+        src.depth() != CV_8U)
+    {
+        return false;
+    }
+
+    const bool is_dryrun = (type & THRESH_DRYRUN) != 0;
+    type &= ~THRESH_DRYRUN;
+    const int automatic_thresh = type & (~THRESH_MASK);
+    const int threshold_type = type & THRESH_MASK;
+
+    if (automatic_thresh == THRESH_OTSU && src.type() == CV_8UC1)
+    {
+        thresh = threshold_otsu_u8(src);
+    }
+    else if (automatic_thresh == THRESH_TRIANGLE &&
+             src.type() == CV_8UC1)
+    {
+        thresh = threshold_triangle_u8(src);
+    }
+    else if (automatic_thresh != 0)
+    {
+        return false;
+    }
+
+    const double effective_threshold = std::floor(thresh);
+    *out_ret = effective_threshold;
+    if (is_dryrun)
+    {
+        return true;
+    }
+    if (effective_threshold < 0.0 || effective_threshold > 255.0)
+    {
+        return false;
+    }
+
+    dst.create(src.dims, src.size.p, src.type());
+    const uchar threshold_u8 =
+        static_cast<uchar>(effective_threshold);
+    const uchar maximum_u8 = saturate_cast<uchar>(maxval);
+    const bool dispatched = dispatch_threshold_type(
+        threshold_type,
+        [&](auto threshold_tag) {
+            threshold_rows_u8<decltype(threshold_tag)::value>(
+                src, dst, threshold_u8, maximum_u8);
+        });
+    if (dispatched)
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+    }
+    return dispatched;
+#else
+    (void)src;
+    (void)dst;
+    (void)thresh;
+    (void)maxval;
+    (void)type;
+    (void)out_ret;
+    return false;
+#endif
+}
+
 inline bool try_threshold_fastpath_f32(const Mat& src, Mat& dst, double thresh, double maxval, int type, double* out_ret)
 {
     if (out_ret == nullptr)
@@ -57,6 +317,25 @@ inline bool try_threshold_fastpath_f32(const Mat& src, Mat& dst, double thresh, 
     }
 
     dst.create(src.dims, src.size.p, src.type());
+
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    if (ui_enabled())
+    {
+        const bool dispatched = dispatch_threshold_type(
+            thresh_type,
+            [&](auto threshold_tag) {
+                threshold_rows_f32<decltype(threshold_tag)::value>(
+                    src, dst, thresh_f, max_f);
+            });
+        if (dispatched)
+        {
+            cpu::set_last_dispatch_tag(
+                cpu::DispatchTag::OpenCVUI);
+            return true;
+        }
+    }
+#endif
 
     const std::size_t scalar_count = src.total() * static_cast<std::size_t>(src.channels());
     const float* src_ptr = reinterpret_cast<const float*>(src.data);
@@ -137,11 +416,17 @@ inline bool try_threshold_fastpath_f32(const Mat& src, Mat& dst, double thresh, 
 inline double threshold_fast_impl(const Mat& src, Mat& dst, double thresh, double maxval, int type)
 {
     double ret_value = 0.0;
+    if (threshold_fastpath::try_threshold_fastpath_u8(
+            src, dst, thresh, maxval, type, &ret_value))
+    {
+        return ret_value;
+    }
     if (threshold_fastpath::try_threshold_fastpath_f32(src, dst, thresh, maxval, type, &ret_value))
     {
         return ret_value;
     }
 
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     return threshold_fallback(src, dst, thresh, maxval, type);
 }
 

@@ -2,6 +2,8 @@
 #define CVH_IMGPROC_CONVERT_MAPS_H
 
 #include "detail/common.h"
+#include "cvh/core/detail/dispatch_control.h"
+#include "cvh/core/simd/opencv_ui.h"
 
 #include <cmath>
 #include <limits>
@@ -110,8 +112,23 @@ inline void convertMaps(const Mat& map1,
             "convertMaps outputs must be distinct Mat objects");
     }
     detail::validate_map_input(map1, map2);
-    const Mat first = map1.clone();
-    const Mat second = map2.empty() ? Mat() : map2.clone();
+    Mat first_snapshot;
+    const Mat* first_ref = &map1;
+    if (map1.data == dstmap1.data || map1.data == dstmap2.data)
+    {
+        first_snapshot = map1.clone();
+        first_ref = &first_snapshot;
+    }
+    Mat second_snapshot;
+    const Mat* second_ref = &map2;
+    if (!map2.empty() &&
+        (map2.data == dstmap1.data || map2.data == dstmap2.data))
+    {
+        second_snapshot = map2.clone();
+        second_ref = &second_snapshot;
+    }
+    const Mat& first = *first_ref;
+    const Mat& second = *second_ref;
     if (dstmap1type <= 0)
     {
         dstmap1type =
@@ -139,6 +156,145 @@ inline void convertMaps(const Mat& map1,
     {
         dstmap2.release();
     }
+
+#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    if (cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly &&
+        first.type() == CV_32FC1 && second.type() == CV_32FC1 &&
+        dstmap1type == CV_16SC2)
+    {
+        const cv::v_float32x4 scale =
+            cv::v_setall_f32(static_cast<float>(INTER_TAB_SIZE));
+        const cv::v_int32x4 fraction_mask =
+            cv::v_setall_s32(INTER_TAB_SIZE - 1);
+        const cv::v_int32x4 tab_size =
+            cv::v_setall_s32(INTER_TAB_SIZE);
+        const cv::v_float32x4 finite_limit =
+            cv::v_setall_f32(
+                std::numeric_limits<float>::max());
+        for (int row = 0; row < first.size[0]; ++row)
+        {
+            const float* source_x = reinterpret_cast<const float*>(
+                first.data + static_cast<size_t>(row) * first.step(0));
+            const float* source_y = reinterpret_cast<const float*>(
+                second.data + static_cast<size_t>(row) * second.step(0));
+            short* integer_output = reinterpret_cast<short*>(
+                dstmap1.data +
+                static_cast<size_t>(row) * dstmap1.step(0));
+            ushort* fraction_output =
+                nninterpolation
+                    ? nullptr
+                    : reinterpret_cast<ushort*>(
+                          dstmap2.data +
+                          static_cast<size_t>(row) * dstmap2.step(0));
+            int col = 0;
+            for (; col + 4 <= first.size[1]; col += 4)
+            {
+                const cv::v_float32x4 x_values =
+                    cv::v_load(source_x + col);
+                const cv::v_float32x4 y_values =
+                    cv::v_load(source_y + col);
+                const cv::v_uint32x4 x_finite =
+                    cv::v_reinterpret_as_u32(
+                        cv::v_and(
+                            cv::v_not_nan(x_values),
+                            cv::v_lt(
+                                cv::v_abs(x_values),
+                                finite_limit)));
+                const cv::v_uint32x4 y_finite =
+                    cv::v_reinterpret_as_u32(
+                        cv::v_and(
+                            cv::v_not_nan(y_values),
+                            cv::v_lt(
+                                cv::v_abs(y_values),
+                                finite_limit)));
+                if (!cv::v_check_all(
+                        cv::v_and(x_finite, y_finite)))
+                {
+                    break;
+                }
+                cv::v_int32x4 scaled_x;
+                cv::v_int32x4 scaled_y;
+                if (nninterpolation)
+                {
+                    scaled_x = cv::v_round(x_values);
+                    scaled_y = cv::v_round(y_values);
+                }
+                else
+                {
+                    scaled_x = cv::v_round(
+                        cv::v_mul(x_values, scale));
+                    scaled_y = cv::v_round(
+                        cv::v_mul(y_values, scale));
+                }
+                if (!nninterpolation)
+                {
+                    cv::v_pack_u_store(
+                        fraction_output + col,
+                        cv::v_add(
+                            cv::v_and(scaled_x, fraction_mask),
+                            cv::v_mul(
+                                cv::v_and(
+                                    scaled_y, fraction_mask),
+                                tab_size)));
+                    scaled_x =
+                        cv::v_shr<INTER_BITS>(scaled_x);
+                    scaled_y =
+                        cv::v_shr<INTER_BITS>(scaled_y);
+                }
+                cv::v_int32x4 interleaved_low;
+                cv::v_int32x4 interleaved_high;
+                cv::v_zip(
+                    scaled_x,
+                    scaled_y,
+                    interleaved_low,
+                    interleaved_high);
+                cv::v_store(
+                    integer_output + col * 2,
+                    cv::v_pack(
+                        interleaved_low,
+                        interleaved_high));
+            }
+            for (; col < first.size[1]; ++col)
+            {
+                const double x = source_x[col];
+                const double y = source_y[col];
+                if (nninterpolation)
+                {
+                    integer_output[col * 2] =
+                        saturate_cast<short>(
+                            detail::map_round_to_int(x));
+                    integer_output[col * 2 + 1] =
+                        saturate_cast<short>(
+                            detail::map_round_to_int(y));
+                    continue;
+                }
+                const int scaled_x =
+                    detail::map_round_to_int(x * INTER_TAB_SIZE);
+                const int scaled_y =
+                    detail::map_round_to_int(y * INTER_TAB_SIZE);
+                const int integer_x = static_cast<int>(
+                    std::floor(
+                        static_cast<double>(scaled_x) /
+                        INTER_TAB_SIZE));
+                const int integer_y = static_cast<int>(
+                    std::floor(
+                        static_cast<double>(scaled_y) /
+                        INTER_TAB_SIZE));
+                integer_output[col * 2] =
+                    saturate_cast<short>(integer_x);
+                integer_output[col * 2 + 1] =
+                    saturate_cast<short>(integer_y);
+                fraction_output[col] = static_cast<ushort>(
+                    (scaled_y - integer_y * INTER_TAB_SIZE) *
+                        INTER_TAB_SIZE +
+                    (scaled_x - integer_x * INTER_TAB_SIZE));
+            }
+        }
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
+#endif
 
     for (int row = 0; row < first.size[0]; ++row)
     {

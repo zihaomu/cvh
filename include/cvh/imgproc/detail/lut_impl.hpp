@@ -2,6 +2,8 @@
 #define CVH_IMGPROC_DETAIL_LUT_IMPL_HPP
 
 #include "fastpath_common.hpp"
+#include "cvh/core/detail/dispatch_control.h"
+#include "cvh/core/simd/opencv_ui.h"
 
 namespace cvh
 {
@@ -52,13 +54,23 @@ inline bool try_lut_fastpath_u8(const Mat& src, const Mat& lut, Mat& dst)
     }
 
     std::vector<uchar> table;
+    const uchar* map = nullptr;
     if (lut_cn == 1)
     {
-        table.resize(256u);
-        for (int i = 0; i < 256; ++i)
+        if (lut_ref->isContinuous())
         {
-            const uchar* base = lut_entry_base_ptr(*lut_ref, i);
-            table[static_cast<std::size_t>(i)] = base[0];
+            map = lut_ref->data;
+        }
+        else
+        {
+            table.resize(256u);
+            for (int i = 0; i < 256; ++i)
+            {
+                const uchar* base =
+                    lut_entry_base_ptr(*lut_ref, i);
+                table[static_cast<std::size_t>(i)] = base[0];
+            }
+            map = table.data();
         }
     }
     else
@@ -72,22 +84,45 @@ inline bool try_lut_fastpath_u8(const Mat& src, const Mat& lut, Mat& dst)
                 base,
                 static_cast<std::size_t>(src_cn));
         }
+        map = table.data();
     }
 
-    dst.create(std::vector<int>{rows, cols}, src_ref->type());
+    dst.create(src_ref->shape(), src_ref->type());
     const std::size_t src_step = src_ref->step(0);
     const std::size_t dst_step = dst.step(0);
     const bool do_parallel = should_parallelize_cvtcolor(rows, cols, src_cn);
 
     if (lut_cn == 1)
     {
-        const uchar* map = table.data();
+        const int row_elems = cols * src_cn;
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_AVX_512VBMI)
+        const bool use_ui =
+            cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly &&
+            row_elems >= cv::VTraits<cv::v_uint8>::vlanes();
+#else
+        const bool use_ui = false;
+#endif
         parallel_for_index_if(do_parallel, rows, [&](int y) {
             const uchar* src_row = src_ref->data + static_cast<std::size_t>(y) * src_step;
             uchar* dst_row = dst.data + static_cast<std::size_t>(y) * dst_step;
 
-            const int row_elems = cols * src_cn;
             int i = 0;
+#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+    (CV_NEON || CV_AVX_512VBMI)
+            if (use_ui)
+            {
+                const int lanes =
+                    cv::VTraits<cv::v_uint8>::vlanes();
+                for (; i + lanes <= row_elems; i += lanes)
+                {
+                    cv::vx_store(
+                        dst_row + i,
+                        cv::v_lut(
+                            map, cv::vx_load(src_row + i)));
+                }
+            }
+#endif
             for (; i + 7 < row_elems; i += 8)
             {
                 dst_row[i + 0] = map[src_row[i + 0]];
@@ -104,10 +139,14 @@ inline bool try_lut_fastpath_u8(const Mat& src, const Mat& lut, Mat& dst)
                 dst_row[i] = map[src_row[i]];
             }
         });
+        if (use_ui)
+        {
+            cpu::set_last_dispatch_tag(
+                cpu::DispatchTag::OpenCVUI);
+        }
         return true;
     }
 
-    const uchar* map = table.data();
     parallel_for_index_if(do_parallel, rows, [&](int y) {
         const uchar* src_row = src_ref->data + static_cast<std::size_t>(y) * src_step;
         uchar* dst_row = dst.data + static_cast<std::size_t>(y) * dst_step;

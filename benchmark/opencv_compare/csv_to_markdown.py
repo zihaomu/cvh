@@ -172,6 +172,20 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
         1 for r in supported if r.get("op", "") in PHASE1_BENCHMARK_OPS
     )
 
+    def group_result(op_names) -> str:
+        values = [
+            to_float(r.get("speedup", "0"))
+            for r in supported
+            if r.get("op", "") in op_names
+            and to_float(r.get("speedup", "0")) > 0.0
+        ]
+        ratio = geometric_mean(values)
+        if ratio <= 0.0:
+            return "无有效 case"
+        if ratio > 1.0:
+            return f"CVH `~{ratio:.2f}x`"
+        return f"OpenCV `~{(1.0 / ratio):.2f}x`"
+
     generated_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
 
     lines = []
@@ -188,8 +202,15 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("- Core 的 `add/subtract/multiply/divide/transpose/GEMM` 已迁入 ODR-safe headers；本报告通过公共 API 测量，不链接 legacy core 对象。")
     lines.append("- OpenCV Universal Intrinsics 是默认 SIMD 方言，kernel 直接使用 OpenCV UI；项目已移除 xsimd 性能路径。")
     lines.append("- Core F32 `patchNaNs/exp/log/pow` 已接入 UI；`pow` 分离整数指数与通用指数，特殊值 block 保留 scalar fallback。")
+    lines.append("- Core `countNonZero/hasNonZero` 已接入 UI；计数使用分段 widen 归约，存在性检测按块 early-exit。")
+    lines.append("- Core `findNonZero` 已接入稀疏感知 UI；全零 block 直接跳过，连续稠密 block 自适应切回 typed lane 枚举，并保持 row-major 坐标顺序。")
+    lines.append("- Core `sum/mean/meanStdDev` 已接入 C1-C4 channel-aware UI；`sum/mean` 共享 widen sum/count，`meanStdDev` 使用中心化 block statistics 与 Chan merge。")
+    lines.append("- Core `minMaxIdx/minMaxLoc/reduceArgMin/reduceArgMax` 已接入 UI；极值与索引在同一遍扫描中更新，并保留 first/last tie 语义。")
+    lines.append("- Core `norm/normalize` 已接入 UI；`norm` 覆盖 U8/F32 单/双输入的 L1/L2/Inf，`normalize` 复用 norm/minmax 归约并向量化 F32 apply-scale。")
+    lines.append("- P-ACC-2 至 P-ACC-8 已完成 Apple ARM 收尾，覆盖 Core 归约、布局、通道与 GEMM，以及 Imgproc 滤波、几何、非线性、形态学、累积和强度变换；真实 x86 SSE/AVX 运行验证仍是外部 gate。")
+    lines.append("- P-ACC-8 新增 pyramid ring workspace、非线性滤波专用算法、几何 fixed-coordinate block、S16 derivative UI、sqrBoxFilter wide sliding sum 与 F32 C1 reduction fast-path。")
     lines.append("- ARM 当前关注 NEON，本次实测平台为 Apple ARM；x86 目标是 SSE/AVX 系列，RVV 因 scalable vector 设计问题暂缓。")
-    lines.append("- Imgproc legacy `.cpp` fast-path 已迁入 ODR-safe detail headers；resize/cvtColor UI、filter、LUT、border、Sobel、Canny 和 morphology 均从公共 header API 进入。")
+    lines.append("- Imgproc legacy `.cpp` fast-path 已迁入 ODR-safe detail headers；resize/cvtColor、共享 filter、几何采样、morphology、threshold、LUT/histogram 和 accumulate family 均从公共 header API 进入。")
     lines.append(f"- 第一阶段新增的 `79` 个操作族已全部进入 Mode B，本报告包含 `{phase1_case_count}` 个 P1 性能 case。")
     lines.append(f"- `{meta.get('profile', 'unknown')}` profile 覆盖代表性的 `CV_8U` / `CV_32F`、C1/C3/C4、尺寸、布局与非连续 ROI 扩展。")
     lines.append("")
@@ -223,8 +244,9 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("| --- | --- | --- |")
     lines.append("| 公共 API | OpenCV-compatible header API | 所有 case 均从 `cvh::headers_fast` 公共入口调用 |")
     lines.append("| SIMD 方言 | OpenCV Universal Intrinsics | 在 Apple ARM 上映射到 NEON |")
-    lines.append("| 专用 kernel | `cvtColor`、特定 `resize`、core 逐元素与 F32 数学 UI kernel | 实际命中时记录为 `dispatch_path=opencv_ui` |")
-    lines.append("| Header fast-path | 行并行 filter、LUT、border、Sobel、Canny、morphology | 记录为 `dispatch_path=header_fastpath` |")
+    lines.append("| 专用 kernel | `cvtColor`、特定 `resize`、core 逐元素、统计/非零归约、F32 数学、pyramid 与 derivative UI kernel | 实际命中时记录为 `dispatch_path=opencv_ui` |")
+    lines.append("| Header fast-path | 行并行 filter、LUT、border、Sobel、Canny、morphology、sliding sum 与 nonlinear 专用 kernel | 记录实际 `header_fastpath` / `sliding_*` / `precomputed_lut` 路径 |")
+    lines.append("| 几何采样 | 共享定点坐标 block、U8 bilinear sampler 与 interior/border 分流 | 记录为 `dispatch_path=fixed_coordinate_block` |")
     lines.append("| 通用实现 | `cvh::headers` 中的 header baseline | 无专用 fast-path 时自动继承，记录为 `headers_baseline` 或 `public_header_scalar` |")
     lines.append("| 对照实现 | upstream OpenCV `core` / `imgproc` | 相同输入、尺寸、border 和线程配置 |")
     lines.append("")
@@ -292,6 +314,55 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
             )
         )
         lines.append("")
+
+    lines.append("## P-ACC-8 未收敛差距")
+    lines.append("")
+    lines.append("以下倍率是本次 case 的组内几何平均，只用于定位后续工作，不等同于 API 支持状态。P-ACC-8 已通过相对自身旧路径的接受 gate，但部分算子仍明显落后 upstream。")
+    lines.append("")
+    lines.append(
+        md_table(
+            ["范围", "本报告", "主要原因", "后续边界"],
+            [
+                [
+                    "`GEMM`",
+                    group_result({"GEMM"}),
+                    "默认 upstream 可进入 Accelerate/LAPACK；这不是 OpenCV UI 内建 kernel 的纯 SIMD 对比",
+                    "保留现有 header-only micro-kernel，不为追赶外部 BLAS 引入链接依赖",
+                ],
+                [
+                    "filter / derivative",
+                    group_result({"BOX_FILTER", "FILTER2D", "GAUSSIAN", "SEP_FILTER2D", "SCHARR", "LAPLACIAN", "SPATIAL_GRADIENT"}),
+                    "CVH 仍有通用 filter 调度、border materialization 和中间行处理；upstream 的类型/核尺寸专用化更深",
+                    "下一批优先做共享 row/column engine 与 U8-to-S16/F32 fused kernel",
+                ],
+                [
+                    "nonlinear",
+                    group_result({"BILATERAL_FILTER", "MEDIAN_BLUR", "STACK_BLUR"}),
+                    "已消除重复窗口扫描，但 bilateral 权重累计、median lane network 和大尺寸 cache 行为仍有差距",
+                    "保留已接受算法，后续按绝对耗时继续拆像素内核与内存访问",
+                ],
+                [
+                    "pyramid",
+                    group_result({"PYR_DOWN", "PYR_UP", "BUILD_PYRAMID"}),
+                    "ring workspace 和 UI 已落地，C3 interleave、边界行与上下采样写回仍未达到 upstream 专用 kernel",
+                    "继续复用当前 ring 基础设施，不回退到整图 temporary",
+                ],
+                [
+                    "geometry",
+                    group_result({"CONVERT_MAPS", "REMAP", "WARP_AFFINE", "WARP_PERSPECTIVE"}),
+                    "坐标 block 已共享，但插值、border mask 和多通道 gather/store 仍包含较多标量工作",
+                    "后续只扩 U8 C1/C3/C4 interior SIMD，不复制三套公共内核",
+                ],
+                [
+                    "reduction",
+                    group_result({"MEAN_STD_DEV", "NORM", "REDUCE"}),
+                    "本轮 fast-path 主要覆盖 F32 C1；Mode B 仍包含多通道、双输入和高精度合同路径",
+                    "按 variant 拆 gate，不能用降低精度换取汇总倍率",
+                ],
+            ],
+        )
+    )
+    lines.append("")
 
     lines.append("## 算子级概览")
     lines.append("")

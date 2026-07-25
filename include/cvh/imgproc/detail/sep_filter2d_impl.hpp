@@ -2,6 +2,7 @@
 #define CVH_IMGPROC_DETAIL_SEP_FILTER2D_IMPL_HPP
 
 #include "fastpath_common.hpp"
+#include "filter_ui.hpp"
 
 namespace cvh
 {
@@ -84,6 +85,19 @@ inline bool try_sep_filter2d_fastpath(const Mat& src,
     if (rows <= 0 || cols <= 0 || channels <= 0)
     {
         return false;
+    }
+
+    if (filter_ui::separable_c1(*src_ref,
+                                dst,
+                                out_depth,
+                                kx,
+                                ky,
+                                ax,
+                                ay,
+                                delta,
+                                border_type))
+    {
+        return true;
     }
 
     const int row_stride = cols * channels;

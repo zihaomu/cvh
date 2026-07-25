@@ -201,6 +201,59 @@ TEST(ImgprocPhase1GeometricSampling_TEST, map_representations_produce_same_linea
     }
 }
 
+TEST(ImgprocPhase1GeometricSampling_TEST, shared_fixed_sampler_covers_channels_roi_and_borders)
+{
+    for (const int channels : {1, 3, 4})
+    {
+        Mat parent({9, 12}, CV_MAKETYPE(CV_8U, channels));
+        fill_u8(parent);
+        Mat source = parent(Range(1, 8), Range(2, 11));
+        ASSERT_FALSE(source.isContinuous());
+
+        Mat map_x;
+        Mat map_y;
+        make_maps(map_x, map_y, 7, 9);
+        Mat fixed_coordinates;
+        Mat fixed_fractions;
+        convertMaps(
+            map_x,
+            map_y,
+            fixed_coordinates,
+            fixed_fractions,
+            CV_16SC2);
+
+        for (const int border_type :
+             {BORDER_CONSTANT,
+              BORDER_REPLICATE,
+              BORDER_REFLECT,
+              BORDER_REFLECT_101})
+        {
+            Mat from_float;
+            Mat from_fixed;
+            const Scalar border_value(7.0, 11.0, 19.0, 23.0);
+            remap(
+                source,
+                from_float,
+                map_x,
+                map_y,
+                INTER_LINEAR,
+                border_type,
+                border_value);
+            remap(
+                source,
+                from_fixed,
+                fixed_coordinates,
+                fixed_fractions,
+                INTER_LINEAR,
+                border_type,
+                border_value);
+            EXPECT_EQ(
+                max_u8_difference(from_float, from_fixed),
+                0);
+        }
+    }
+}
+
 TEST(ImgprocPhase1GeometricSampling_TEST, nearest_fixed_map_and_border_modes_are_defined)
 {
     Mat source({2, 3}, CV_32FC1);

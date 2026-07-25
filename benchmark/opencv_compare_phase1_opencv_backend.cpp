@@ -43,6 +43,19 @@ void p1_fill_u8(cv::Mat& mat, std::uint32_t seed)
     }
 }
 
+void p1_prepare_find_nonzero(cv::Mat& mat, Phase1OpId op)
+{
+    if (op == Phase1OpId::FindNonZero)
+    {
+        return;
+    }
+    mat.setTo(cv::Scalar::all(0.0));
+    if (op == Phase1OpId::FindNonZeroSparseTail)
+    {
+        mat.ptr<unsigned char>(mat.rows - 1)[mat.cols - 1] = 1;
+    }
+}
+
 void p1_fill_f32(cv::Mat& mat, std::uint32_t seed)
 {
     std::uint32_t state = seed;

@@ -26,6 +26,21 @@ Required metadata for every run:
 - thread count and runtime flags
 - profile, warmup, iters, repeats
 - OpenCV source/build directory
+- focused `ops` filter and OpenCV acceleration variant
+- OpenCV `WITH_LAPACK/WITH_IPP/WITH_KLEIDICV/WITH_CAROTENE`
+  values when a CMake cache is available
+
+## Sampling Policy
+
+Regular image and matrix cases use the selected profile or explicit CLI
+values for `warmup`, `iters`, and `repeats`.
+
+P1 micro cases use a fixed `warmup=2`, `iters=100`, `repeats=3` policy. These
+operations are too short for the regular image-case sampling counts, while
+three repeated samples provide basic timing-noise resistance without making
+micro cases dominate the total benchmark runtime.
+CVH and upstream OpenCV always receive the same effective values. Each result
+row records the effective micro settings in its `note` field.
 
 ## Local OpenCV Source
 
@@ -73,6 +88,9 @@ Current caveats:
 
 ## Dated Snapshots
 
+- [2026-07-24 OpenCV upstream performance](results/2026-07-24-opencv-upstream-performance.md):
+  Apple M5, single-threaded full profile, including the current Core UI
+  acceleration batches.
 - [2026-07-23 OpenCV upstream performance](results/2026-07-23-opencv-upstream-performance.md):
   Apple M5, single-threaded stable profile, `core_mat` plus `imgproc`.
 
@@ -106,6 +124,37 @@ Explicit implementation:
 ```
 
 `cvh_headers_fast` is accepted as an alias for `headers_fast`.
+
+Focused GEMM attribution:
+
+```bash
+CVH_COMPARE_SKIP_OPENCV_SETUP=1 \
+CVH_OPENCV_DIR=../opencv \
+CVH_OPENCV_CONFIG_DIR=../opencv/build-slim \
+CVH_COMPARE_OPENCV_VARIANT=default_lapack_on \
+./benchmark/opencv_compare/run_compare.sh \
+  --profile quick --ops GEMM \
+  --warmup 2 --iters 100 --repeats 3 --threads 1
+```
+
+Build the separate upstream built-in CPU configuration and run the same
+focused matrix:
+
+```bash
+./benchmark/opencv_compare/configure_opencv_cpu_only.sh
+
+CVH_COMPARE_SKIP_OPENCV_SETUP=1 \
+CVH_OPENCV_DIR=../opencv \
+CVH_OPENCV_CONFIG_DIR=../opencv/build-cpu-only \
+CVH_COMPARE_OPENCV_VARIANT=builtin_cpu_no_lapack_ipp_hal \
+./benchmark/opencv_compare/run_compare.sh \
+  --profile quick --ops GEMM \
+  --warmup 2 --iters 100 --repeats 3 --threads 1
+```
+
+The CPU-only configuration disables LAPACK, IPP, KleidiCV, Carotene, and
+OpenCL. It is an attribution build, not the upstream product-performance
+configuration used by the regular Mode B report.
 
 ## Coverage Status
 

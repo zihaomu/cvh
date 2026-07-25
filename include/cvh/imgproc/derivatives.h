@@ -3,6 +3,7 @@
 
 #include "kernels.h"
 #include "sobel.h"
+#include "detail/filter_ui.hpp"
 
 #include <vector>
 
@@ -62,6 +63,30 @@ inline void convolve(const Mat& src,
     const Mat source = src.data == dst.data ? src.clone() : src;
     const detail::SobelSamplingWindow window =
         detail::resolve_sobel_sampling_window(source, isolated);
+    if (!window.use_parent_window && source.channels() == 1 &&
+        (output_depth == CV_16S || output_depth == CV_32F) &&
+        (source.depth() == CV_8U || source.depth() == CV_32F))
+    {
+        std::vector<float> scaled_kernel(kernel.size());
+        for (size_t index = 0; index < kernel.size(); ++index)
+        {
+            scaled_kernel[index] =
+                static_cast<float>(kernel[index] * scale);
+        }
+        if (detail::filter_ui::filter2d_c1(source,
+                                           dst,
+                                           output_depth,
+                                           scaled_kernel,
+                                           kernel_height,
+                                           kernel_width,
+                                           kernel_width / 2,
+                                           kernel_height / 2,
+                                           delta,
+                                           border_type))
+        {
+            return;
+        }
+    }
     dst.create(
         source.shape(), CV_MAKETYPE(output_depth, source.channels()));
     const int radius_x = kernel_width / 2;
@@ -206,6 +231,18 @@ inline void spatialGradient(const Mat& src,
         CV_Error(
             Error::StsBadArg,
             "spatialGradient supports ksize=3 and reflect101/replicate borders");
+    }
+    const bool isolated = (borderType & BORDER_ISOLATED) != 0;
+    const detail::SobelSamplingWindow window =
+        detail::resolve_sobel_sampling_window(src, isolated);
+    if (!window.use_parent_window &&
+        detail::filter_ui::spatial_gradient_u8_c1(
+            src,
+            dx,
+            dy,
+            detail::normalize_border_type(borderType)))
+    {
+        return;
     }
     Sobel(src, dx, CV_16S, 1, 0, 3, 1.0, 0.0, borderType);
     Sobel(src, dy, CV_16S, 0, 1, 3, 1.0, 0.0, borderType);

@@ -2,6 +2,7 @@
 #define CVH_IMGPROC_DETAIL_GAUSSIAN_BLUR_IMPL_HPP
 
 #include "fastpath_common.hpp"
+#include "filter_ui.hpp"
 
 namespace cvh
 {
@@ -94,6 +95,20 @@ inline bool try_gaussian_blur_fastpath_u8(const Mat& src, Mat& dst, Size ksize, 
     const std::vector<float> kernel_y = build_gaussian_kernel_1d(ky, sigmaY);
     const int rx = kx / 2;
     const int ry = ky / 2;
+
+    if (filter_ui::separable_c1(*src_ref,
+                                dst,
+                                CV_8U,
+                                kernel_x,
+                                kernel_y,
+                                rx,
+                                ry,
+                                0.0,
+                                border_type))
+    {
+        return true;
+    }
+
     const bool has_constant_border = border_type == BORDER_CONSTANT;
 
     std::vector<int> x_offsets(static_cast<std::size_t>(cols) * static_cast<std::size_t>(kx), -1);
@@ -455,6 +470,20 @@ inline bool try_gaussian_blur_fastpath_f32(const Mat& src, Mat& dst, Size ksize,
     const std::vector<float> kernel_y = build_gaussian_kernel_1d(ky, sigmaY);
     const int rx = kx / 2;
     const int ry = ky / 2;
+
+    if (filter_ui::separable_c1(*src_ref,
+                                dst,
+                                CV_32F,
+                                kernel_x,
+                                kernel_y,
+                                rx,
+                                ry,
+                                0.0,
+                                border_type))
+    {
+        return true;
+    }
+
     const bool has_constant_border = border_type == BORDER_CONSTANT;
 
     std::vector<int> x_offsets(static_cast<std::size_t>(cols) * static_cast<std::size_t>(kx), -1);

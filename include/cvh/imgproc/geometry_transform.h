@@ -234,14 +234,27 @@ inline void invertAffineTransform(const Mat& matrix, Mat& inverse)
     const Mat source =
         matrix.data == inverse.data ? matrix.clone() : matrix;
     double values[6] = {};
-    for (int row = 0; row < 2; ++row)
+    if (source.depth() == CV_32F)
     {
-        for (int col = 0; col < 3; ++col)
+        for (int row = 0; row < 2; ++row)
         {
-            values[row * 3 + col] =
-                source.depth() == CV_32F
-                    ? source.at<float>(row, col)
-                    : source.at<double>(row, col);
+            const float* input = reinterpret_cast<const float*>(
+                source.data +
+                static_cast<size_t>(row) * source.step(0));
+            for (int col = 0; col < 3; ++col)
+            {
+                values[row * 3 + col] = input[col];
+            }
+        }
+    }
+    else
+    {
+        for (int row = 0; row < 2; ++row)
+        {
+            const double* input = reinterpret_cast<const double*>(
+                source.data +
+                static_cast<size_t>(row) * source.step(0));
+            std::copy(input, input + 3, values + row * 3);
         }
     }
     const double determinant =
@@ -260,20 +273,31 @@ inline void invertAffineTransform(const Mat& matrix, Mat& inverse)
             -output[3] * values[2] - output[4] * values[5];
     }
     inverse.create({2, 3}, source.type());
-    for (int row = 0; row < 2; ++row)
+    if (inverse.depth() == CV_32F)
     {
-        for (int col = 0; col < 3; ++col)
+        for (int row = 0; row < 2; ++row)
         {
-            if (inverse.depth() == CV_32F)
+            float* destination = reinterpret_cast<float*>(
+                inverse.data +
+                static_cast<size_t>(row) * inverse.step(0));
+            for (int col = 0; col < 3; ++col)
             {
-                inverse.at<float>(row, col) =
+                destination[col] =
                     static_cast<float>(output[row * 3 + col]);
             }
-            else
-            {
-                inverse.at<double>(row, col) =
-                    output[row * 3 + col];
-            }
+        }
+    }
+    else
+    {
+        for (int row = 0; row < 2; ++row)
+        {
+            double* destination = reinterpret_cast<double*>(
+                inverse.data +
+                static_cast<size_t>(row) * inverse.step(0));
+            std::copy(
+                output + row * 3,
+                output + row * 3 + 3,
+                destination);
         }
     }
 }

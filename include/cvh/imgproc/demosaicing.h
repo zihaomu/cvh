@@ -100,6 +100,14 @@ inline uchar interpolate(const Mat& src,
             static_cast<double>(sum) / count)));
 }
 
+inline uchar rounded_average(int sum, int count)
+{
+    return saturate_cast<uchar>(
+        static_cast<int>(std::lrint(
+            static_cast<double>(sum) /
+            static_cast<double>(count))));
+}
+
 }  // namespace demosaicing_detail
 
 inline void demosaicing(const Mat& src,
@@ -131,29 +139,71 @@ inline void demosaicing(const Mat& src,
     }
     for (int y = 1; y < rows - 1; ++y)
     {
+        const uchar* previous =
+            source.data +
+            static_cast<size_t>(y - 1) * source.step(0);
+        const uchar* current =
+            source.data +
+            static_cast<size_t>(y) * source.step(0);
+        const uchar* next =
+            source.data +
+            static_cast<size_t>(y + 1) * source.step(0);
         uchar* output =
             dst.data + static_cast<size_t>(y) * dst.step(0);
         for (int x = 1; x < cols - 1; ++x)
         {
             const size_t index = static_cast<size_t>(x) * 3;
-            output[index] = demosaicing_detail::interpolate(
-                source,
-                y,
-                x,
-                pattern,
-                demosaicing_detail::Blue);
-            output[index + 1] = demosaicing_detail::interpolate(
-                source,
-                y,
-                x,
-                pattern,
-                demosaicing_detail::Green);
-            output[index + 2] = demosaicing_detail::interpolate(
-                source,
-                y,
-                x,
-                pattern,
-                demosaicing_detail::Red);
+            const demosaicing_detail::Channel site =
+                demosaicing_detail::color_at(y, x, pattern);
+            const uchar center = current[x];
+            if (site == demosaicing_detail::Red ||
+                site == demosaicing_detail::Blue)
+            {
+                const uchar green =
+                    demosaicing_detail::rounded_average(
+                        static_cast<int>(previous[x]) +
+                            static_cast<int>(next[x]) +
+                            static_cast<int>(current[x - 1]) +
+                            static_cast<int>(current[x + 1]),
+                        4);
+                const uchar opposite =
+                    demosaicing_detail::rounded_average(
+                        static_cast<int>(previous[x - 1]) +
+                            static_cast<int>(previous[x + 1]) +
+                            static_cast<int>(next[x - 1]) +
+                            static_cast<int>(next[x + 1]),
+                        4);
+                output[index] =
+                    site == demosaicing_detail::Blue
+                        ? center
+                        : opposite;
+                output[index + 1] = green;
+                output[index + 2] =
+                    site == demosaicing_detail::Red
+                        ? center
+                        : opposite;
+                continue;
+            }
+
+            const bool red_is_horizontal =
+                demosaicing_detail::color_at(
+                    y, x - 1, pattern) ==
+                demosaicing_detail::Red;
+            const uchar horizontal =
+                demosaicing_detail::rounded_average(
+                    static_cast<int>(current[x - 1]) +
+                        static_cast<int>(current[x + 1]),
+                    2);
+            const uchar vertical =
+                demosaicing_detail::rounded_average(
+                    static_cast<int>(previous[x]) +
+                        static_cast<int>(next[x]),
+                    2);
+            output[index] =
+                red_is_horizontal ? vertical : horizontal;
+            output[index + 1] = center;
+            output[index + 2] =
+                red_is_horizontal ? horizontal : vertical;
         }
         std::copy_n(output + 3, 3, output);
         std::copy_n(

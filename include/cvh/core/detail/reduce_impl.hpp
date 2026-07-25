@@ -1,6 +1,7 @@
 #ifndef CVH_CORE_DETAIL_REDUCE_IMPL_HPP
 #define CVH_CORE_DETAIL_REDUCE_IMPL_HPP
 
+#include "reduce_ui.hpp"
 #include "../saturate.h"
 
 #include <algorithm>
@@ -172,6 +173,50 @@ inline void ensure_single_channel(const Mat& src, const char* fn_name)
 inline bool nonzero(double value)
 {
     return value != 0.0;
+}
+
+inline bool has_nonzero_scalar(const Mat& src)
+{
+    const detail::reduce_ui::SourceRows rows =
+        detail::reduce_ui::source_rows(src);
+    for (size_t row = 0; row < rows.rows; ++row)
+    {
+        const uchar* row_data = rows.data + row * rows.step;
+        for (size_t x = 0; x < rows.row_scalars; ++x)
+        {
+            if (nonzero(read_scalar(row_data, x, src.depth())))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+inline void find_nonzero_points(const Mat& src, std::vector<Point>& indices)
+{
+    indices.clear();
+    const auto emit = [&](size_t column, size_t row) {
+        indices.emplace_back(
+            static_cast<int>(column), static_cast<int>(row));
+    };
+    if (detail::reduce_ui::try_find_nonzero(src, emit))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    for_each_selected_scalar(
+        src,
+        Mat(),
+        [&](size_t row, size_t pixel, int, double value) {
+            if (nonzero(value))
+            {
+                indices.emplace_back(
+                    static_cast<int>(pixel), static_cast<int>(row));
+            }
+        });
 }
 
 inline std::vector<int> coordinates_from_linear(const Mat& src, size_t linear)
@@ -355,12 +400,24 @@ inline void apply_normalize(const Mat& src,
 
 inline Scalar sum(const Mat& src)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     Scalar result;
     if (src.empty())
     {
         return result;
     }
     reduce_detail::validate_channels_1_to_4(src, "sum");
+    detail::reduce_ui::SumCount ui_result;
+    if (detail::reduce_ui::try_sum_count(src, Mat(), ui_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        for (int ch = 0; ch < src.channels(); ++ch)
+        {
+            result[ch] = static_cast<double>(ui_result.sums[ch]);
+        }
+        return result;
+    }
+
     long double accumulators[4] = {0.0L, 0.0L, 0.0L, 0.0L};
     reduce_detail::for_each_selected_scalar(
         src,
@@ -377,6 +434,7 @@ inline Scalar sum(const Mat& src)
 
 inline Scalar mean(const Mat& src, const Mat& mask)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     Scalar result;
     if (src.empty())
     {
@@ -384,6 +442,23 @@ inline Scalar mean(const Mat& src, const Mat& mask)
     }
     reduce_detail::validate_channels_1_to_4(src, "mean");
     reduce_detail::validate_mask(src, mask, "mean");
+    detail::reduce_ui::SumCount ui_result;
+    if (detail::reduce_ui::try_sum_count(src, mask, ui_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        if (ui_result.count == 0)
+        {
+            return result;
+        }
+        for (int ch = 0; ch < src.channels(); ++ch)
+        {
+            result[ch] = static_cast<double>(
+                ui_result.sums[ch] /
+                static_cast<long double>(ui_result.count));
+        }
+        return result;
+    }
+
     const size_t count = reduce_detail::selected_pixel_count(src, mask);
     if (count == 0)
     {
@@ -409,6 +484,7 @@ inline void meanStdDev(const Mat& src,
                        Scalar& stddev_value,
                        const Mat& mask)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     mean_value = Scalar();
     stddev_value = Scalar();
     if (src.empty())
@@ -417,6 +493,30 @@ inline void meanStdDev(const Mat& src,
     }
     reduce_detail::validate_channels_1_to_4(src, "meanStdDev");
     reduce_detail::validate_mask(src, mask, "meanStdDev");
+    detail::reduce_ui::StableStatistics ui_result;
+    if (detail::reduce_ui::try_stable_statistics(src, mask, ui_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        if (ui_result.count == 0)
+        {
+            return;
+        }
+        for (int ch = 0; ch < src.channels(); ++ch)
+        {
+            long double variance =
+                ui_result.m2[ch] /
+                static_cast<long double>(ui_result.count);
+            if (variance < 0.0L && variance > -1e-18L)
+            {
+                variance = 0.0L;
+            }
+            mean_value[ch] = static_cast<double>(ui_result.means[ch]);
+            stddev_value[ch] =
+                std::sqrt(static_cast<double>(variance));
+        }
+        return;
+    }
+
     const size_t count = reduce_detail::selected_pixel_count(src, mask);
     if (count == 0)
     {
@@ -451,6 +551,7 @@ inline void meanStdDev(const Mat& src,
 
 inline double norm(const Mat& src, int normType, const Mat& mask)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (src.empty())
     {
         return 0.0;
@@ -459,6 +560,25 @@ inline double norm(const Mat& src, int normType, const Mat& mask)
     if (normType != NORM_INF && normType != NORM_L1 && normType != NORM_L2)
     {
         CV_Error_(Error::StsBadArg, ("norm unsupported normType=%d", normType));
+    }
+
+    detail::reduce_ui::NormResult ui_result;
+    if (detail::reduce_ui::try_norm(src, mask, normType, ui_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        if (ui_result.has_nan)
+        {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        if (normType == NORM_INF)
+        {
+            return ui_result.maximum;
+        }
+        if (normType == NORM_L1)
+        {
+            return static_cast<double>(ui_result.accumulator);
+        }
+        return std::sqrt(static_cast<double>(ui_result.accumulator));
     }
 
     long double accumulator = 0.0L;
@@ -503,6 +623,7 @@ inline double norm(const Mat& src1,
                    int normType,
                    const Mat& mask)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (src1.empty() && src2.empty())
     {
         return 0.0;
@@ -515,6 +636,26 @@ inline double norm(const Mat& src1,
     if (normType != NORM_INF && normType != NORM_L1 && normType != NORM_L2)
     {
         CV_Error_(Error::StsBadArg, ("norm unsupported normType=%d", normType));
+    }
+
+    detail::reduce_ui::NormResult ui_result;
+    if (detail::reduce_ui::try_norm_diff(
+            src1, src2, mask, normType, ui_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        if (ui_result.has_nan)
+        {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        if (normType == NORM_INF)
+        {
+            return ui_result.maximum;
+        }
+        if (normType == NORM_L1)
+        {
+            return static_cast<double>(ui_result.accumulator);
+        }
+        return std::sqrt(static_cast<double>(ui_result.accumulator));
     }
 
     const int channels = src1.channels();
@@ -584,16 +725,25 @@ inline int countNonZero(const Mat& src)
 {
     if (src.empty())
     {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
         return 0;
     }
     reduce_detail::ensure_single_channel(src, "countNonZero");
     size_t count = 0;
-    reduce_detail::for_each_selected_scalar(
-        src,
-        Mat(),
-        [&](size_t, size_t, int, double value) {
-            count += reduce_detail::nonzero(value) ? 1u : 0u;
-        });
+    if (detail::reduce_ui::try_count_nonzero(src, count))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+    }
+    else
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+        reduce_detail::for_each_selected_scalar(
+            src,
+            Mat(),
+            [&](size_t, size_t, int, double value) {
+                count += reduce_detail::nonzero(value) ? 1u : 0u;
+            });
+    }
     if (count > static_cast<size_t>(std::numeric_limits<int>::max()))
     {
         CV_Error(Error::StsOutOfRange, "countNonZero result exceeds int range");
@@ -605,21 +755,23 @@ inline bool hasNonZero(const Mat& src)
 {
     if (src.empty())
     {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
         return false;
     }
     reduce_detail::ensure_single_channel(src, "hasNonZero");
     bool found = false;
-    reduce_detail::for_each_selected_scalar(
-        src,
-        Mat(),
-        [&](size_t, size_t, int, double value) {
-            found = found || reduce_detail::nonzero(value);
-        });
-    return found;
+    if (detail::reduce_ui::try_has_nonzero(src, found))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return found;
+    }
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    return reduce_detail::has_nonzero_scalar(src);
 }
 
 inline void findNonZero(const Mat& src, std::vector<Point>& indices)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     indices.clear();
     if (src.empty())
     {
@@ -630,36 +782,35 @@ inline void findNonZero(const Mat& src, std::vector<Point>& indices)
     {
         CV_Error(Error::StsBadArg, "findNonZero currently supports 2D input");
     }
-    reduce_detail::for_each_selected_scalar(
-        src,
-        Mat(),
-        [&](size_t row, size_t pixel, int, double value) {
-            if (reduce_detail::nonzero(value))
-            {
-                indices.emplace_back(static_cast<int>(pixel), static_cast<int>(row));
-            }
-        });
+    reduce_detail::find_nonzero_points(src, indices);
 }
 
 inline void findNonZero(const Mat& src, Mat& indices)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (src.empty())
     {
         indices.release();
         return;
     }
+    reduce_detail::ensure_single_channel(src, "findNonZero");
+    if (src.dims != 2)
+    {
+        CV_Error(Error::StsBadArg, "findNonZero currently supports 2D input");
+    }
     std::vector<Point> points;
-    findNonZero(src, points);
+    reduce_detail::find_nonzero_points(src, points);
     if (points.empty())
     {
         indices.release();
         return;
     }
     indices.create({static_cast<int>(points.size()), 1}, CV_32SC2);
+    int* output = reinterpret_cast<int*>(indices.data);
     for (size_t i = 0; i < points.size(); ++i)
     {
-        indices.at<int>(static_cast<int>(i), 0, 0) = points[i].x;
-        indices.at<int>(static_cast<int>(i), 0, 1) = points[i].y;
+        output[i * 2] = points[i].x;
+        output[i * 2 + 1] = points[i].y;
     }
 }
 
@@ -670,6 +821,7 @@ inline void minMaxIdx(const Mat& src,
                       int* maxIdx,
                       const Mat& mask)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (src.empty())
     {
         CV_Error(Error::StsBadArg, "minMaxIdx expects non-empty src");
@@ -679,7 +831,21 @@ inline void minMaxIdx(const Mat& src,
     {
         CV_Error(Error::StsBadArg, "minMaxIdx indices and mask require single-channel src");
     }
-    const reduce_detail::Extrema extrema = reduce_detail::find_extrema(src, mask);
+    reduce_detail::Extrema extrema;
+    detail::reduce_ui::ExtremaResult ui_result;
+    if (detail::reduce_ui::try_extrema(src, mask, ui_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        extrema.found = ui_result.found;
+        extrema.min_value = ui_result.min_value;
+        extrema.max_value = ui_result.max_value;
+        extrema.min_linear = ui_result.min_linear;
+        extrema.max_linear = ui_result.max_linear;
+    }
+    else
+    {
+        extrema = reduce_detail::find_extrema(src, mask);
+    }
     if (minVal != nullptr)
     {
         *minVal = extrema.found ? extrema.min_value : 0.0;
@@ -713,6 +879,7 @@ inline void minMaxLoc(const Mat& src,
                       Point* maxLoc,
                       const Mat& mask)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (src.empty())
     {
         if (minVal != nullptr)
@@ -758,6 +925,7 @@ inline void minMaxLoc(const Mat& src,
 
 inline void reduce(const Mat& src, Mat& dst, int dim, int rtype, int dtype)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (src.empty() || src.dims != 2)
     {
         CV_Error(Error::StsBadArg, "reduce expects non-empty 2D src");
@@ -783,6 +951,31 @@ inline void reduce(const Mat& src, Mat& dst, int dim, int rtype, int dtype)
     if (dst.empty() || dst.type() != type || dst.shape() != MatShape({rows, cols}))
     {
         dst.create({rows, cols}, type);
+    }
+
+    auto write_ui_result =
+        [&](int output_index, int channel, long double value) {
+            uchar* dst_row =
+                dst.data +
+                static_cast<size_t>(dim == 0 ? 0 : output_index) *
+                    dst.step(0);
+            const size_t scalar_index =
+                dim == 0
+                    ? static_cast<size_t>(output_index) *
+                              static_cast<size_t>(src.channels()) +
+                          static_cast<size_t>(channel)
+                    : static_cast<size_t>(channel);
+            reduce_detail::write_scalar(
+                dst_row,
+                scalar_index,
+                depth,
+                static_cast<double>(value));
+        };
+    if (detail::reduce_ui::try_reduce(
+            src, dim, rtype, write_ui_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
     }
 
     const int output_length = dim == 0 ? cols : rows;
@@ -830,6 +1023,13 @@ inline void reduce_arg_impl(const Mat& src,
     {
         dst.create({rows, cols}, CV_32SC1);
     }
+    if (detail::reduce_ui::try_reduce_arg<FindMax>(
+            src, dst, axis, lastIndex))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
+
     const int output_length = axis == 0 ? cols : rows;
     const int reduce_length = axis == 0 ? src.size.p[0] : src.size.p[1];
     for (int fixed = 0; fixed < output_length; ++fixed)
@@ -869,11 +1069,13 @@ inline void reduce_arg_impl(const Mat& src,
 
 inline void reduceArgMin(const Mat& src, Mat& dst, int axis, bool lastIndex)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     reduce_arg_impl<false>(src, dst, axis, lastIndex, "reduceArgMin");
 }
 
 inline void reduceArgMax(const Mat& src, Mat& dst, int axis, bool lastIndex)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     reduce_arg_impl<true>(src, dst, axis, lastIndex, "reduceArgMax");
 }
 
@@ -885,6 +1087,7 @@ inline void normalize(const Mat& src,
                       int dtype,
                       const Mat& mask)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (src.empty())
     {
         dst.release();
@@ -901,11 +1104,29 @@ inline void normalize(const Mat& src,
 
     double scale = 0.0;
     double shift = 0.0;
+    bool used_ui = false;
     if (normType == NORM_MINMAX)
     {
-        const reduce_detail::Extrema extrema = reduce_detail::find_extrema(src, mask);
+        reduce_detail::Extrema extrema;
+        detail::reduce_ui::ExtremaResult ui_extrema;
+        if (detail::reduce_ui::try_extrema(src, mask, ui_extrema))
+        {
+            extrema.found = ui_extrema.found;
+            extrema.min_value = ui_extrema.min_value;
+            extrema.max_value = ui_extrema.max_value;
+            extrema.min_linear = ui_extrema.min_linear;
+            extrema.max_linear = ui_extrema.max_linear;
+            used_ui = true;
+        }
+        else
+        {
+            extrema = reduce_detail::find_extrema(src, mask);
+        }
         if (!extrema.found)
         {
+            cpu::set_last_dispatch_tag(
+                used_ui ? cpu::DispatchTag::OpenCVUI
+                        : cpu::DispatchTag::Scalar);
             return;
         }
         if (extrema.max_value != extrema.min_value)
@@ -917,13 +1138,26 @@ inline void normalize(const Mat& src,
     else if (normType == NORM_INF || normType == NORM_L1 || normType == NORM_L2)
     {
         const double source_norm = norm(src, normType, mask);
+        used_ui =
+            cpu::last_dispatch_tag() == cpu::DispatchTag::OpenCVUI;
         scale = source_norm > 0.0 ? alpha / source_norm : 0.0;
     }
     else
     {
         CV_Error_(Error::StsBadArg, ("normalize unsupported normType=%d", normType));
     }
-    reduce_detail::apply_normalize(src, dst, mask, scale, shift);
+    if (detail::reduce_ui::try_apply_normalize(
+            src, dst, mask, scale, shift))
+    {
+        used_ui = true;
+    }
+    else
+    {
+        reduce_detail::apply_normalize(src, dst, mask, scale, shift);
+    }
+    cpu::set_last_dispatch_tag(
+        used_ui ? cpu::DispatchTag::OpenCVUI
+                : cpu::DispatchTag::Scalar);
 }
 
 }  // namespace cvh

@@ -1,8 +1,11 @@
 #ifndef CVH_IMGPROC_SQR_BOX_FILTER_H
 #define CVH_IMGPROC_SQR_BOX_FILTER_H
 
+#include "../core/basic_op.h"
+#include "box_filter.h"
 #include "detail/common.h"
 
+#include <cstdint>
 #include <vector>
 
 namespace cvh
@@ -47,6 +50,174 @@ inline void write_value(Mat& dst,
     }
 }
 
+inline bool squared_box_u8_wide(const Mat& src,
+                                Mat& dst,
+                                int output_depth,
+                                Size ksize,
+                                Point anchor,
+                                bool normalize,
+                                int border_type)
+{
+    if (src.depth() != CV_8U ||
+        (output_depth != CV_8U && output_depth != CV_64F))
+    {
+        return false;
+    }
+    const int rows = src.size.p[0];
+    const int cols = src.size.p[1];
+    const int channels = src.channels();
+    const int row_elements = cols * channels;
+    const int right = ksize.width - anchor.x - 1;
+    const int bottom = ksize.height - anchor.y - 1;
+    const std::vector<int> x_map = detail::build_extended_index_map(
+        cols, anchor.x, right, border_type);
+    const std::vector<int> y_map = detail::build_extended_index_map(
+        rows, anchor.y, bottom, border_type);
+    std::vector<std::int64_t> row_sums(
+        static_cast<size_t>(rows) * row_elements);
+
+    for (int y = 0; y < rows; ++y)
+    {
+        const uchar* source =
+            src.data + static_cast<size_t>(y) * src.step(0);
+        std::int64_t* output =
+            row_sums.data() + static_cast<size_t>(y) * row_elements;
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            std::int64_t sum = 0;
+            for (int kernel_x = 0;
+                 kernel_x < ksize.width;
+                 ++kernel_x)
+            {
+                const int source_x =
+                    x_map[static_cast<size_t>(kernel_x)];
+                if (source_x >= 0)
+                {
+                    const std::int64_t value =
+                        source[
+                            static_cast<size_t>(source_x) * channels +
+                            channel];
+                    sum += value * value;
+                }
+            }
+            output[channel] = sum;
+            for (int x = 1; x < cols; ++x)
+            {
+                const int add_x = x_map[
+                    static_cast<size_t>(x + ksize.width - 1)];
+                if (add_x >= 0)
+                {
+                    const std::int64_t value =
+                        source[
+                            static_cast<size_t>(add_x) * channels +
+                            channel];
+                    sum += value * value;
+                }
+                const int subtract_x =
+                    x_map[static_cast<size_t>(x - 1)];
+                if (subtract_x >= 0)
+                {
+                    const std::int64_t value =
+                        source[
+                            static_cast<size_t>(subtract_x) * channels +
+                            channel];
+                    sum -= value * value;
+                }
+                output[static_cast<size_t>(x) * channels + channel] =
+                    sum;
+            }
+        }
+    }
+
+    dst.create(
+        src.shape(), CV_MAKETYPE(output_depth, channels));
+    std::vector<std::int64_t> accumulated(
+        static_cast<size_t>(row_elements),
+        0);
+    for (int kernel_y = 0;
+         kernel_y < ksize.height;
+         ++kernel_y)
+    {
+        const int source_y =
+            y_map[static_cast<size_t>(kernel_y)];
+        if (source_y < 0)
+        {
+            continue;
+        }
+        const std::int64_t* source =
+            row_sums.data() +
+            static_cast<size_t>(source_y) * row_elements;
+        for (int index = 0; index < row_elements; ++index)
+        {
+            accumulated[static_cast<size_t>(index)] += source[index];
+        }
+    }
+
+    const double scale = normalize
+        ? 1.0 /
+              static_cast<double>(ksize.width * ksize.height)
+        : 1.0;
+    for (int y = 0; y < rows; ++y)
+    {
+        if (output_depth == CV_64F)
+        {
+            double* output = reinterpret_cast<double*>(
+                dst.data + static_cast<size_t>(y) * dst.step(0));
+            for (int index = 0; index < row_elements; ++index)
+            {
+                output[index] =
+                    static_cast<double>(
+                        accumulated[static_cast<size_t>(index)]) *
+                    scale;
+            }
+        }
+        else
+        {
+            uchar* output =
+                dst.data + static_cast<size_t>(y) * dst.step(0);
+            for (int index = 0; index < row_elements; ++index)
+            {
+                output[index] = saturate_cast<uchar>(
+                    static_cast<double>(
+                        accumulated[static_cast<size_t>(index)]) *
+                    scale);
+            }
+        }
+        if (y + 1 >= rows)
+        {
+            continue;
+        }
+        const int subtract_y =
+            y_map[static_cast<size_t>(y)];
+        const int add_y =
+            y_map[static_cast<size_t>(y + ksize.height)];
+        const std::int64_t* subtract_row =
+            subtract_y >= 0
+                ? row_sums.data() +
+                      static_cast<size_t>(subtract_y) * row_elements
+                : nullptr;
+        const std::int64_t* add_row =
+            add_y >= 0
+                ? row_sums.data() +
+                      static_cast<size_t>(add_y) * row_elements
+                : nullptr;
+        for (int index = 0; index < row_elements; ++index)
+        {
+            if (subtract_row)
+            {
+                accumulated[static_cast<size_t>(index)] -=
+                    subtract_row[index];
+            }
+            if (add_row)
+            {
+                accumulated[static_cast<size_t>(index)] +=
+                    add_row[index];
+            }
+        }
+    }
+    return true;
+}
+
 }  // namespace sqr_box_detail
 
 inline void sqrBoxFilter(const Mat& src,
@@ -88,6 +259,46 @@ inline void sqrBoxFilter(const Mat& src,
     }
 
     const Mat source = src.data == dst.data ? src.clone() : src;
+    if (sqr_box_detail::squared_box_u8_wide(
+            source,
+            dst,
+            output_depth,
+            ksize,
+            anchor,
+            normalize,
+            border_type))
+    {
+        return;
+    }
+    if (output_depth == CV_32F)
+    {
+        Mat source_f32;
+        if (source.depth() == CV_32F)
+        {
+            source_f32 = source;
+        }
+        else
+        {
+            source.convertTo(
+                source_f32,
+                CV_MAKETYPE(CV_32F, source.channels()));
+        }
+
+        Mat squared;
+        multiply(source_f32, source_f32, squared);
+        Mat filtered;
+        boxFilter(
+            squared,
+            filtered,
+            CV_32F,
+            ksize,
+            anchor,
+            normalize,
+            border_type);
+        dst = filtered;
+        return;
+    }
+
     dst.create(
         source.shape(), CV_MAKETYPE(output_depth, source.channels()));
     const int area = ksize.width * ksize.height;

@@ -146,7 +146,18 @@ void expect_transpose_kernel_bytes_equal(int rows,
     cpu::reset_last_dispatch_tag();
 
     cpu::transpose2d_kernel_blocked(src.data(), dst.data(), rows, cols, elem_size, 1);
-    ASSERT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+    cpu::DispatchTag expected_tag = cpu::DispatchTag::Scalar;
+#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const size_t block =
+        elem_size == 1 ? 16 : (elem_size == 2 ? 8 : 4);
+    if (mode == cpu::DispatchMode::Auto && elem_size <= 4 &&
+        rows >= static_cast<int>(block) && cols >= static_cast<int>(block))
+    {
+        expected_tag = cpu::DispatchTag::OpenCVUI;
+    }
+#endif
+    ASSERT_EQ(cpu::last_dispatch_tag(), expected_tag);
 
     ASSERT_EQ(dst.size(), ref.size());
     for (size_t i = 0; i < byte_count; ++i)

@@ -119,12 +119,83 @@ inline void warpAffine_fallback_impl_typed(const Mat& src,
     for (int y = 0; y < dst_rows; ++y)
     {
         T* dst_row = reinterpret_cast<T*>(dst.data + static_cast<size_t>(y) * dst_step);
+        if constexpr (std::is_same<T, uchar>::value)
+        {
+            if (interpolation == INTER_LINEAR)
+            {
+                constexpr int block_size = 64;
+                int coordinates[block_size * 2];
+                ushort fractions[block_size];
+                for (int block_start = 0;
+                     block_start < dst_cols;
+                     block_start += block_size)
+                {
+                    const int count =
+                        std::min(block_size, dst_cols - block_start);
+                    for (int index = 0; index < count; ++index)
+                    {
+                        const int x = block_start + index;
+                        const double sx =
+                            m00 * static_cast<double>(x) +
+                            m01 * static_cast<double>(y) + m02;
+                        const double sy =
+                            m10 * static_cast<double>(x) +
+                            m11 * static_cast<double>(y) + m12;
+                        int fraction_x = 0;
+                        int fraction_y = 0;
+                        geometric_fixed_linear_coordinate(
+                            sx,
+                            coordinates[index * 2],
+                            fraction_x);
+                        geometric_fixed_linear_coordinate(
+                            sy,
+                            coordinates[index * 2 + 1],
+                            fraction_y);
+                        fractions[index] =
+                            geometric_pack_linear_fraction(
+                                fraction_x,
+                                fraction_y);
+                    }
+                    geometric_write_linear_u8_fixed_row(
+                        *src_ref,
+                        dst_row +
+                            static_cast<size_t>(block_start) *
+                                channels,
+                        coordinates,
+                        fractions,
+                        count,
+                        border_type,
+                        borderValue);
+                }
+                continue;
+            }
+        }
         for (int x = 0; x < dst_cols; ++x)
         {
             const double sx = m00 * static_cast<double>(x) + m01 * static_cast<double>(y) + m02;
             const double sy = m10 * static_cast<double>(x) + m11 * static_cast<double>(y) + m12;
             T* dst_px = dst_row + static_cast<size_t>(x) * channels;
 
+            if constexpr (std::is_same<T, uchar>::value)
+            {
+                if (interpolation == INTER_LINEAR)
+                {
+                    const int integer_x =
+                        static_cast<int>(std::floor(sx));
+                    const int integer_y =
+                        static_cast<int>(std::floor(sy));
+                    geometric_write_linear_u8(
+                        *src_ref,
+                        dst_px,
+                        integer_x,
+                        integer_y,
+                        sx - integer_x,
+                        sy - integer_y,
+                        border_type,
+                        borderValue);
+                    continue;
+                }
+            }
             geometric_write_coordinate(
                 *src_ref,
                 dst_px,

@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <type_traits>
 
 namespace cvh {
@@ -68,6 +69,20 @@ inline void geometric_write_nearest(const Mat& src,
                                     int border_type,
                                     const Scalar& border_value)
 {
+    if (static_cast<unsigned>(source_y) <
+            static_cast<unsigned>(src.size[0]) &&
+        static_cast<unsigned>(source_x) <
+            static_cast<unsigned>(src.size[1]))
+    {
+        const T* source = reinterpret_cast<const T*>(
+            src.data + static_cast<size_t>(source_y) * src.step(0)) +
+            static_cast<size_t>(source_x) * src.channels();
+        std::memcpy(
+            destination,
+            source,
+            static_cast<size_t>(src.channels()) * sizeof(T));
+        return;
+    }
     for (int channel = 0; channel < src.channels(); ++channel)
     {
         destination[channel] = geometric_read<T>(
@@ -148,6 +163,263 @@ inline void geometric_write_linear(const Mat& src,
         fraction_y,
         border_type,
         border_value);
+}
+
+inline int geometric_resolve_index(int index,
+                                   int length,
+                                   int border_type)
+{
+    if (static_cast<unsigned>(index) <
+        static_cast<unsigned>(length))
+    {
+        return index;
+    }
+    return border_type == BORDER_CONSTANT
+        ? -1
+        : border_interpolate(index, length, border_type);
+}
+
+inline void geometric_fixed_linear_coordinate(double coordinate,
+                                              int& integer,
+                                              int& fraction)
+{
+    const long scaled = std::lrint(
+        coordinate * static_cast<double>(INTER_TAB_SIZE));
+    integer = static_cast<int>(std::floor(
+        static_cast<double>(scaled) /
+        static_cast<double>(INTER_TAB_SIZE)));
+    fraction = static_cast<int>(
+        scaled - static_cast<long>(integer) * INTER_TAB_SIZE);
+}
+
+inline ushort geometric_pack_linear_fraction(int fraction_x,
+                                             int fraction_y)
+{
+    return static_cast<ushort>(
+        fraction_x + fraction_y * INTER_TAB_SIZE);
+}
+
+template<int Channels>
+inline void geometric_write_linear_u8_fixed_interior(
+    const Mat& src,
+    uchar* destination,
+    int source_x,
+    int source_y,
+    int fraction_x,
+    int fraction_y)
+{
+    const uchar* row0 =
+        src.data + static_cast<size_t>(source_y) * src.step(0);
+    const uchar* row1 = row0 + src.step(0);
+    const uchar* top_left =
+        row0 + static_cast<size_t>(source_x) * Channels;
+    const uchar* bottom_left =
+        row1 + static_cast<size_t>(source_x) * Channels;
+    const int inverse_x = INTER_TAB_SIZE - fraction_x;
+    const int inverse_y = INTER_TAB_SIZE - fraction_y;
+    const int weight00 = inverse_x * inverse_y;
+    const int weight01 = fraction_x * inverse_y;
+    const int weight10 = inverse_x * fraction_y;
+    const int weight11 = fraction_x * fraction_y;
+    for (int channel = 0; channel < Channels; ++channel)
+    {
+        destination[channel] = saturate_cast<uchar>(
+            (top_left[channel] * weight00 +
+             top_left[Channels + channel] * weight01 +
+             bottom_left[channel] * weight10 +
+             bottom_left[Channels + channel] * weight11 +
+             INTER_TAB_SIZE2 / 2) /
+            INTER_TAB_SIZE2);
+    }
+}
+
+inline void geometric_write_linear_u8_fixed(
+    const Mat& src,
+    uchar* destination,
+    int source_x,
+    int source_y,
+    int fraction_x,
+    int fraction_y,
+    int border_type,
+    const Scalar& border_value)
+{
+    if (static_cast<unsigned>(source_y) <
+            static_cast<unsigned>(src.size[0] - 1) &&
+        static_cast<unsigned>(source_x) <
+            static_cast<unsigned>(src.size[1] - 1))
+    {
+        switch (src.channels())
+        {
+        case 1:
+            geometric_write_linear_u8_fixed_interior<1>(
+                src,
+                destination,
+                source_x,
+                source_y,
+                fraction_x,
+                fraction_y);
+            return;
+        case 3:
+            geometric_write_linear_u8_fixed_interior<3>(
+                src,
+                destination,
+                source_x,
+                source_y,
+                fraction_x,
+                fraction_y);
+            return;
+        case 4:
+            geometric_write_linear_u8_fixed_interior<4>(
+                src,
+                destination,
+                source_x,
+                source_y,
+                fraction_x,
+                fraction_y);
+            return;
+        default:
+            break;
+        }
+    }
+    const int x0 = geometric_resolve_index(
+        source_x, src.size[1], border_type);
+    const int x1 = geometric_resolve_index(
+        source_x + 1, src.size[1], border_type);
+    const int y0 = geometric_resolve_index(
+        source_y, src.size[0], border_type);
+    const int y1 = geometric_resolve_index(
+        source_y + 1, src.size[0], border_type);
+    const uchar* row0 =
+        y0 >= 0
+            ? src.data + static_cast<size_t>(y0) * src.step(0)
+            : nullptr;
+    const uchar* row1 =
+        y1 >= 0
+            ? src.data + static_cast<size_t>(y1) * src.step(0)
+            : nullptr;
+    const int channels = src.channels();
+    const int inverse_x = INTER_TAB_SIZE - fraction_x;
+    const int inverse_y = INTER_TAB_SIZE - fraction_y;
+    const int weight00 = inverse_x * inverse_y;
+    const int weight01 = fraction_x * inverse_y;
+    const int weight10 = inverse_x * fraction_y;
+    const int weight11 = fraction_x * fraction_y;
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        const int border = saturate_cast<uchar>(
+            border_value.val[channel < 4 ? channel : 3]);
+        const int top_left =
+            row0 && x0 >= 0
+                ? row0[static_cast<size_t>(x0) * channels + channel]
+                : border;
+        const int top_right =
+            row0 && x1 >= 0
+                ? row0[static_cast<size_t>(x1) * channels + channel]
+                : border;
+        const int bottom_left =
+            row1 && x0 >= 0
+                ? row1[static_cast<size_t>(x0) * channels + channel]
+                : border;
+        const int bottom_right =
+            row1 && x1 >= 0
+                ? row1[static_cast<size_t>(x1) * channels + channel]
+                : border;
+        destination[channel] = saturate_cast<uchar>(
+            (top_left * weight00 +
+             top_right * weight01 +
+             bottom_left * weight10 +
+             bottom_right * weight11 +
+             INTER_TAB_SIZE2 / 2) /
+            INTER_TAB_SIZE2);
+    }
+}
+
+template<typename CoordinateT>
+inline void geometric_write_linear_u8_fixed_row(
+    const Mat& src,
+    uchar* destination,
+    const CoordinateT* coordinates,
+    const ushort* fractions,
+    int count,
+    int border_type,
+    const Scalar& border_value)
+{
+    const int channels = src.channels();
+    for (int index = 0; index < count; ++index)
+    {
+        const ushort fraction = fractions[index];
+        geometric_write_linear_u8_fixed(
+            src,
+            destination + static_cast<size_t>(index) * channels,
+            static_cast<int>(coordinates[index * 2]),
+            static_cast<int>(coordinates[index * 2 + 1]),
+            fraction & (INTER_TAB_SIZE - 1),
+            fraction >> INTER_BITS,
+            border_type,
+            border_value);
+    }
+}
+
+inline void geometric_write_linear_u8(
+    const Mat& src,
+    uchar* destination,
+    int source_x,
+    int source_y,
+    double fraction_x,
+    double fraction_y,
+    int border_type,
+    const Scalar& border_value)
+{
+    const int x0 = geometric_resolve_index(
+        source_x, src.size[1], border_type);
+    const int x1 = geometric_resolve_index(
+        source_x + 1, src.size[1], border_type);
+    const int y0 = geometric_resolve_index(
+        source_y, src.size[0], border_type);
+    const int y1 = geometric_resolve_index(
+        source_y + 1, src.size[0], border_type);
+    const uchar* row0 =
+        y0 >= 0
+            ? src.data + static_cast<size_t>(y0) * src.step(0)
+            : nullptr;
+    const uchar* row1 =
+        y1 >= 0
+            ? src.data + static_cast<size_t>(y1) * src.step(0)
+            : nullptr;
+    const int channels = src.channels();
+    const double weight00 =
+        (1.0 - fraction_x) * (1.0 - fraction_y);
+    const double weight01 =
+        fraction_x * (1.0 - fraction_y);
+    const double weight10 =
+        (1.0 - fraction_x) * fraction_y;
+    const double weight11 = fraction_x * fraction_y;
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        const double border =
+            border_value.val[channel < 4 ? channel : 3];
+        const double top_left =
+            row0 && x0 >= 0
+                ? row0[static_cast<size_t>(x0) * channels + channel]
+                : border;
+        const double top_right =
+            row0 && x1 >= 0
+                ? row0[static_cast<size_t>(x1) * channels + channel]
+                : border;
+        const double bottom_left =
+            row1 && x0 >= 0
+                ? row1[static_cast<size_t>(x0) * channels + channel]
+                : border;
+        const double bottom_right =
+            row1 && x1 >= 0
+                ? row1[static_cast<size_t>(x1) * channels + channel]
+                : border;
+        destination[channel] = saturate_cast<uchar>(
+            top_left * weight00 +
+            top_right * weight01 +
+            bottom_left * weight10 +
+            bottom_right * weight11);
+    }
 }
 
 inline void geometric_linear_coordinate(double coordinate,

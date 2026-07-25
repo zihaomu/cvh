@@ -62,37 +62,54 @@ inline void blendLinear(const Mat& src1,
             weight2.data + static_cast<size_t>(y) * weight2.step(0));
         uchar* output =
             dst.data + static_cast<size_t>(y) * dst.step(0);
+        if (source1.depth() == CV_8U)
+        {
+            for (int x = 0; x < cols; ++x)
+            {
+                const float w1 = first_weight[x];
+                const float w2 = second_weight[x];
+                const float reciprocal =
+                    1.0f / (w1 + w2 + 1e-5f);
+                const size_t index =
+                    static_cast<size_t>(x) * channels;
+                for (int ch = 0; ch < channels; ++ch)
+                {
+                    const float value =
+                        (static_cast<float>(
+                             input1[index + static_cast<size_t>(ch)]) *
+                             w1 +
+                         static_cast<float>(
+                             input2[index + static_cast<size_t>(ch)]) *
+                             w2) *
+                        reciprocal;
+                    output[index + static_cast<size_t>(ch)] =
+                        saturate_cast<uchar>(
+                        static_cast<int>(std::lrint(value)));
+                }
+            }
+            continue;
+        }
+
+        const float* first =
+            reinterpret_cast<const float*>(input1);
+        const float* second =
+            reinterpret_cast<const float*>(input2);
+        float* destination =
+            reinterpret_cast<float*>(output);
         for (int x = 0; x < cols; ++x)
         {
             const float w1 = first_weight[x];
             const float w2 = second_weight[x];
-            const float denominator = w1 + w2 + 1e-5f;
+            const float reciprocal =
+                1.0f / (w1 + w2 + 1e-5f);
+            const size_t index =
+                static_cast<size_t>(x) * channels;
             for (int ch = 0; ch < channels; ++ch)
             {
-                const size_t index =
-                    static_cast<size_t>(x) * channels +
-                    static_cast<size_t>(ch);
-                if (source1.depth() == CV_8U)
-                {
-                    const float value =
-                        (static_cast<float>(input1[index]) * w1 +
-                         static_cast<float>(input2[index]) * w2) /
-                        denominator;
-                    output[index] = saturate_cast<uchar>(
-                        static_cast<int>(std::lrint(value)));
-                }
-                else
-                {
-                    const float* first =
-                        reinterpret_cast<const float*>(input1);
-                    const float* second =
-                        reinterpret_cast<const float*>(input2);
-                    float* destination =
-                        reinterpret_cast<float*>(output);
-                    destination[index] =
-                        (first[index] * w1 + second[index] * w2) /
-                        denominator;
-                }
+                destination[index + static_cast<size_t>(ch)] =
+                    (first[index + static_cast<size_t>(ch)] * w1 +
+                     second[index + static_cast<size_t>(ch)] * w2) *
+                    reciprocal;
             }
         }
     }

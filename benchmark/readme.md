@@ -92,16 +92,30 @@ Core 逐元素算子还支持在同一二进制内强制 scalar，用于排除�
 cmake --build build-bench -j --target cvh_benchmark_core_mat_header
 
 ./build-bench/cvh_benchmark_core_mat_header \
-  --profile quick --dispatch scalar \
+  --profile quick --dispatch scalar --threads 1 \
   --output benchmark/results/internal/core_mat/quick/scalar.csv
 
 ./build-bench/cvh_benchmark_core_mat_header \
-  --profile quick --dispatch auto \
+  --profile quick --dispatch auto --threads 1 \
   --output benchmark/results/internal/core_mat/quick/opencv_ui.csv
 ```
 
 `dispatch_path` 记录公共 API 最终命中的 `scalar` 或 `opencv_ui`，不以 target
 名称推测实际执行路径。
+
+P-ACC-8 的 GEMM 归因可以只运行 square/skinny/wide 矩阵和
+end-to-end/pack-only/pack-once/kernel-only 组件：
+
+```bash
+./build-bench/cvh_benchmark_core_mat_header \
+  --profile quick --ops GEMM --dispatch auto --threads 1 \
+  --warmup 2 --iters 100 --repeats 3
+```
+
+`cvh_benchmark_imgproc_header` 在 640x480 anchor 上记录 pyramid 的
+`public_reuse`、`public_recreate`、`precompute` 和
+`precomputed_workspace` kernel 行。两者都会显式把 `cvh` 线程数设置为
+CSV 中记录的线程数，不能仅依赖 OpenMP 环境变量。
 
 `core_mat` 的逐元素矩阵同时包含 Mat-Mat、Mat-Scalar/Scalar-Mat、`inRange` 的
 Mat/Scalar bounds，以及 masked Mat-Mat/Mat-Scalar bitwise 变体；这些 variant 使用相同

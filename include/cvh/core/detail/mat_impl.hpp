@@ -107,13 +107,62 @@ inline void fill_scalar_pattern(_Tp* out, size_t pixel_count, int cn, const Scal
         lane[ch] = saturate_cast<_Tp>(s[ch]);
     }
 
-    for (size_t i = 0; i < pixel_count; ++i)
+    bool uniform = true;
+    for (int ch = 1; ch < cn; ++ch)
     {
-        _Tp* px = out + i * static_cast<size_t>(cn);
-        for (int ch = 0; ch < cn; ++ch)
-        {
-            px[ch] = lane[ch];
-        }
+        uniform = uniform && lane[ch] == lane[0];
+    }
+    if (uniform)
+    {
+        std::fill(
+            out,
+            out + pixel_count * static_cast<size_t>(cn),
+            lane[0]);
+        return;
+    }
+
+    if (pixel_count == 0)
+    {
+        return;
+    }
+    std::copy(lane, lane + cn, out);
+    size_t initialized = 1;
+    while (initialized < pixel_count)
+    {
+        const size_t copy_pixels = std::min(initialized, pixel_count - initialized);
+        std::memcpy(
+            out + initialized * static_cast<size_t>(cn),
+            out,
+            copy_pixels * static_cast<size_t>(cn) * sizeof(_Tp));
+        initialized += copy_pixels;
+    }
+}
+
+inline bool is_positive_zero(float value)
+{
+    if (value != 0.0f)
+    {
+        return false;
+    }
+    unsigned int bits = 0;
+    static_assert(sizeof(bits) == sizeof(value), "float size mismatch");
+    std::memcpy(&bits, &value, sizeof(bits));
+    return bits == 0;
+}
+
+inline void fill_zero_rows(uchar* data,
+                           size_t rows,
+                           size_t row_step,
+                           size_t row_bytes)
+{
+    if (rows == 1 || row_step == row_bytes)
+    {
+        std::memset(data, 0, rows * row_bytes);
+        return;
+    }
+    for (size_t row = 0; row < rows; ++row)
+    {
+        std::memset(data + row * row_step, 0, row_bytes);
     }
 }
 
@@ -846,6 +895,16 @@ inline void Mat::setTo(float v)
     const size_t outer = dims > 1 ? static_cast<size_t>(size.p[0]) : 1;
     const size_t scalar_per_outer = (dims > 1 ? total(1, dims) : total()) * static_cast<size_t>(channels());
     const size_t outer_step = dims > 1 ? step(0) : scalar_per_outer * elemSize1();
+
+    if (lite_mat_detail::is_positive_zero(v))
+    {
+        lite_mat_detail::fill_zero_rows(
+            data,
+            outer,
+            outer_step,
+            scalar_per_outer * elemSize1());
+        return;
+    }
 
     auto fill_block = [d, v](uchar* ptr, size_t scalar_count) {
         switch (d)

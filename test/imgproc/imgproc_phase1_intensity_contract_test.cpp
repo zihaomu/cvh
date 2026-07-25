@@ -1,7 +1,9 @@
 #include "cvh.h"
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 
@@ -23,6 +25,62 @@ void fill_pattern(Mat& mat)
             }
         }
     }
+}
+
+Mat naive_stack_blur_u8(const Mat& src, Size ksize)
+{
+    Mat dst(src.shape(), src.type());
+    const int radius_x = ksize.width / 2;
+    const int radius_y = ksize.height / 2;
+    const std::int64_t divisor =
+        static_cast<std::int64_t>(radius_x + 1) *
+        static_cast<std::int64_t>(radius_x + 1) *
+        static_cast<std::int64_t>(radius_y + 1) *
+        static_cast<std::int64_t>(radius_y + 1);
+    for (int y = 0; y < src.size.p[0]; ++y)
+    {
+        for (int x = 0; x < src.size.p[1]; ++x)
+        {
+            for (int channel = 0;
+                 channel < src.channels();
+                 ++channel)
+            {
+                std::int64_t sum = 0;
+                for (int ky = -radius_y;
+                     ky <= radius_y;
+                     ++ky)
+                {
+                    const int source_y =
+                        std::clamp(
+                            y + ky, 0, src.size.p[0] - 1);
+                    const int weight_y =
+                        radius_y + 1 - std::abs(ky);
+                    for (int kx = -radius_x;
+                         kx <= radius_x;
+                         ++kx)
+                    {
+                        const int source_x =
+                            std::clamp(
+                                x + kx, 0, src.size.p[1] - 1);
+                        const int weight_x =
+                            radius_x + 1 - std::abs(kx);
+                        sum +=
+                            static_cast<std::int64_t>(
+                                weight_x * weight_y) *
+                            src.at<uchar>(
+                                source_y,
+                                source_x,
+                                channel);
+                    }
+                }
+                dst.at<uchar>(y, x, channel) =
+                    saturate_cast<uchar>(
+                        static_cast<double>(sum) /
+                        static_cast<double>(divisor));
+            }
+        }
+    }
+    return dst;
 }
 
 }  // namespace
@@ -61,6 +119,46 @@ TEST(ImgprocPhase1Intensity_TEST, median_blur_handles_boundaries_roi_and_in_plac
     EXPECT_FLOAT_EQ(filtered.at<float>(0, 4), 4.0f);
     EXPECT_THROW(medianBlur(one_row, filtered, 7), Exception);
     EXPECT_THROW(medianBlur(impulse, filtered, 4), Exception);
+}
+
+TEST(ImgprocPhase1Intensity_TEST, median_blur_ui_matches_scalar_for_u8_channels_and_roi)
+{
+    const cpu::DispatchMode saved_mode = cpu::dispatch_mode();
+    for (const int type : {CV_8UC1, CV_8UC3, CV_8UC4})
+    {
+        Mat parent({11, 19}, type);
+        fill_pattern(parent);
+        const Mat roi =
+            parent(Range(1, 10), Range(2, 18));
+        for (const int ksize : {3, 5})
+        {
+            Mat scalar;
+            Mat accelerated;
+            cpu::set_dispatch_mode(
+                cpu::DispatchMode::ScalarOnly);
+            medianBlur(roi, scalar, ksize);
+            cpu::set_dispatch_mode(cpu::DispatchMode::Auto);
+            medianBlur(roi, accelerated, ksize);
+            ASSERT_EQ(scalar.shape(), accelerated.shape());
+            EXPECT_EQ(
+                std::memcmp(
+                    scalar.data,
+                    accelerated.data,
+                    scalar.total() * scalar.elemSize()),
+                0);
+
+            Mat alias = roi.clone();
+            medianBlur(alias, alias, ksize);
+            EXPECT_EQ(
+                std::memcmp(
+                    accelerated.data,
+                    alias.data,
+                    accelerated.total() *
+                        accelerated.elemSize()),
+                0);
+        }
+    }
+    cpu::set_dispatch_mode(saved_mode);
 }
 
 TEST(ImgprocPhase1Intensity_TEST, bilateral_filter_preserves_constants_and_rejects_alias)
@@ -121,6 +219,31 @@ TEST(ImgprocPhase1Intensity_TEST, stack_blur_has_triangular_kernel_and_alias_con
     EXPECT_EQ(color.at<uchar>(2, 2, 0), 2);
     EXPECT_EQ(color.at<uchar>(2, 2, 3), 255);
     EXPECT_THROW(stackBlur(color, filtered, Size(4, 3)), Exception);
+}
+
+TEST(ImgprocPhase1Intensity_TEST, stack_blur_sliding_u8_matches_naive_for_roi_and_channels)
+{
+    for (const int type : {CV_8UC1, CV_8UC3, CV_8UC4})
+    {
+        Mat parent({9, 13}, type);
+        fill_pattern(parent);
+        const Mat roi =
+            parent(Range(1, 8), Range(2, 12));
+        for (const Size ksize : {Size(3, 5), Size(5, 3)})
+        {
+            const Mat expected =
+                naive_stack_blur_u8(roi, ksize);
+            Mat actual;
+            stackBlur(roi, actual, ksize);
+            ASSERT_EQ(expected.shape(), actual.shape());
+            EXPECT_EQ(
+                std::memcmp(
+                    expected.data,
+                    actual.data,
+                    expected.total() * expected.elemSize()),
+                0);
+        }
+    }
 }
 
 TEST(ImgprocPhase1Intensity_TEST, adaptive_threshold_covers_mean_gaussian_and_in_place)

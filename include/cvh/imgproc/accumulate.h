@@ -2,6 +2,8 @@
 #define CVH_IMGPROC_ACCUMULATE_H
 
 #include "detail/common.h"
+#include "cvh/core/detail/dispatch_control.h"
+#include "cvh/core/simd/opencv_ui.h"
 
 #include <cmath>
 
@@ -78,6 +80,108 @@ inline void run(const Mat& src1,
     const int rows = src1.size.p[0];
     const int cols = src1.size.p[1];
     const int channels = src1.channels();
+
+#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    if (cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly &&
+        mask.empty())
+    {
+        const cv::v_float32x4 alpha_vector =
+            cv::v_setall_f32(static_cast<float>(alpha));
+        const cv::v_float32x4 beta_vector =
+            cv::v_setall_f32(static_cast<float>(1.0 - alpha));
+        for (int y = 0; y < rows; ++y)
+        {
+            const uchar* input1 =
+                src1.data + static_cast<size_t>(y) * src1.step(0);
+            const uchar* input2 =
+                src2
+                    ? src2->data +
+                          static_cast<size_t>(y) * src2->step(0)
+                    : nullptr;
+            float* output = reinterpret_cast<float*>(
+                dst.data + static_cast<size_t>(y) * dst.step(0));
+            const int scalar_count = cols * channels;
+            int index = 0;
+            for (; index + 4 <= scalar_count; index += 4)
+            {
+                const cv::v_float32x4 value1 =
+                    src1.depth() == CV_8U
+                        ? cv::v_cvt_f32(
+                              cv::v_reinterpret_as_s32(
+                                  cv::v_load_expand_q(
+                                      input1 + index)))
+                        : cv::v_load(
+                              reinterpret_cast<const float*>(
+                                  input1) +
+                              index);
+                const cv::v_float32x4 previous =
+                    cv::v_load(output + index);
+                cv::v_float32x4 result;
+                switch (operation)
+                {
+                    case Operation::Add:
+                        result = cv::v_add(previous, value1);
+                        break;
+                    case Operation::Square:
+                        result = cv::v_fma(
+                            value1, value1, previous);
+                        break;
+                    case Operation::Product:
+                    {
+                        const cv::v_float32x4 value2 =
+                            src1.depth() == CV_8U
+                                ? cv::v_cvt_f32(
+                                      cv::v_reinterpret_as_s32(
+                                          cv::v_load_expand_q(
+                                              input2 + index)))
+                                : cv::v_load(
+                                      reinterpret_cast<const float*>(
+                                          input2) +
+                                      index);
+                        result = cv::v_fma(
+                            value1, value2, previous);
+                        break;
+                    }
+                    case Operation::Weighted:
+                        result = cv::v_add(
+                            cv::v_mul(previous, beta_vector),
+                            cv::v_mul(value1, alpha_vector));
+                        break;
+                }
+                cv::v_store(output + index, result);
+            }
+            for (; index < scalar_count; ++index)
+            {
+                const double value1 =
+                    read_source(src1, input1, index);
+                switch (operation)
+                {
+                    case Operation::Add:
+                        output[index] += static_cast<float>(value1);
+                        break;
+                    case Operation::Square:
+                        output[index] +=
+                            static_cast<float>(value1 * value1);
+                        break;
+                    case Operation::Product:
+                        output[index] += static_cast<float>(
+                            value1 *
+                            read_source(*src2, input2, index));
+                        break;
+                    case Operation::Weighted:
+                        output[index] = static_cast<float>(
+                            (1.0 - alpha) * output[index] +
+                            alpha * value1);
+                        break;
+                }
+            }
+        }
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        return;
+    }
+#endif
+
     for (int y = 0; y < rows; ++y)
     {
         const uchar* input1 =

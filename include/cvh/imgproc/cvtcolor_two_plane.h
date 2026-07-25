@@ -44,17 +44,24 @@ inline void cvtColorTwoPlane(const Mat& y,
     const Mat y_source = y.data == dst.data ? y.clone() : y;
     const Mat uv_source = uv.data == dst.data ? uv.clone() : uv;
     dst.create(y_source.shape(), CV_8UC3);
-    for (int row = 0; row < y_source.size.p[0]; ++row)
+    const int rows = y_source.size.p[0];
+    const int cols = y_source.size.p[1];
+    for (int row = 0; row < rows; row += 2)
     {
-        const uchar* y_row =
+        const uchar* y_row0 =
             y_source.data +
             static_cast<size_t>(row) * y_source.step(0);
+        const uchar* y_row1 =
+            y_source.data +
+            static_cast<size_t>(row + 1) * y_source.step(0);
         const uchar* uv_row =
             uv_source.data +
             static_cast<size_t>(row / 2) * uv_source.step(0);
-        uchar* output =
+        uchar* output0 =
             dst.data + static_cast<size_t>(row) * dst.step(0);
-        for (int col = 0; col < y_source.size.p[1]; ++col)
+        uchar* output1 =
+            dst.data + static_cast<size_t>(row + 1) * dst.step(0);
+        for (int col = 0; col < cols; col += 2)
         {
             const size_t uv_index =
                 static_cast<size_t>(col / 2) * 2;
@@ -62,20 +69,38 @@ inline void cvtColorTwoPlane(const Mat& y,
             const int second = uv_row[uv_index + 1];
             const int uu = nv21 ? second : first;
             const int vv = nv21 ? first : second;
-            const uchar blue =
-                detail::cvtcolor_yuv420sp_channel_u8(
-                    y_row[col], uu, vv, 0);
-            const uchar green =
-                detail::cvtcolor_yuv420sp_channel_u8(
-                    y_row[col], uu, vv, 1);
-            const uchar red =
-                detail::cvtcolor_yuv420sp_channel_u8(
-                    y_row[col], uu, vv, 2);
-            const size_t output_index =
-                static_cast<size_t>(col) * 3;
-            output[output_index + (rgb ? 0 : 2)] = red;
-            output[output_index + 1] = green;
-            output[output_index + (rgb ? 2 : 0)] = blue;
+            const int d = uu - 128;
+            const int e = vv - 128;
+            const int blue_chroma = 516 * d + 128;
+            const int green_chroma = -100 * d - 208 * e + 128;
+            const int red_chroma = 409 * e + 128;
+
+            const uchar* y_rows[2] = {y_row0, y_row1};
+            uchar* output_rows[2] = {output0, output1};
+            for (int block_row = 0; block_row < 2; ++block_row)
+            {
+                for (int block_col = 0; block_col < 2; ++block_col)
+                {
+                    const int x = col + block_col;
+                    const int c =
+                        std::max(
+                            static_cast<int>(y_rows[block_row][x]) - 16,
+                            0);
+                    const int luminance = 298 * c;
+                    const uchar blue = saturate_cast<uchar>(
+                        (luminance + blue_chroma) >> 8);
+                    const uchar green = saturate_cast<uchar>(
+                        (luminance + green_chroma) >> 8);
+                    const uchar red = saturate_cast<uchar>(
+                        (luminance + red_chroma) >> 8);
+                    uchar* pixel =
+                        output_rows[block_row] +
+                        static_cast<size_t>(x) * 3u;
+                    pixel[rgb ? 0 : 2] = red;
+                    pixel[1] = green;
+                    pixel[rgb ? 2 : 0] = blue;
+                }
+            }
         }
     }
 }

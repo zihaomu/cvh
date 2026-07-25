@@ -17,6 +17,10 @@ namespace {
 
 volatile double g_phase1_cvh_sink = 0.0;
 
+constexpr int kMicroWarmup = 2;
+constexpr int kMicroIterations = 100;
+constexpr int kMicroRepeats = 3;
+
 std::uint32_t p1_lcg_next(std::uint32_t state)
 {
     return state * 1664525u + 1013904223u;
@@ -40,6 +44,22 @@ void p1_fill_u8(cvh::Mat& mat, std::uint32_t seed)
             output[index] = static_cast<uchar>(
                 (state >> 24) ^ static_cast<std::uint32_t>(index + row * 17));
         }
+    }
+}
+
+void p1_prepare_find_nonzero(cvh::Mat& mat, Phase1OpId op)
+{
+    if (op == Phase1OpId::FindNonZero)
+    {
+        return;
+    }
+    mat.setTo(cvh::Scalar::all(0.0));
+    if (op == Phase1OpId::FindNonZeroSparseTail)
+    {
+        uchar* last_row =
+            mat.data +
+            static_cast<std::size_t>(mat.size[0] - 1) * mat.step(0);
+        last_row[mat.size[1] - 1] = 1;
     }
 }
 
@@ -155,19 +175,38 @@ const std::vector<Phase1CaseSpec>& phase1_case_specs()
         {Phase1OpId::Log, "core", "LOG", "positive_f32c1", "CV_32F", 1, false},
         {Phase1OpId::CheckRange, "core", "CHECK_RANGE", "quiet_f32c1", "CV_32F", 1, false},
         {Phase1OpId::PatchNaNs, "core", "PATCH_NANS", "one_nan_f32c1", "CV_32F", 1, false},
-        {Phase1OpId::Norm, "core", "NORM", "l2_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::NormInf, "core", "NORM", "inf_single_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::NormL1, "core", "NORM", "l1_single_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::Norm, "core", "NORM", "l2_single_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::NormDiffInf, "core", "NORM", "inf_diff_zero_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::NormDiffL1, "core", "NORM", "l1_diff_zero_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::NormDiffL2, "core", "NORM", "l2_diff_zero_f32c1", "CV_32F", 1, false},
         {Phase1OpId::Sum, "core", "SUM", "f32c3", "CV_32F", 3, false},
         {Phase1OpId::Mean, "core", "MEAN", "f32c3", "CV_32F", 3, false},
         {Phase1OpId::MeanStdDev, "core", "MEAN_STD_DEV", "f32c3", "CV_32F", 3, false},
         {Phase1OpId::CountNonZero, "core", "COUNT_NON_ZERO", "u8c1", "CV_8U", 1, false},
         {Phase1OpId::HasNonZero, "core", "HAS_NON_ZERO", "u8c1", "CV_8U", 1, false},
-        {Phase1OpId::FindNonZero, "core", "FIND_NON_ZERO", "u8c1", "CV_8U", 1, false},
+        {Phase1OpId::FindNonZero, "core", "FIND_NON_ZERO", "random_dense_u8c1", "CV_8U", 1, false},
+        {Phase1OpId::FindNonZeroAllZero, "core", "FIND_NON_ZERO", "all_zero_u8c1", "CV_8U", 1, false},
+        {Phase1OpId::FindNonZeroSparseTail, "core", "FIND_NON_ZERO", "sparse_tail_u8c1", "CV_8U", 1, false},
         {Phase1OpId::MinMaxIdx, "core", "MIN_MAX_IDX", "f32c1", "CV_32F", 1, false},
         {Phase1OpId::MinMaxLoc, "core", "MIN_MAX_LOC", "f32c1", "CV_32F", 1, false},
         {Phase1OpId::Reduce, "core", "REDUCE", "axis0_sum_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::ReduceAxis0Avg, "core", "REDUCE", "axis0_avg_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::ReduceAxis0Max, "core", "REDUCE", "axis0_max_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::ReduceAxis0Min, "core", "REDUCE", "axis0_min_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::ReduceAxis0Sum2, "core", "REDUCE", "axis0_sum2_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::ReduceAxis1Sum, "core", "REDUCE", "axis1_sum_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::ReduceAxis1Avg, "core", "REDUCE", "axis1_avg_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::ReduceAxis1Max, "core", "REDUCE", "axis1_max_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::ReduceAxis1Min, "core", "REDUCE", "axis1_min_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::ReduceAxis1Sum2, "core", "REDUCE", "axis1_sum2_f32c1", "CV_32F", 1, false},
         {Phase1OpId::ReduceArgMax, "core", "REDUCE_ARG_MAX", "axis0_f32c1", "CV_32F", 1, false},
         {Phase1OpId::ReduceArgMin, "core", "REDUCE_ARG_MIN", "axis0_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::NormalizeInf, "core", "NORMALIZE", "inf_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::NormalizeL1, "core", "NORMALIZE", "l1_f32c1", "CV_32F", 1, false},
         {Phase1OpId::Normalize, "core", "NORMALIZE", "l2_f32c1", "CV_32F", 1, false},
+        {Phase1OpId::NormalizeMinMax, "core", "NORMALIZE", "minmax_f32c1", "CV_32F", 1, false},
         {Phase1OpId::BorderInterpolate, "core", "BORDER_INTERPOLATE", "reflect101_batch4096", "S32", 1, true},
         {Phase1OpId::CopyTo, "core", "COPY_TO", "masked_u8c3", "CV_8U", 3, false},
         {Phase1OpId::ExtractChannel, "core", "EXTRACT_CHANNEL", "channel1_u8c3", "CV_8U", 3, false},
@@ -231,27 +270,30 @@ std::vector<Phase1BenchmarkResult> run_phase1_benchmarks(
     std::vector<Phase1BenchmarkResult> results;
     results.reserve(phase1_case_specs().size());
 
-    if (phase1_case_specs().size() != 76u)
+    if (phase1_case_specs().size() != 95u)
     {
-        throw std::logic_error("P1 Mode B additional case list must contain 76 operations");
+        throw std::logic_error(
+            "P1 Mode B additional case list must contain 95 operations");
     }
 
     for (const Phase1CaseSpec& spec : phase1_case_specs())
     {
         int warmup = config.warmup;
         int iters = config.iters;
+        int repeats = config.repeats;
         if (spec.micro)
         {
-            warmup = std::max(20, config.warmup * 20);
-            iters = std::max(1000, config.iters * 1000);
+            warmup = kMicroWarmup;
+            iters = kMicroIterations;
+            repeats = kMicroRepeats;
         }
         cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = bench_cvh_phase1(
-            spec.id, rows, cols, warmup, iters, config.repeats, seed);
+            spec.id, rows, cols, warmup, iters, repeats, seed);
         const cvh::cpu::DispatchTag cvh_dispatch_tag =
             cvh::cpu::last_dispatch_tag();
         const double opencv_ms = bench_opencv_phase1(
-            spec.id, rows, cols, warmup, iters, config.repeats, seed);
+            spec.id, rows, cols, warmup, iters, repeats, seed);
         if (cvh_ms <= 0.0 || opencv_ms <= 0.0)
         {
             throw std::runtime_error(
@@ -277,8 +319,10 @@ std::vector<Phase1BenchmarkResult> run_phase1_benchmarks(
         result.opencv_ms = opencv_ms;
         result.note =
             spec.micro
-                ? "phase1_representative_case;micro_iterations=" +
-                      std::to_string(iters)
+                ? "phase1_representative_case;micro_warmup=" +
+                      std::to_string(warmup) +
+                      ";micro_iterations=" + std::to_string(iters) +
+                      ";micro_repeats=" + std::to_string(repeats)
                 : "phase1_representative_case";
         results.push_back(std::move(result));
     }
