@@ -7,6 +7,13 @@
 #include "cvh/core/system.h"
 #include "cvh/core/utils.h"
 
+#include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+
 namespace cvh
 {
 
@@ -94,4 +101,4 @@ Mat readMatFromNpy(const std::string& path) {
     return blob;
 }
 
-}
+}  // namespace cvh

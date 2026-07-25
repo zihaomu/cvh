@@ -219,6 +219,19 @@ endif()
 
 if(CVH_BUILD_TESTS)
     add_subdirectory(test/3rdparty/googletest EXCLUDE_FROM_ALL)
+    include(test/cmake/CvhTest.cmake)
+    include(test/core/sources.cmake)
+    include(test/imgproc/sources.cmake)
+    include(test/smoke/imgproc_headers/sources.cmake)
+
+    cvh_assert_all_test_sources_registered(
+        "${CMAKE_CURRENT_SOURCE_DIR}/test/core"
+        SOURCES ${CVH_CORE_TEST_SOURCES}
+    )
+    cvh_assert_all_test_sources_registered(
+        "${CMAKE_CURRENT_SOURCE_DIR}/test/imgproc"
+        SOURCES ${CVH_IMGPROC_TEST_SOURCES}
+    )
 
     add_executable(cvh_header_compile_smoke test/smoke/cvh_header_compile_smoke.cpp)
     target_link_libraries(cvh_header_compile_smoke PRIVATE cvh::headers)
@@ -234,6 +247,12 @@ if(CVH_BUILD_TESTS)
         test/smoke/cvh_imgproc_header_odr_peer.cpp
     )
     target_link_libraries(cvh_imgproc_header_odr_smoke PRIVATE cvh::headers_fast)
+
+    add_executable(cvh_imgproc_headers_compile_smoke
+        ${CVH_IMGPROC_HEADER_COMPILE_SMOKE_SOURCES}
+    )
+    target_link_libraries(cvh_imgproc_headers_compile_smoke PRIVATE cvh::headers)
+    target_compile_features(cvh_imgproc_headers_compile_smoke PRIVATE cxx_std_17)
 
     add_executable(cvh_include_only_smoke test/smoke/cvh_include_only_smoke.cpp)
     target_include_directories(cvh_include_only_smoke PRIVATE
@@ -286,26 +305,7 @@ if(CVH_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/test
     )
 
-    add_executable(cvh_test_imgproc
-        test/imgproc/imgproc_header_layout_test.cpp
-        test/imgproc/imgproc_resize_contract_test.cpp
-        test/imgproc/imgproc_cvtcolor_contract_test.cpp
-        test/imgproc/imgproc_threshold_contract_test.cpp
-        test/imgproc/imgproc_pipeline_regression_test.cpp
-        test/imgproc/imgproc_lut_contract_test.cpp
-        test/imgproc/imgproc_filter_contract_test.cpp
-        test/imgproc/imgproc_phase1_kernels_contract_test.cpp
-        test/imgproc/imgproc_phase1_intensity_contract_test.cpp
-        test/imgproc/imgproc_phase1_pyramid_color_contract_test.cpp
-        test/imgproc/imgproc_phase1_geometry_matrix_contract_test.cpp
-        test/imgproc/imgproc_phase1_geometric_sampling_contract_test.cpp
-        test/imgproc/imgproc_filter2d_contract_test.cpp
-        test/imgproc/imgproc_sep_filter2d_contract_test.cpp
-        test/imgproc/imgproc_copy_make_border_contract_test.cpp
-        test/imgproc/imgproc_morph_gradient_contract_test.cpp
-        test/imgproc/imgproc_canny_contract_test.cpp
-        test/imgproc/imgproc_warp_affine_contract_test.cpp
-    )
+    add_executable(cvh_test_imgproc ${CVH_IMGPROC_TEST_SOURCES})
     target_link_libraries(cvh_test_imgproc PRIVATE cvh::headers gtest_main)
     target_compile_features(cvh_test_imgproc PRIVATE cxx_std_17)
     target_compile_definitions(cvh_test_imgproc PRIVATE M_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -327,36 +327,14 @@ if(CVH_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/test
     )
 
-    set(CVH_CORE_TEST_LITE_SOURCES
-        test/core/array_ops_contract_test.cpp
-        test/core/core_ops_test.cpp
-        test/core/binary_op_contract_test.cpp
-        test/core/gemm_pack_contract_test.cpp
-        test/core/geometry_types_contract_test.cpp
-        test/core/layout_ops_contract_test.cpp
-        test/core/mat_channel_contract_test.cpp
-        test/core/mat_layout_semantics_test.cpp
-        test/core/mat_contract_test.cpp
-        test/core/math_ops_contract_test.cpp
-        test/core/mat_expr_scalar_compare_test.cpp
-        test/core/mat_shape_display_test.cpp
-        test/core/mat_opencv_compat_test.cpp
-        test/core/mat_scalar_ops_test.cpp
-        test/core/mat_submat_test.cpp
-        test/core/mat_upstream_channel_port_test.cpp
-        test/core/parallel_for_runtime_test.cpp
-        test/core/reduction_ops_contract_test.cpp
-        test/core/scalar_contract_test.cpp
+    add_executable(cvh_test_core
+        ${CVH_CORE_TEST_SOURCES}
+        ${CVH_CORE_TEST_SUPPORT_SOURCES}
     )
-
-    add_executable(cvh_test_core_lite
-        ${CVH_CORE_TEST_LITE_SOURCES}
-    )
-    add_executable(cvh_test_core ALIAS cvh_test_core_lite)
-    target_link_libraries(cvh_test_core_lite PRIVATE cvh::headers gtest_main)
-    target_compile_features(cvh_test_core_lite PRIVATE cxx_std_17)
-    target_compile_definitions(cvh_test_core_lite PRIVATE M_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
-    target_include_directories(cvh_test_core_lite PRIVATE
+    target_link_libraries(cvh_test_core PRIVATE cvh::headers gtest_main)
+    target_compile_features(cvh_test_core PRIVATE cxx_std_17)
+    target_compile_definitions(cvh_test_core PRIVATE M_ROOT_PATH="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_include_directories(cvh_test_core PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/test
@@ -414,6 +392,7 @@ if(CVH_BUILD_TESTS)
         add_test(NAME cvh_header_compile_smoke COMMAND cvh_header_compile_smoke)
         add_test(NAME cvh_core_header_odr_smoke COMMAND cvh_core_header_odr_smoke)
         add_test(NAME cvh_imgproc_header_odr_smoke COMMAND cvh_imgproc_header_odr_smoke)
+        add_test(NAME cvh_imgproc_headers_compile_smoke COMMAND cvh_imgproc_headers_compile_smoke)
         add_test(NAME cvh_include_only_smoke COMMAND cvh_include_only_smoke)
         add_test(NAME cvh_mode_lite_smoke COMMAND cvh_mode_lite_smoke)
         add_test(NAME cvh_headers_fast_smoke COMMAND cvh_headers_fast_smoke)
@@ -428,11 +407,22 @@ if(CVH_BUILD_TESTS)
         add_test(NAME cvh_test_imgcodecs COMMAND cvh_test_imgcodecs)
         add_test(NAME cvh_test_imgproc COMMAND cvh_test_imgproc)
         add_test(NAME cvh_test_highgui COMMAND cvh_test_highgui)
-        add_test(NAME cvh_test_core_lite COMMAND cvh_test_core_lite)
+        add_test(NAME cvh_test_core COMMAND cvh_test_core)
+        set_tests_properties(
+            cvh_test_core
+            PROPERTIES LABELS "core;unit"
+        )
+        set_tests_properties(
+            cvh_test_imgproc
+            PROPERTIES LABELS "imgproc;unit"
+        )
+        set_tests_properties(
+            cvh_imgproc_headers_compile_smoke
+            PROPERTIES LABELS "imgproc;smoke"
+        )
         if(TARGET cvh_test_opencv_contract_smoke)
             add_test(NAME cvh_test_opencv_contract_smoke COMMAND cvh_test_opencv_contract_smoke)
         endif()
-        add_test(NAME cvh_test_core COMMAND cvh_test_core_lite)
         if(TARGET cvh_native_backend)
             add_test(NAME cvh_test_highgui_native COMMAND cvh_test_highgui_native)
             add_test(NAME cvh_native_backend_smoke COMMAND cvh_native_backend_smoke)

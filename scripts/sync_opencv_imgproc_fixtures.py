@@ -2,9 +2,6 @@
 """
 Sync selected OpenCV extra fixtures for imgproc tests.
 
-Default source:
-  /home/moo/work/github/opencv_extra-4.x/testdata
-
 Destination:
   test/imgproc/data/opencv_extra
 """
@@ -32,12 +29,40 @@ OPTIONAL_LARGE_FIXTURES = [
     "cv/shared/lena.png",
 ]
 
+FIXTURE_CONSUMERS = {
+    "cv/shared/pic1.png": [
+        "test/imgproc/integration/basic_pipeline_test.cpp"
+    ],
+    "cv/shared/fruits.png": [
+        "test/imgproc/upstream/canny_upstream_test.cpp"
+    ],
+    "cv/imgproc/stuff.jpg": [
+        "test/imgproc/integration/basic_pipeline_test.cpp"
+    ],
+    "cv/grabcut/image1652.ppm": [
+        "test/imgproc/integration/basic_pipeline_test.cpp"
+    ],
+    "cv/grabcut/mask1652.ppm": [
+        "test/imgproc/integration/basic_pipeline_test.cpp"
+    ],
+}
+
+PIPELINE_GOLDEN = {
+    "cv/shared/pic1.png": {"adler32": 678252563, "nonzero": 1879},
+    "cv/imgproc/stuff.jpg": {"adler32": 606059218, "nonzero": 2757},
+    "cv/grabcut/image1652.ppm": {
+        "adler32": 1741072570,
+        "nonzero": 1968,
+    },
+    "cv/grabcut/mask1652.ppm": {"adler32": 201326593, "nonzero": 0},
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sync selected OpenCV extra fixtures for imgproc tests.")
     parser.add_argument(
         "--opencv-extra-root",
-        default="/home/moo/work/github/opencv_extra-4.x",
+        required=True,
         help="Path to opencv_extra root (or directly to testdata directory).",
     )
     parser.add_argument("--repo-root", default=".", help="Path to opencv-header-only repository root.")
@@ -110,10 +135,11 @@ def main() -> int:
             {
                 "relative_path": rel,
                 "optional_large": rel in OPTIONAL_LARGE_FIXTURES,
-                "source_file": str(src),
+                "source_file": f"opencv_extra/testdata/{rel}",
                 "snapshot_file": str(dst.relative_to(repo_root)),
                 "size": dst.stat().st_size,
                 "sha256": sha256_file(dst),
+                "consumers": FIXTURE_CONSUMERS.get(rel, []),
             }
         )
 
@@ -124,8 +150,21 @@ def main() -> int:
 
     manifest = {
         "generated_by": "scripts/sync_opencv_imgproc_fixtures.py",
-        "opencv_extra_root": str(opencv_extra_root),
-        "opencv_extra_testdata_root": str(testdata_root),
+        "source_project": "opencv_extra",
+        "pipeline_golden": {
+            "consumer": "test/imgproc/integration/basic_pipeline_test.cpp",
+            "pipeline": [
+                "imread(IMREAD_COLOR)",
+                "resize(64x48, INTER_LINEAR)",
+                "cvtColor(BGR2GRAY)",
+                "threshold(96, 255, THRESH_BINARY)",
+            ],
+            "provenance": (
+                "Regression baseline frozen at main@385783e; each component "
+                "also has an independent public contract test."
+            ),
+            "cases": PIPELINE_GOLDEN,
+        },
         "fixtures": copied_records,
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)

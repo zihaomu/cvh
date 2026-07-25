@@ -1,0 +1,1378 @@
+{
+  "schema_version": 1,
+  "generated_by": "test/core/data/generators/generate_fixtures.py",
+  "fixtures": [
+    {
+      "path": "npy/gemm_nn_broadcast_a_a.npy",
+      "sha256": "b4b1b1667ce76fccceec3406647a3c0131a6832cd57a07508d30745863e16e82",
+      "dtype": "float32",
+      "shape": [
+        1,
+        3,
+        5,
+        9
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_broadcast_a_b.npy",
+      "sha256": "09d69aa62e9e88d99cd253e6df37b79042e25188d25bd842a9fb82d76a00bc94",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        9,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_broadcast_a_o.npy",
+      "sha256": "cbd7c26bb34b98ba3c401f8248883f16b6673a03bcfa032c9d74ad9f1ba0980d",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        5,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_broadcast_b_a.npy",
+      "sha256": "3f6c91ed43cfea691610db62b0e1ec362565d60a4a5b5e888262dca371e8e31e",
+      "dtype": "float32",
+      "shape": [
+        2,
+        1,
+        6,
+        8
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_broadcast_b_b.npy",
+      "sha256": "6d41402e410367ce605106943589979d7b5a2675e6c2edf0951deb004c574725",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4,
+        8,
+        3
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_broadcast_b_o.npy",
+      "sha256": "4dbccb80f5a99982003c49739a3e9bc45c6088d6312ae23e5788f40f288358e7",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4,
+        6,
+        3
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_large_value_a.npy",
+      "sha256": "fbeac580f80e22a0aaa7d4600793123a19a43989a65e7356eaec073d61b50bff",
+      "dtype": "float32",
+      "shape": [
+        8,
+        16
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_large_value_b.npy",
+      "sha256": "bf540af4bfd046d7cac10f40c70f0358583c88557a5604259236b97b5baf0e1a",
+      "dtype": "float32",
+      "shape": [
+        16,
+        9
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_large_value_o.npy",
+      "sha256": "adae629935215f223957d67acfec730b8fcc3c0be41391d989ec7ac509c563bf",
+      "dtype": "float32",
+      "shape": [
+        8,
+        9
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank3_a.npy",
+      "sha256": "2a54c31ca810b64713bdec2e9469f171bf5e0be0b24d671a98884f5fa3214a29",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4,
+        6
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank3_b.npy",
+      "sha256": "7c1ff1a715607230bdfa0f8cd6a294593f375739a9a210605c445376cf6d6818",
+      "dtype": "float32",
+      "shape": [
+        2,
+        6,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank3_o.npy",
+      "sha256": "ff09932c5d4745eac2bfd0476c84c3b421c3eff3b2d77aef85a7a499b043f4ea",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank4_a.npy",
+      "sha256": "ff2c5c59e36031ea189f18980ef0a8481d36333c3a9f3962971d8a06856a8cee",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        3,
+        7
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank4_b.npy",
+      "sha256": "ae4cfe183e09801a5c205e928d0d901a840547c86e6e04b0a484c6595b7361da",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        7,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank4_o.npy",
+      "sha256": "525c85ba27dd25693eef14f192d719742e8f518c9906f9bf48bf0fced02375ee",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        3,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank_mismatch_a_a.npy",
+      "sha256": "68c617c4318b49b63d50745411275f29a5c49e1e95b3285786568e7567431eb8",
+      "dtype": "float32",
+      "shape": [
+        3,
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank_mismatch_a_b.npy",
+      "sha256": "ca03da0847c5b06f314fc5c8723d8c468c672606387e151c7f11948023723bd7",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        5,
+        6
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank_mismatch_a_o.npy",
+      "sha256": "ed764a236a2fbcc1a86daa22a0362fd0e294fc7f91fadfcaa39d932629a122e1",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        4,
+        6
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank_mismatch_b_a.npy",
+      "sha256": "965d5b87dca8c16d168fadf02c01e09be31b3f9877628d444d817c1953abc75c",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank_mismatch_b_b.npy",
+      "sha256": "2250d4c2f9f3b21bcfbafdccf5778dad4040646f45881c60688723f5ac2d913f",
+      "dtype": "float32",
+      "shape": [
+        3,
+        5,
+        6
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_rank_mismatch_b_o.npy",
+      "sha256": "f58555dbbe1037dbb7656ec7729a8d767829e6637506fb23427b7993f2e49d4f",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        4,
+        6
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_small_odd_a.npy",
+      "sha256": "f02965f585dd805fa0ce352aa0907c3774a5edbf2be35f77fe77ded91e741a5e",
+      "dtype": "float32",
+      "shape": [
+        3,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_small_odd_b.npy",
+      "sha256": "5a42cd72ceac42bec46d144134b279a4f5e6f15e0835bf2987b046d5baefad29",
+      "dtype": "float32",
+      "shape": [
+        5,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_small_odd_o.npy",
+      "sha256": "aba989a6d1a94a4924cae68aac90ab5689b3c0887f9be26142a3cd55d67975c2",
+      "dtype": "float32",
+      "shape": [
+        3,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_tail_rect_a.npy",
+      "sha256": "65730fd7c8938019d88929c3139c82483ca7e27aeede70cab519f8792ca2887a",
+      "dtype": "float32",
+      "shape": [
+        7,
+        11
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_tail_rect_b.npy",
+      "sha256": "c7ea5dc1f2b72353bb4f2075d00b35f1a339dac9b4bb70ef73cdb76d3f02e3af",
+      "dtype": "float32",
+      "shape": [
+        11,
+        13
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nn_tail_rect_o.npy",
+      "sha256": "31bc17c58a9fdc62edbbeb5c37b002a67a6a107ccc557ee6e2b3fa5b84057e10",
+      "dtype": "float32",
+      "shape": [
+        7,
+        13
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_broadcast_a_a.npy",
+      "sha256": "2a7b57640726e7b05d4c831f6cdaeaa1d228353bc18435ef353b4493a3459a60",
+      "dtype": "float32",
+      "shape": [
+        1,
+        3,
+        4,
+        9
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_broadcast_a_b.npy",
+      "sha256": "fdfc9d90b5fba15b0ef2680354fa41c6846f962c4259ffd045daaef725232f1f",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        5,
+        9
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_broadcast_a_o.npy",
+      "sha256": "1bf34554ac7129b05f704e4be506d19ae10bee743cde8990b2aa7e05ae3cdee6",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_broadcast_b_a.npy",
+      "sha256": "97759e4e7a8e796582874779b0bd555bb723dcf0d1ed248462e300044225de91",
+      "dtype": "float32",
+      "shape": [
+        2,
+        1,
+        4,
+        8
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_broadcast_b_b.npy",
+      "sha256": "adb702c786e74d12430e361224f928029472b8d014954599fd26b0652d6b3d39",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4,
+        5,
+        8
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_broadcast_b_o.npy",
+      "sha256": "0d357cb03de00a85c1c1e8094fa754c58544a32fd15d012b56b4254a08615bab",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4,
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_rank3_a.npy",
+      "sha256": "54a341dbd052a28a053b6a775db92fc4b798fb0a7f31b38077de1e294e44389d",
+      "dtype": "float32",
+      "shape": [
+        2,
+        5,
+        7
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_rank3_b.npy",
+      "sha256": "ae663105072b2c6812eb8b1b6e7c00a4483db2a1e7adad30ff9de7393a5c5360",
+      "dtype": "float32",
+      "shape": [
+        2,
+        6,
+        7
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_rank3_o.npy",
+      "sha256": "02f0cab567e7e85da5b1f666a4cb7af9c2319c71e9b1294fa3ba5cd7e9892921",
+      "dtype": "float32",
+      "shape": [
+        2,
+        5,
+        6
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_rank_mismatch_a.npy",
+      "sha256": "930ad5d9feddd372ff9ee55bffb1070a4b415917720b0d21960dfe9e9991f7cb",
+      "dtype": "float32",
+      "shape": [
+        3,
+        6,
+        10
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_rank_mismatch_b.npy",
+      "sha256": "ccc3357e3dc7df8079f46d07dff79663afb6b164d19b58e166401679fc47bc4b",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        4,
+        10
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_rank_mismatch_o.npy",
+      "sha256": "38f4d90cb2db877a65e295c3e5fccc85aa4471d728ac44a262f5440b7d675ccc",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        6,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_small_odd_a.npy",
+      "sha256": "fe8c570ea26c51619f8b734d863e2ee28167022e9ed1a4b6155e23c75d15e43e",
+      "dtype": "float32",
+      "shape": [
+        3,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_small_odd_b.npy",
+      "sha256": "7f0c5fdbbbdc1c3048b4be30241ca4531a2aee11ddb86711102ada76d26e13cd",
+      "dtype": "float32",
+      "shape": [
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_small_odd_o.npy",
+      "sha256": "e7a7df048a6aead98090d8cba2ecce4fc1b81be5bac7964912ef9f0df4605cfe",
+      "dtype": "float32",
+      "shape": [
+        3,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_small_value_a.npy",
+      "sha256": "ba38d80752a6c78108216b6d80d64621e71c35f84290bfba3b586a8864d79c98",
+      "dtype": "float32",
+      "shape": [
+        8,
+        16
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_small_value_b.npy",
+      "sha256": "bbb1cf8fc62a93bffe9524318a3bc7ab7477723da1f1ca83a5d2b974d5a5e6e6",
+      "dtype": "float32",
+      "shape": [
+        9,
+        16
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_small_value_o.npy",
+      "sha256": "41617d2c9ba7a4b058022d76b1244a8a0ca42dad74571c2b7e2d92d121e6eeee",
+      "dtype": "float32",
+      "shape": [
+        8,
+        9
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_tail_rect_a.npy",
+      "sha256": "0824781172d8e2c026aabc8573b78d96150805f36f646c0feeddb227dde00214",
+      "dtype": "float32",
+      "shape": [
+        9,
+        15
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_tail_rect_b.npy",
+      "sha256": "8cd3889bf9cf66c5f67116ac347bc078eeb4a540fd1d512a9beee09f02d5e002",
+      "dtype": "float32",
+      "shape": [
+        7,
+        15
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_nt_tail_rect_o.npy",
+      "sha256": "97525386c41e26f6f3948c54c2fd211572e2f7815deeb4a0521ae53a2d11d968",
+      "dtype": "float32",
+      "shape": [
+        9,
+        7
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tn_basic_a.npy",
+      "sha256": "5aa6a60ff67e12fe859bbe545ec3a35a78d5436b47ab5f3021f52f3ca9d65361",
+      "dtype": "float32",
+      "shape": [
+        7,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tn_basic_b.npy",
+      "sha256": "b6ca4723411cbfa6b9e13971740095192cc55823a54a521ef7822c8197c87feb",
+      "dtype": "float32",
+      "shape": [
+        7,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tn_basic_o.npy",
+      "sha256": "665ca7a397eb2c00babc9f8b17a2ab6efe39b670989ab605c89c298393a99418",
+      "dtype": "float32",
+      "shape": [
+        5,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tn_broadcast_a.npy",
+      "sha256": "7a811f3c10d7b55403a8c613659d80841b35a0f2fac10e12bdc6fa16d5e5fb92",
+      "dtype": "float32",
+      "shape": [
+        1,
+        3,
+        6,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tn_broadcast_b.npy",
+      "sha256": "2beb0ed0eeda7056b61919a6f8b3b9d9dce3de966571337eff54bfd0ac1f6bd6",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        6,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tn_broadcast_o.npy",
+      "sha256": "6bedf174397302a2a7c774d14c3e883f61871d24dd321ae95faa672ddcd75345",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tn_rank3_a.npy",
+      "sha256": "cd6d5bb31924ccac674a39c76da54eb21e56c569e20d114bba8b370302c797c8",
+      "dtype": "float32",
+      "shape": [
+        2,
+        6,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tn_rank3_b.npy",
+      "sha256": "0af157412962d4519ded7bf23802098f567328b723262dc1af23eb7460a07b5f",
+      "dtype": "float32",
+      "shape": [
+        2,
+        6,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tn_rank3_o.npy",
+      "sha256": "090eb24ba7ec45d3d93333eff95fd9b2ee4a6c814327d3b076abb8b9d1bfb11d",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tt_basic_a.npy",
+      "sha256": "2c2560a60a951e2583e0886f951e89c7d23ea3ac0f94b4db6a30368c12c2bddc",
+      "dtype": "float32",
+      "shape": [
+        5,
+        3
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tt_basic_b.npy",
+      "sha256": "93b891a6d0f52995ec3848e6ca51f0a5a916cbdafdf9032a736913a6137b44aa",
+      "dtype": "float32",
+      "shape": [
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tt_basic_o.npy",
+      "sha256": "63c2662cff6bab7b3e457ddcc8ec9aec93d1b0dbea51923ca5a282c4d854c1f9",
+      "dtype": "float32",
+      "shape": [
+        3,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tt_broadcast_a.npy",
+      "sha256": "bd98be8f59999cc412b78f8cbe0ad6401b5582c2f6680e7c85e2f3878c92bdba",
+      "dtype": "float32",
+      "shape": [
+        2,
+        1,
+        7,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tt_broadcast_b.npy",
+      "sha256": "a1db4bf362fda8504f183dd1b9a5f1d801c8d732d726fd7918075a255b56e46b",
+      "dtype": "float32",
+      "shape": [
+        1,
+        3,
+        4,
+        7
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tt_broadcast_o.npy",
+      "sha256": "e4daa8afeb725513e513811d0a6a0b71cc524c6ec588c9abcbe2efd5b0be1e88",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        5,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tt_rank3_a.npy",
+      "sha256": "0cbe2e3a002272f81430b4a3d60a0f6ce265fbc483fd12a460c3108e911f65cd",
+      "dtype": "float32",
+      "shape": [
+        2,
+        9,
+        4
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tt_rank3_b.npy",
+      "sha256": "7d5eb4684cf970d99e76375cc4aab3f1b3064d345fcf6504139974aa8cd2bae2",
+      "dtype": "float32",
+      "shape": [
+        2,
+        6,
+        9
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/gemm_tt_rank3_o.npy",
+      "sha256": "9814d42d0ac771def8fa11e534129294f1476a9c7e949b07aecbb568393c0a3d",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4,
+        6
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.matmul with explicit last-two-axis transpose",
+      "consumer": "test/core/operations/gemm_fixture_test.cpp"
+    },
+    {
+      "path": "npy/random10x12.npy",
+      "sha256": "ce4ed7726ad8b4001618a03ae56ccadcc5f02e48fb6885a98d5b46796efa7d9e",
+      "dtype": "float32",
+      "shape": [
+        10,
+        12
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "NumPy RandomState(0) fixed sample",
+      "consumer": "test/core/support/npy_reader_test.cpp"
+    },
+    {
+      "path": "npy/transpose_last2_3d_i.npy",
+      "sha256": "a6ad960b19cd340cd4994991f0df31703be43a5c128c183dd9fcc32ae23218e0",
+      "dtype": "float32",
+      "shape": [
+        2,
+        5,
+        7
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.swapaxes / numpy.transpose",
+      "consumer": "test/core/operations/transpose_fixture_test.cpp"
+    },
+    {
+      "path": "npy/transpose_last2_3d_o.npy",
+      "sha256": "dae2ccb4e28022174d46d714ac47dfd42602910d95c6ff1c309b34d55e888349",
+      "dtype": "float32",
+      "shape": [
+        2,
+        7,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.swapaxes / numpy.transpose",
+      "consumer": "test/core/operations/transpose_fixture_test.cpp"
+    },
+    {
+      "path": "npy/transpose_perm_4d_i.npy",
+      "sha256": "e725d1e93822135adb3f7b4e6e02208aa87b5260ebaf23cdda858254fb138a33",
+      "dtype": "float32",
+      "shape": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.swapaxes / numpy.transpose",
+      "consumer": "test/core/operations/transpose_fixture_test.cpp"
+    },
+    {
+      "path": "npy/transpose_perm_4d_o.npy",
+      "sha256": "af891ac1139210c20873fe0693b4464975aee78a9b3669ef68fd249089ea06e1",
+      "dtype": "float32",
+      "shape": [
+        2,
+        4,
+        3,
+        5
+      ],
+      "generator": "test/core/data/generators/generate_fixtures.py",
+      "oracle": "numpy.swapaxes / numpy.transpose",
+      "consumer": "test/core/operations/transpose_fixture_test.cpp"
+    }
+  ],
+  "gemm_cases": [
+    {
+      "name": "nn_small_odd",
+      "transpose_a": false,
+      "transpose_b": false,
+      "shape_a": [
+        3,
+        5
+      ],
+      "shape_b": [
+        5,
+        4
+      ],
+      "shape_output": [
+        3,
+        4
+      ]
+    },
+    {
+      "name": "nn_tail_rect",
+      "transpose_a": false,
+      "transpose_b": false,
+      "shape_a": [
+        7,
+        11
+      ],
+      "shape_b": [
+        11,
+        13
+      ],
+      "shape_output": [
+        7,
+        13
+      ]
+    },
+    {
+      "name": "nn_rank3",
+      "transpose_a": false,
+      "transpose_b": false,
+      "shape_a": [
+        2,
+        4,
+        6
+      ],
+      "shape_b": [
+        2,
+        6,
+        5
+      ],
+      "shape_output": [
+        2,
+        4,
+        5
+      ]
+    },
+    {
+      "name": "nn_rank4",
+      "transpose_a": false,
+      "transpose_b": false,
+      "shape_a": [
+        2,
+        3,
+        3,
+        7
+      ],
+      "shape_b": [
+        2,
+        3,
+        7,
+        4
+      ],
+      "shape_output": [
+        2,
+        3,
+        3,
+        4
+      ]
+    },
+    {
+      "name": "nn_broadcast_a",
+      "transpose_a": false,
+      "transpose_b": false,
+      "shape_a": [
+        1,
+        3,
+        5,
+        9
+      ],
+      "shape_b": [
+        2,
+        3,
+        9,
+        4
+      ],
+      "shape_output": [
+        2,
+        3,
+        5,
+        4
+      ]
+    },
+    {
+      "name": "nn_broadcast_b",
+      "transpose_a": false,
+      "transpose_b": false,
+      "shape_a": [
+        2,
+        1,
+        6,
+        8
+      ],
+      "shape_b": [
+        2,
+        4,
+        8,
+        3
+      ],
+      "shape_output": [
+        2,
+        4,
+        6,
+        3
+      ]
+    },
+    {
+      "name": "nn_rank_mismatch_a",
+      "transpose_a": false,
+      "transpose_b": false,
+      "shape_a": [
+        3,
+        4,
+        5
+      ],
+      "shape_b": [
+        2,
+        3,
+        5,
+        6
+      ],
+      "shape_output": [
+        2,
+        3,
+        4,
+        6
+      ]
+    },
+    {
+      "name": "nn_rank_mismatch_b",
+      "transpose_a": false,
+      "transpose_b": false,
+      "shape_a": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "shape_b": [
+        3,
+        5,
+        6
+      ],
+      "shape_output": [
+        2,
+        3,
+        4,
+        6
+      ]
+    },
+    {
+      "name": "nt_small_odd",
+      "transpose_a": false,
+      "transpose_b": true,
+      "shape_a": [
+        3,
+        5
+      ],
+      "shape_b": [
+        4,
+        5
+      ],
+      "shape_output": [
+        3,
+        4
+      ]
+    },
+    {
+      "name": "nt_tail_rect",
+      "transpose_a": false,
+      "transpose_b": true,
+      "shape_a": [
+        9,
+        15
+      ],
+      "shape_b": [
+        7,
+        15
+      ],
+      "shape_output": [
+        9,
+        7
+      ]
+    },
+    {
+      "name": "nt_rank3",
+      "transpose_a": false,
+      "transpose_b": true,
+      "shape_a": [
+        2,
+        5,
+        7
+      ],
+      "shape_b": [
+        2,
+        6,
+        7
+      ],
+      "shape_output": [
+        2,
+        5,
+        6
+      ]
+    },
+    {
+      "name": "nt_broadcast_a",
+      "transpose_a": false,
+      "transpose_b": true,
+      "shape_a": [
+        1,
+        3,
+        4,
+        9
+      ],
+      "shape_b": [
+        2,
+        3,
+        5,
+        9
+      ],
+      "shape_output": [
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "name": "nt_broadcast_b",
+      "transpose_a": false,
+      "transpose_b": true,
+      "shape_a": [
+        2,
+        1,
+        4,
+        8
+      ],
+      "shape_b": [
+        2,
+        4,
+        5,
+        8
+      ],
+      "shape_output": [
+        2,
+        4,
+        4,
+        5
+      ]
+    },
+    {
+      "name": "nt_rank_mismatch",
+      "transpose_a": false,
+      "transpose_b": true,
+      "shape_a": [
+        3,
+        6,
+        10
+      ],
+      "shape_b": [
+        2,
+        3,
+        4,
+        10
+      ],
+      "shape_output": [
+        2,
+        3,
+        6,
+        4
+      ]
+    },
+    {
+      "name": "tn_basic",
+      "transpose_a": true,
+      "transpose_b": false,
+      "shape_a": [
+        7,
+        5
+      ],
+      "shape_b": [
+        7,
+        4
+      ],
+      "shape_output": [
+        5,
+        4
+      ]
+    },
+    {
+      "name": "tn_rank3",
+      "transpose_a": true,
+      "transpose_b": false,
+      "shape_a": [
+        2,
+        6,
+        4
+      ],
+      "shape_b": [
+        2,
+        6,
+        5
+      ],
+      "shape_output": [
+        2,
+        4,
+        5
+      ]
+    },
+    {
+      "name": "tn_broadcast",
+      "transpose_a": true,
+      "transpose_b": false,
+      "shape_a": [
+        1,
+        3,
+        6,
+        4
+      ],
+      "shape_b": [
+        2,
+        3,
+        6,
+        5
+      ],
+      "shape_output": [
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "name": "tt_basic",
+      "transpose_a": true,
+      "transpose_b": true,
+      "shape_a": [
+        5,
+        3
+      ],
+      "shape_b": [
+        4,
+        5
+      ],
+      "shape_output": [
+        3,
+        4
+      ]
+    },
+    {
+      "name": "tt_rank3",
+      "transpose_a": true,
+      "transpose_b": true,
+      "shape_a": [
+        2,
+        9,
+        4
+      ],
+      "shape_b": [
+        2,
+        6,
+        9
+      ],
+      "shape_output": [
+        2,
+        4,
+        6
+      ]
+    },
+    {
+      "name": "tt_broadcast",
+      "transpose_a": true,
+      "transpose_b": true,
+      "shape_a": [
+        2,
+        1,
+        7,
+        5
+      ],
+      "shape_b": [
+        1,
+        3,
+        4,
+        7
+      ],
+      "shape_output": [
+        2,
+        3,
+        5,
+        4
+      ]
+    },
+    {
+      "name": "nn_large_value",
+      "transpose_a": false,
+      "transpose_b": false,
+      "shape_a": [
+        8,
+        16
+      ],
+      "shape_b": [
+        16,
+        9
+      ],
+      "shape_output": [
+        8,
+        9
+      ]
+    },
+    {
+      "name": "nt_small_value",
+      "transpose_a": false,
+      "transpose_b": true,
+      "shape_a": [
+        8,
+        16
+      ],
+      "shape_b": [
+        9,
+        16
+      ],
+      "shape_output": [
+        8,
+        9
+      ]
+    }
+  ]
+}

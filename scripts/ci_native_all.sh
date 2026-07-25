@@ -32,7 +32,9 @@ run_gtest_with_case_log() {
 
 print_env_fingerprint
 "${ROOT_DIR}/scripts/check_public_headers.sh"
+python3 "${ROOT_DIR}/scripts/check_test_fixtures.py"
 
+cmake -E remove_directory "${BUILD_DIR}"
 cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
   -U CVH_BUILD_FULL_BACKEND \
   -DCVH_BUILD_NATIVE_BACKEND=ON \
@@ -43,7 +45,7 @@ echo "ci_native_cmake_cache_begin"
 grep -E '^(CVH_BUILD_NATIVE_BACKEND|CVH_BUILD_FULL_BACKEND|CVH_BUILD_TESTS|CVH_BUILD_BENCHMARKS|CMAKE_BUILD_TYPE):' "${BUILD_DIR}/CMakeCache.txt" || true
 echo "ci_native_cmake_cache_end"
 
-cmake --build "${BUILD_DIR}" --target cvh_test_core_lite cvh_test_imgproc -j
+cmake --build "${BUILD_DIR}" --target cvh_test_core cvh_test_imgproc -j
 
-run_gtest_with_case_log "${BUILD_DIR}/cvh_test_core_lite" "cvh_test_core_headers_under_native_config"
+run_gtest_with_case_log "${BUILD_DIR}/cvh_test_core" "cvh_test_core_headers_under_native_config"
 run_gtest_with_case_log "${BUILD_DIR}/cvh_test_imgproc" "cvh_test_imgproc_lite_under_native_config"

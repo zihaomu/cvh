@@ -117,7 +117,7 @@ The support table above is tied to the header-only test path:
 | `cvh::headers` macro/default behavior | `cvh_header_compile_smoke`, `cvh_include_only_smoke` |
 | `cvh::headers_fast` macro/default behavior | `cvh_headers_fast_smoke` |
 | Imgproc multi-TU ODR | `cvh_imgproc_header_odr_smoke` |
-| `core` supported baseline | `cvh_test_core_lite` |
+| `core` supported baseline | `cvh_test_core` |
 | Multi-translation-unit core ODR/link | `cvh_core_header_odr_smoke` |
 | `imgproc` supported operators | `cvh_test_imgproc` |
 | `imgcodecs` supported read/write subset | `cvh_test_imgcodecs` |

@@ -1,47 +1,89 @@
 {
   "generated_by": "scripts/sync_opencv_imgproc_fixtures.py",
-  "opencv_extra_root": "/Volumes/ssd1t/work_ssd/my_project/opencv_test/opencv_extra-4.x",
-  "opencv_extra_testdata_root": "/Volumes/ssd1t/work_ssd/my_project/opencv_test/opencv_extra-4.x/testdata",
   "fixtures": [
     {
       "relative_path": "cv/shared/pic1.png",
       "optional_large": false,
-      "source_file": "/Volumes/ssd1t/work_ssd/my_project/opencv_test/opencv_extra-4.x/testdata/cv/shared/pic1.png",
+      "source_file": "opencv_extra/testdata/cv/shared/pic1.png",
       "snapshot_file": "test/imgproc/data/opencv_extra/cv/shared/pic1.png",
       "size": 13160,
-      "sha256": "0244e20a34fa2d30c60e60928d6d71f89d32e0e0266b4644980798cc2368765a"
+      "sha256": "0244e20a34fa2d30c60e60928d6d71f89d32e0e0266b4644980798cc2368765a",
+      "consumers": [
+        "test/imgproc/integration/basic_pipeline_test.cpp"
+      ]
     },
     {
       "relative_path": "cv/shared/fruits.png",
       "optional_large": false,
-      "source_file": "/Volumes/ssd1t/work_ssd/my_project/opencv_test/opencv_extra-4.x/testdata/cv/shared/fruits.png",
+      "source_file": "opencv_extra/testdata/cv/shared/fruits.png",
       "snapshot_file": "test/imgproc/data/opencv_extra/cv/shared/fruits.png",
       "size": 428398,
-      "sha256": "172bceeb74155ae1fd815ccb9e9bd1c8e52844a885e519af8b69741f8c8910c9"
+      "sha256": "172bceeb74155ae1fd815ccb9e9bd1c8e52844a885e519af8b69741f8c8910c9",
+      "consumers": [
+        "test/imgproc/upstream/canny_upstream_test.cpp"
+      ]
     },
     {
       "relative_path": "cv/imgproc/stuff.jpg",
       "optional_large": false,
-      "source_file": "/Volumes/ssd1t/work_ssd/my_project/opencv_test/opencv_extra-4.x/testdata/cv/imgproc/stuff.jpg",
+      "source_file": "opencv_extra/testdata/cv/imgproc/stuff.jpg",
       "snapshot_file": "test/imgproc/data/opencv_extra/cv/imgproc/stuff.jpg",
       "size": 29365,
-      "sha256": "21cd00afbdd0727f445dd91c0a09633e6345ed5b05a3d2355453a1f3c314c6c5"
+      "sha256": "21cd00afbdd0727f445dd91c0a09633e6345ed5b05a3d2355453a1f3c314c6c5",
+      "consumers": [
+        "test/imgproc/integration/basic_pipeline_test.cpp"
+      ]
     },
     {
       "relative_path": "cv/grabcut/image1652.ppm",
       "optional_large": false,
-      "source_file": "/Volumes/ssd1t/work_ssd/my_project/opencv_test/opencv_extra-4.x/testdata/cv/grabcut/image1652.ppm",
+      "source_file": "opencv_extra/testdata/cv/grabcut/image1652.ppm",
       "snapshot_file": "test/imgproc/data/opencv_extra/cv/grabcut/image1652.ppm",
       "size": 67515,
-      "sha256": "23a66767b2920a57eecac01e8ffba8c8f62f0e7b885f0aa5428865705861c799"
+      "sha256": "23a66767b2920a57eecac01e8ffba8c8f62f0e7b885f0aa5428865705861c799",
+      "consumers": [
+        "test/imgproc/integration/basic_pipeline_test.cpp"
+      ]
     },
     {
       "relative_path": "cv/grabcut/mask1652.ppm",
       "optional_large": false,
-      "source_file": "/Volumes/ssd1t/work_ssd/my_project/opencv_test/opencv_extra-4.x/testdata/cv/grabcut/mask1652.ppm",
+      "source_file": "opencv_extra/testdata/cv/grabcut/mask1652.ppm",
       "snapshot_file": "test/imgproc/data/opencv_extra/cv/grabcut/mask1652.ppm",
       "size": 22515,
-      "sha256": "d2319b81b226b38200350061624cac6a957b090e14b7157e7fdce098cd9d4b71"
+      "sha256": "d2319b81b226b38200350061624cac6a957b090e14b7157e7fdce098cd9d4b71",
+      "consumers": [
+        "test/imgproc/integration/basic_pipeline_test.cpp"
+      ]
     }
-  ]
+  ],
+  "source_project": "opencv_extra",
+  "pipeline_golden": {
+    "consumer": "test/imgproc/integration/basic_pipeline_test.cpp",
+    "pipeline": [
+      "imread(IMREAD_COLOR)",
+      "resize(64x48, INTER_LINEAR)",
+      "cvtColor(BGR2GRAY)",
+      "threshold(96, 255, THRESH_BINARY)"
+    ],
+    "provenance": "Regression baseline frozen at main@385783e; each component also has an independent public contract test.",
+    "cases": {
+      "cv/shared/pic1.png": {
+        "adler32": 678252563,
+        "nonzero": 1879
+      },
+      "cv/imgproc/stuff.jpg": {
+        "adler32": 606059218,
+        "nonzero": 2757
+      },
+      "cv/grabcut/image1652.ppm": {
+        "adler32": 1741072570,
+        "nonzero": 1968
+      },
+      "cv/grabcut/mask1652.ppm": {
+        "adler32": 201326593,
+        "nonzero": 0
+      }
+    }
+  }
 }

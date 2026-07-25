@@ -1,5 +1,33 @@
 # Core / Imgproc 测试重构方案
 
+> 文档状态：已实施，保留为设计依据和迁移记录。
+>
+> 最近复核：2026-07-25，基线为 `main@385783e`。
+
+## 0. 实施结果
+
+2026-07-25 已完成 T0～T6：
+
+- `cvh_test_core`：204 个有效 GTest，204 pass，0 fail，0 skip。
+- `cvh_test_imgproc`：183 个有效 GTest，183 pass，0 fail，0 skip。
+- 原来的 1 个无行为断言 header GTest 已删除；35 个
+  `include/cvh/imgproc/*.h` 改为独立翻译单元 compile smoke。
+- core 从三个未接线 legacy 文件中收编 6 个有独立观察点的用例；inference
+  声明无 header-only 定义、旧 broadcast fixture、打印/空用例均按明确 disposition
+  移出活动测试。
+- core fixture 从 122 个收敛为 71 个有消费者的 `.npy`，统一由
+  `test/core/data/generators/generate_fixtures.py` 生成；重复生成 hash 不变。
+- CMake 配置期审计 core/imgproc 的 `*_test.cpp` 注册完整性，规范 target 和
+  CTest 入口各只有一个。
+- 全新临时构建目录完成默认全量构建，16/16 个 CTest 入口通过。
+- public contract 与 internal dispatch、upstream port、integration 分层完成；
+  `test/core` 和 `test/imgproc` 文件名中不再出现 `phase1` 或 `_contract_test`。
+- core/imgproc fixture 与 upstream manifest 已移除本机绝对路径，并增加 consumer
+  和稳定 case ID 校验。
+
+下文第 2 节保留的是改造前冻结基线，用于解释迁移数量和原问题，不代表当前目录
+状态。
+
 ## 1. 结论
 
 本轮测试重构采用以下原则：
@@ -31,20 +59,28 @@
 
 ## 2. 当前基线
 
-盘点日期：2026-07-24。
+盘点日期：2026-07-25。
 
 ### 2.1 规模与接线状态
 
 | 模块 | 目录内 `.cpp` | 已接入目标 | 目录内 `TEST` | 当前目标实际执行 | 代码行数 |
 |---|---:|---:|---:|---:|---:|
-| `core` | 22 | 19 | 196 | 176 | 6,404 |
-| `imgproc` | 18 | 18 | 173 | 173 | 9,049 |
+| `core` | 22 | 19 | 220 | 200 | 8,569 |
+| `imgproc` | 18 | 18 | 178 | 178 | 9,456 |
 
-在当前 Release/header-only 构建中：
+在当前 header-only 构建中：
 
-- `cvh_test_core_lite`：176 个用例，174 个通过，2 个按设计跳过。
-- `cvh_test_imgproc`：173 个用例，173 个通过。
+- `cvh_test_core_lite`：200 个用例，198 个通过，2 个按设计跳过。
+- `cvh_test_imgproc`：178 个用例，178 个通过。
 - 两个模块级 CTest 均通过。
+
+与 2026-07-24 的首次盘点相比，没有新增 `test/core/*.cpp` 或
+`test/imgproc/*.cpp`；变化来自已有文件新增用例：
+
+- core 活动用例从 176 增至 200，增加 24 个。
+- imgproc 活动用例从 173 增至 178，增加 5 个。
+- 主要增量是 OpenCV UI/SIMD 与 scalar 的一致性、dispatch tag、ROI/tail、
+  border 和特殊值 case。
 
 这只能证明当前被接线的两个二进制可运行，不能证明目录中所有测试都有效。
 
@@ -70,7 +106,7 @@
 
 `test/core/test_data/data` 中有 122 个被版本控制的 `.npy` 文件，但读取这些
 fixture 的只有上述未接线的 `kernel_op_test.cpp` 和 `mat_test.cpp`。当前通过的
-176 个 core 用例不会读取这些数据。
+200 个 core 用例不会读取这些数据。
 
 这意味着 fixture 的存在目前不构成有效覆盖。重构后必须满足：
 
@@ -106,7 +142,13 @@ filter。实现阶段结束后，这些名称已经不能帮助定位维护责�
 
 - `imgproc_cvtcolor_contract_test.cpp`：3,288 行，混合 RGB/GRAY、YUV420、
   YUV422、YUV444、连续/非连续布局和错误路径。
+- `reduction_ops_contract_test.cpp`：2,107 行，其中新增约 1,700 行
+  UI/scalar、dispatch、ROI/tail、mask 和特殊值对照；公共 reduction 合同与
+  internal acceleration 验证已经明显混在一起。
 - `array_ops_contract_test.cpp`：1,116 行，同时测试公开 API 和私有 UI dispatch。
+- `math_ops_contract_test.cpp`：802 行，同时测试公开数学合同和 UI dispatch。
+- `layout_ops_contract_test.cpp`：541 行，新增 masked copy、channel、flip/rotate
+  的 UI/scalar 对照。
 - `imgproc_morph_gradient_contract_test.cpp`：同时包含 morphology、Sobel 和
   upstream port。
 - `imgproc_filter_contract_test.cpp`：同时包含 box filter、Gaussian blur、
@@ -116,12 +158,30 @@ filter。实现阶段结束后，这些名称已经不能帮助定位维护责�
 
 #### 2.2.6 黑盒合同与白盒实现测试混在一起
 
-当前多个 core 文件直接 include `cvh/core/detail/*`：
+白盒测试不能只按是否直接 include `cvh/core/detail/*` 判断。以下任一行为都属于
+internal 测试：
+
+- include `detail` 头。
+- 调用 `detail::*` 或实现命名空间。
+- 强制 `cpu::DispatchMode::ScalarOnly/Auto`。
+- 断言 `cpu::last_dispatch_tag()`。
+- 直接比较 UI/SIMD kernel 与 scalar kernel。
+
+当前涉及这些行为的 core 文件至少包括：
 
 - `array_ops_contract_test.cpp`
 - `binary_op_contract_test.cpp`
+- `gemm_pack_contract_test.cpp`
+- `layout_ops_contract_test.cpp`
 - `math_ops_contract_test.cpp`
 - `mat_contract_test.cpp`
+- `reduction_ops_contract_test.cpp`
+
+当前涉及这些行为的 imgproc 文件至少包括：
+
+- `imgproc_phase1_intensity_contract_test.cpp`
+- `imgproc_phase1_kernels_contract_test.cpp`
+- `imgproc_phase1_pyramid_color_contract_test.cpp`
 
 公开 API 合同和私有 dispatch/kernel 测试需要分开。否则 detail 重构会造成大量
 看似 API 回归、实为白盒耦合的失败。
@@ -216,7 +276,7 @@ TEST(ArrayDispatchInternalTest, vector_tail_matches_scalar)
 | 类型 | 位置 | 允许依赖 | 主要目的 |
 |---|---|---|---|
 | 公共合同 | 功能域目录 | 公共 `cvh/*` 头 | API、数值、边界、异常、alias/ROI |
-| internal | `internal/` | `cvh/*/detail/*` | dispatch、SIMD tail、私有 kernel |
+| internal | `internal/` | 公共头 + 必要的 dispatch/detail 控制 | dispatch、SIMD tail、私有 kernel |
 | upstream | `upstream/` | 公共头 + 测试 support | 固定 upstream case 的兼容回归 |
 | integration | `integration/` | 多模块公共头、fixture | 跨 API pipeline |
 | compile smoke | `compile/` 或 `test/smoke` | 单个公共头 | header self-containment、ODR |
@@ -261,7 +321,10 @@ test/
     internal/
       arithmetic_dispatch_test.cpp
       array_dispatch_test.cpp
+      array_layout_dispatch_test.cpp
+      gemm_dispatch_test.cpp
       math_dispatch_test.cpp
+      reduction_dispatch_test.cpp
       transpose_kernel_test.cpp
     upstream/
       mat_channel_upstream_test.cpp
@@ -316,6 +379,9 @@ test/
     statistics/
       integral_test.cpp
     internal/
+      derivatives_dispatch_test.cpp
+      median_blur_dispatch_test.cpp
+      pyramid_dispatch_test.cpp
     upstream/
     integration/
       basic_pipeline_test.cpp
@@ -335,9 +401,9 @@ test/
 | `array_ops_contract_test.cpp` | 公开 case 迁到 `operations/array_test.cpp`；UI/detail case 迁到 `internal/array_dispatch_test.cpp` |
 | `binary_op_contract_test.cpp` | 公开算术迁到 `operations/arithmetic_test.cpp`；强制 scalar/dispatch case 迁到 `internal/arithmetic_dispatch_test.cpp` |
 | `core_ops_test.cpp` | `convertTo` 迁到 `mat/conversion_test.cpp`；`copyTo` 迁到 `mat/lifecycle_test.cpp` 或 `mat/roi_test.cpp` |
-| `gemm_pack_contract_test.cpp` | 合并到 `operations/gemm_test.cpp` 的 pack/reuse 分组 |
+| `gemm_pack_contract_test.cpp` | pack/reuse 公共合同合并到 `operations/gemm_test.cpp`；UI/scalar 与 dispatch tag case 迁到 `internal/gemm_dispatch_test.cpp` |
 | `geometry_types_contract_test.cpp` | `types/geometry_test.cpp` |
-| `layout_ops_contract_test.cpp` | `operations/array_layout_test.cpp` |
+| `layout_ops_contract_test.cpp` | 公共布局合同迁到 `operations/array_layout_test.cpp`；masked copy、channel、flip/rotate 的 UI/scalar case 迁到 `internal/array_layout_dispatch_test.cpp` |
 | `mat_channel_contract_test.cpp` | `mat/channel_test.cpp` |
 | `mat_layout_semantics_test.cpp` | `mat/layout_test.cpp` |
 | `mat_contract_test.cpp` | 按 lifecycle/conversion/transpose 拆分；私有 blocked transpose 迁到 `internal/transpose_kernel_test.cpp` |
@@ -349,10 +415,27 @@ test/
 | `mat_upstream_channel_port_test.cpp` | `upstream/mat_channel_upstream_test.cpp` |
 | `math_ops_contract_test.cpp` | 公共 math 迁到 `operations/math_test.cpp`；UI/detail case 迁到 `internal/math_dispatch_test.cpp` |
 | `parallel_for_runtime_test.cpp` | `runtime/parallel_for_test.cpp` |
-| `reduction_ops_contract_test.cpp` | `operations/reduction_test.cpp` |
+| `reduction_ops_contract_test.cpp` | 原有公共合同迁到 `operations/reduction_test.cpp`；statistics/nonzero/minmax/reduce/reduceArg/norm/normalize 的 UI/scalar 与 dispatch case 迁到 `internal/reduction_dispatch_test.cpp` |
 | `scalar_contract_test.cpp` | `types/scalar_test.cpp` |
 
-### 6.1 未接线 legacy 文件的处理
+### 6.1 新增 UI/dispatch case 的处理
+
+截至本次复核，`reduction_ops_contract_test.cpp` 有 29 个用例，其中 17 个是
+UI/scalar 或 dispatch 语义验证。这些 case 有价值，不能在整理时合并删除，但
+不应继续伪装成普通 public contract。
+
+拆分规则：
+
+- `*_ui_matches_scalar*`、`*_dispatch*` 和显式检查 dispatch tag 的 case 进入
+  `internal/*_dispatch_test.cpp`。
+- 只验证 public API 输出、边界、异常和数值合同的 case 留在
+  `operations/*_test.cpp`。
+- internal case 仍通过公开 API 获得最终输出；detail API 只用于查询能力或控制
+  路径，不能成为唯一被测对象。
+- dispatch mode 必须使用 RAII guard 恢复，避免一个失败断言污染后续 case。
+- 同一输入矩阵的 scalar expected 只计算一次，多个加速路径复用该 oracle。
+
+### 6.2 未接线 legacy 文件的处理
 
 `kernel_op_test.cpp` 和 `mat_test.cpp` 不直接改名保留，而是建立 case disposition：
 
@@ -381,11 +464,11 @@ test/
 | `imgproc_pipeline_regression_test.cpp` | `integration/basic_pipeline_test.cpp` |
 | `imgproc_lut_contract_test.cpp` | `intensity/lut_test.cpp` |
 | `imgproc_filter_contract_test.cpp` | 拆为 `filtering/box_filter_test.cpp`、`filtering/gaussian_blur_test.cpp` 和对应 upstream case |
-| `imgproc_phase1_kernels_contract_test.cpp` | 拆为 `filtering/kernels_test.cpp`、`statistics/integral_test.cpp`、`filtering/derivatives_test.cpp`、`filtering/sqr_box_filter_test.cpp` |
-| `imgproc_phase1_intensity_contract_test.cpp` | 拆为 median/bilateral/stack/adaptive threshold/equalize/colormap 对应文件；`thresholdWithMask` 合入 threshold |
-| `imgproc_phase1_pyramid_color_contract_test.cpp` | 拆为 accumulate、blend linear、pyramid、cvtColorTwoPlane、demosaicing |
+| `imgproc_phase1_kernels_contract_test.cpp` | 拆为 `filtering/kernels_test.cpp`、`statistics/integral_test.cpp`、`filtering/derivatives_test.cpp`、`filtering/sqr_box_filter_test.cpp`；derivative UI/scalar case 迁到 `internal/derivatives_dispatch_test.cpp` |
+| `imgproc_phase1_intensity_contract_test.cpp` | 拆为 median/bilateral/stack/adaptive threshold/equalize/colormap 对应文件；`thresholdWithMask` 合入 threshold；median blur UI/scalar case 迁到 `internal/median_blur_dispatch_test.cpp` |
+| `imgproc_phase1_pyramid_color_contract_test.cpp` | 拆为 accumulate、blend linear、pyramid、cvtColorTwoPlane、demosaicing；pyramid UI/scalar case 迁到 `internal/pyramid_dispatch_test.cpp` |
 | `imgproc_phase1_geometry_matrix_contract_test.cpp` | `geometry/transform_matrix_test.cpp` |
-| `imgproc_phase1_geometric_sampling_contract_test.cpp` | 拆为 convert maps、remap、warp perspective、rect sub pix |
+| `imgproc_phase1_geometric_sampling_contract_test.cpp` | 拆为 convert maps、remap、warp perspective、rect sub pix；新增 fixed/float sampler 一致性 case 归 `geometry/remap_test.cpp` |
 | `imgproc_filter2d_contract_test.cpp` | `filtering/filter2d_test.cpp` |
 | `imgproc_sep_filter2d_contract_test.cpp` | `filtering/sep_filter2d_test.cpp` |
 | `imgproc_copy_make_border_contract_test.cpp` | `filtering/copy_make_border_test.cpp`，upstream case 明确归档 |
@@ -393,7 +476,21 @@ test/
 | `imgproc_canny_contract_test.cpp` | `feature/canny_test.cpp` 和 `upstream/canny_upstream_test.cpp` |
 | `imgproc_warp_affine_contract_test.cpp` | `geometry/warp_affine_test.cpp` |
 
-### 7.1 cvtColor 的拆分边界
+### 7.1 新增 imgproc case 的归属
+
+| 当前新增 case | 目标位置 | 类型 |
+|---|---|---|
+| `shared_fixed_sampler_covers_channels_roi_and_borders` | `geometry/remap_test.cpp` | public cross-representation contract |
+| `median_blur_ui_matches_scalar_for_u8_channels_and_roi` | `internal/median_blur_dispatch_test.cpp` | internal dispatch |
+| `stack_blur_sliding_u8_matches_naive_for_roi_and_channels` | `filtering/stack_blur_test.cpp` | public independent-reference contract |
+| `derivative_s16_ui_matches_scalar_for_borders_and_tails` | `internal/derivatives_dispatch_test.cpp` | internal dispatch |
+| `pyramid_ui_matches_scalar_for_types_channels_borders_and_roi` | `internal/pyramid_dispatch_test.cpp` | internal dispatch |
+
+这五个 case 都保留。拆分依据是 oracle 和职责，不以名称中是否包含 `ui` 作为唯一
+判断。例如 stack blur 新用例使用独立 naive reference，属于公共算法正确性测试；
+fixed/float remap 一致性验证的是公开 map 表示合同，也不属于 internal。
+
+### 7.2 cvtColor 的拆分边界
 
 `cvtColor` 仍是一个公共入口，但单文件 3,288 行已经不适合作为维护单元。拆分按
 像素格式 family，而不是按实现函数或历史提交：
@@ -572,7 +669,7 @@ README 和 failing-tests 文档由 manifest 生成或只链接 manifest，不再
 
 - 导出 core/imgproc 的 `--gtest_list_tests`。
 - 记录每个文件的 suite/case 数量。
-- 记录当前 174 pass + 2 skip 和 173 pass。
+- 记录当前 core 198 pass + 2 skip，以及 imgproc 178 pass。
 - 建立 case disposition 表。
 
 门槛：
@@ -615,7 +712,9 @@ README 和 failing-tests 文档由 manifest 生成或只链接 manifest，不再
 动作：
 
 - 分离 public contract 与 internal dispatch/kernel。
-- 拆分 `mat_contract`、array、binary、math。
+- 拆分 `mat_contract`、array、binary、math、reduction 和 array layout。
+- 将 GEMM、reduction、layout 新增的 UI/scalar 与 dispatch tag case 迁入
+  `internal/`，保持原有输入矩阵和 oracle 不变。
 - 合并两个已有 GEMM 来源并去重。
 - 明确 inference 扩展算子的产品边界。
 
@@ -631,6 +730,9 @@ README 和 failing-tests 文档由 manifest 生成或只链接 manifest，不再
 
 - 首先拆五个 `phase1` 文件。
 - 再拆 `cvtColor`、filter、morphology/Sobel 混合文件。
+- 将 median blur、derivatives、pyramid 的 UI/scalar case 迁入对应 internal
+  文件；stack blur naive reference 和 remap fixed/float 一致性仍保留在公共
+  合同目录。
 - 抽取独立 reference 和参数构造 support。
 
 门槛：

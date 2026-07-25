@@ -1,21 +1,20 @@
-# `test/upstream/opencv/imgproc` 说明
+# OpenCV Imgproc upstream 快照
 
-该目录用于保存从 upstream OpenCV `modules/imgproc/test` 截取的原始测试片段快照，
-用于追踪 `cvh` 的对齐进度。
+这里保存从 OpenCV `modules/imgproc/test` 抽取的原始 TEST 块，用于追踪本仓库的
+21 个选定兼容 case。快照不参与测试编译，也不应手工修改。
 
-## 生成方式
+当前 manifest 状态使用：
+
+- `PASS`：已有可执行的本地 GTest consumer。
+- `OUT_OF_SCOPE`：不属于当前公开 API，并注明重新评估条件。
+
+重新生成：
 
 ```bash
-python3 scripts/sync_opencv_imgproc_cases.py
+python3 scripts/sync_opencv_imgproc_cases.py \
+  --opencv-root /path/to/opencv \
+  --repo-root .
 ```
 
-## 当前策略
-
-- `PASS_NOW`：当前 `cvh` 已覆盖的行为（通过本仓库 GTest 合同测试验证）。
-- `PENDING_*`：尚未纳入当前 `cvh` 支持范围的上游行为（作为后续里程碑跟踪）。
-
-## 当前同步说明（2026-04-18）
-
-- 同步源可直接指向本地 OpenCV 源码目录（即使没有 `.git`）。
-- 当 OpenCV 目录非 git 仓库时，快照目录名会使用目录名（例如 `opencv-4.13.0`）作为版本标识。
-- 当前 `PASS_NOW` 同步集为 21 条（新增 `Imgproc_WarpAffine.accuracy` 与 `Imgproc_Warp.regression_19566`）。
+`case_manifest.json` 记录稳定 ID、upstream commit、相对 source/snapshot 路径、
+hash 和本地 consumer，不记录本机 checkout 的绝对路径。

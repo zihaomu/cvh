@@ -35,55 +35,55 @@ class CaseSpec:
 
 CASE_SPECS: Dict[str, List[CaseSpec]] = {
     "test_mat.cpp": [
-        CaseSpec("Core_Merge", "shape_operations", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Core_Split", "shape_operations", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Core_Merge", "hang_12171", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Core_Split", "hang_12171", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Core_Split", "crash_12171", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Core_Merge", "bug_13544", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Core_Mat", "reinterpret_Mat_8UC3_8SC3", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Core_Mat", "reinterpret_Mat_8UC4_32FC1", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
+        CaseSpec("Core_Merge", "shape_operations", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Core_Split", "shape_operations", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Core_Merge", "hang_12171", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Core_Split", "hang_12171", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Core_Split", "crash_12171", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Core_Merge", "bug_13544", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Core_Mat", "reinterpret_Mat_8UC3_8SC3", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Core_Mat", "reinterpret_Mat_8UC4_32FC1", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
         CaseSpec(
             "Core_Mat",
             "reinterpret_OutputArray_8UC3_8SC3",
-            "PENDING_CHANNEL",
+            "OUT_OF_SCOPE",
             "by-design gap: OutputArray compatibility is out of scope in Mat-only v1",
-            "non-goal (or add thin OutputArray adapter if strategy changes)",
+            "reassess only if the public API adopts OutputArray",
         ),
         CaseSpec(
             "Core_Mat",
             "reinterpret_OutputArray_8UC4_32FC1",
-            "PENDING_CHANNEL",
+            "OUT_OF_SCOPE",
             "by-design gap: OutputArray compatibility is out of scope in Mat-only v1",
-            "non-goal (or add thin OutputArray adapter if strategy changes)",
+            "reassess only if the public API adopts OutputArray",
         ),
-        CaseSpec("Core_MatExpr", "issue_16655", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
+        CaseSpec("Core_MatExpr", "issue_16655", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
     ],
     "test_arithm.cpp": [
-        CaseSpec("Subtract", "scalarc1_matc3", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Subtract", "scalarc4_matc4", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Compare", "empty", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Compare", "regression_8999", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
-        CaseSpec("Compare", "regression_16F_do_not_crash", "PASS_NOW", "ported and runnable in test/core/mat_upstream_channel_port_test.cpp", "none"),
+        CaseSpec("Subtract", "scalarc1_matc3", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Subtract", "scalarc4_matc4", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Compare", "empty", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Compare", "regression_8999", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
+        CaseSpec("Compare", "regression_16F_do_not_crash", "PASS", "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp", "none"),
         CaseSpec(
             "Core_LUT",
             "accuracy",
-            "PASS_NOW",
-            "ported and runnable in test/core/mat_upstream_channel_port_test.cpp (fixed-parameter subset)",
+            "PASS",
+            "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp (fixed-parameter subset)",
             "none",
         ),
         CaseSpec(
             "Core_LUT",
             "accuracy_multi",
-            "PASS_NOW",
-            "ported and runnable in test/core/mat_upstream_channel_port_test.cpp (fixed-parameter subset)",
+            "PASS",
+            "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp (fixed-parameter subset)",
             "none",
         ),
         CaseSpec(
             "Core_LUT",
             "accuracy_multi2",
-            "PASS_NOW",
-            "ported and runnable in test/core/mat_upstream_channel_port_test.cpp (fixed-parameter subset)",
+            "PASS",
+            "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp (fixed-parameter subset)",
             "none",
         ),
     ],
@@ -91,8 +91,8 @@ CASE_SPECS: Dict[str, List[CaseSpec]] = {
         CaseSpec(
             "Core_Array",
             "expressions",
-            "PASS_NOW",
-            "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+            "PASS",
+            "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp",
             "none",
         ),
     ],
@@ -108,13 +108,14 @@ REQUIRED_MIN_CASES_PER_SOURCE: Dict[str, int] = {
 TEST_RE = re.compile(
     r"^\s*TEST(?:_P)?\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)"
 )
+LOCAL_TEST_RE = re.compile(r"test/[A-Za-z0-9_./-]+\.cpp")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sync upstream OpenCV channel test cases.")
     parser.add_argument(
         "--opencv-root",
-        default="/home/moo/work/github/opencv",
+        required=True,
         help="Path to OpenCV repository root",
     )
     parser.add_argument(
@@ -231,7 +232,7 @@ def main() -> int:
     manifest_path = repo_root / "test" / "upstream" / "opencv" / "core" / "channel_manifest.json"
 
     manifest = {
-        "upstream_repo": str(opencv_root),
+        "upstream_project": "opencv",
         "upstream_commit": upstream_commit,
         "generated_by": "scripts/sync_opencv_core_channel_cases.py",
         "cases": [],
@@ -258,15 +259,22 @@ def main() -> int:
         out_file = out_dir / src_file.replace(".cpp", ".channel_cases.cpp")
         write_snapshot(out_file, src_file, extracted, upstream_commit)
         for item in extracted:
+            local_test_match = LOCAL_TEST_RE.search(item["reason"])
             manifest["cases"].append(
                 {
+                    "id": f"{item['suite']}.{item['name']}",
                     "source_file": f"modules/core/test/{src_file}",
                     "source_line_start": item["source_line_start"],
                     "source_line_end": item["source_line_end"],
                     "suite": item["suite"],
                     "name": item["name"],
                     "status": item["status"],
-                    "reason": item["reason"],
+                    "local_test": (
+                        local_test_match.group(0)
+                        if local_test_match
+                        else None
+                    ),
+                    "adaptation": item["reason"],
                     "unblock_by": item["unblock_by"],
                     "sha256": item["sha256"],
                     "snapshot_file": str(out_file.relative_to(repo_root)),

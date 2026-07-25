@@ -1,52 +1,43 @@
-# `test` 目录规划
+# 测试目录
 
-## 目录职责
+测试按长期产品职责组织，不按开发阶段、版本号或历史任务命名。
 
-维护项目测试体系，保证 API 正确性、行为稳定性和迁移可控性。
+## 分层
 
-## 测试分层
+- `core/`：Mat、基础算子、类型、运行时、内部派发和 upstream 兼容子集。
+- `imgproc/`：颜色、滤波、几何、强度、形态学等图像处理合同。
+- `imgcodecs/`、`highgui/`：各自模块的功能和异常路径。
+- `smoke/`：头文件独立编译、ODR、模式和最小 pipeline 检查。
+- `opencv_contract/`：可选的 OpenCV 隔离差分测试。
+- `upstream/`：OpenCV 原始 case 快照和状态 manifest，不直接参与编译。
+- `support/`：core/imgproc 共用的测试状态 guard。
+- `utils/`：跨模块测试工具。
 
-- `smoke`：最小编译/链接与入口可用性检查。
-- `core`：`Mat` 与基础算子行为测试。
-- `core/reduction_ops_contract_test.cpp`：归约、统计、non-zero、extrema、
-  axis reduce 和 normalize 的 header-only contract。
-- `core/array_ops_contract_test.cpp`、`layout_ops_contract_test.cpp`、
-  `math_ops_contract_test.cpp`：第一阶段逐元素、布局与数学 contract。
-- `opencv_contract`：与官方 OpenCV 隔离编译的 POD/字节差分测试，避免两套
-  类型系统出现在同一翻译单元。
-- `upstream`：OpenCV 上游用例快照与兼容迁移台账（用于接口完整性跟踪）。
-- `imgproc`：图像处理算法正确性测试。
-- `imgproc/imgproc_phase1_*_contract_test.cpp`：第一阶段 kernel、强度、
-  金字塔/颜色、几何矩阵和几何采样 contract。
-- `imgcodecs`：读写链路与异常路径测试。
-- `utils`：测试工具与数据加载辅助。
+public contract 只验证公开 API 的输出、边界和异常；需要强制 scalar/UI 路径或
+观察 dispatch 的用例放在模块的 `internal/`。上游移植用例放在 `upstream/`，
+并保留原 suite/case 关联。
 
-## 阶段计划
+## 构建与运行
 
-### P0：测试主干打通
+```bash
+cmake -S . -B build-tests \
+  -DCVH_BUILD_TESTS=ON \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build-tests --target cvh_test_core cvh_test_imgproc -j
+ctest --test-dir build-tests --output-on-failure
+```
 
-- `ctest` 默认运行 smoke + core 基础集。
-- 清理旧工程路径依赖，确保测试仅依赖当前仓库。
-- 当前已接线 core 测试二进制：
-  - `cvh_test_core_lite`（header-only，Lite/Native CI 共用）
-  - `cvh_test_core`（上述 target 的兼容别名）
-  （通过 `CVH_BUILD_TESTS=ON` 启用，支持 `--gtest_filter` 过滤）。
+规范测试 target 只有 `cvh_test_core` 和 `cvh_test_imgproc`，不再注册同一二进制的
+重复别名。`test/core/sources.cmake` 与 `test/imgproc/sources.cmake` 显式列出
+source；配置阶段会审计遗漏、重复和不存在的 `*_test.cpp`。
 
-### P1：模块化覆盖
+## 维护约束
 
-- `core/imgproc/imgcodecs` 各自建立稳定 case 集。
-- 引入固定数据集和误差阈值策略。
+1. 文件名表达稳定 API 或算法职责，不使用 `phase1`、版本号和任务编号。
+2. 一个测试必须有可观察断言；仅打印、空调用和永久 skip 不属于有效测试。
+3. 混合多个 API 的异常 case 应拆开，使失败能直接定位到 owner。
+4. 公共测试不得依赖生产 `detail` helper 作为 oracle。
+5. fixture 必须有固定生成器、hash、oracle 和 consumer。
+6. upstream 的产品边界外 case 记为 `OUT_OF_SCOPE`，不注册成 `GTEST_SKIP`。
 
-### P2：回归与扩展
-
-- 增加随机测试、边界测试和性能回归挂钩。
-- 建立测试数据生成脚本的可复现流程。
-
-## 完成定义（DoD）
-
-- 关键 API 在对应目录均有测试覆盖。
-- 测试失败可快速定位到模块，不依赖人工猜测。
-
-## 测试失败台账
-
-- `failing-tests.md`：记录当前未通过/未运行/挂起测试列表、原因和解锁条件。
+当前失败和产品边界记录见 `failing-tests.md`。

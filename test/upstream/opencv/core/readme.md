@@ -1,28 +1,20 @@
-# OpenCV Upstream Case Snapshots
+# OpenCV Core upstream 快照
 
-This directory stores upstream OpenCV `modules/core/test` case snapshots used for
-`cvh` compatibility tracking.
+这里保存从 OpenCV `modules/core/test` 抽取的原始 TEST 块，用于 Mat/channel
+兼容性追踪。快照不参与本仓库测试编译，也不应手工修改。
 
-Rules:
+状态由 `channel_manifest.json` 维护：
 
-- Snapshot sources are copied from local OpenCV checkout at
-  `/home/moo/work/github/opencv`.
-- Case bodies are kept exact ("raw upstream") and are not manually edited.
-- Current migration scope in this folder focuses on **Mat channel-related** cases,
-  currently extracted from `test_mat.cpp`, `test_arithm.cpp`, and
-  `test_operations.cpp` (`Core_Array.expressions` channel path), including
-  `Core_LUT.{accuracy,accuracy_multi,accuracy_multi2}` snapshots.
-- Status is tracked in `channel_manifest.json`:
-  - `PASS_NOW`: expected to run and pass in current `cvh`.
-  - `PENDING_CHANNEL`: accepted future requirement, currently blocked by missing APIs.
+- `PASS`：已在 `test/core/upstream/mat_channel_upstream_test.cpp` 落地并执行。
+- `OUT_OF_SCOPE`：不属于当前 Mat-only 公开 API，并注明重新评估条件。
 
-Regeneration:
+重新生成：
 
 ```bash
-python3 scripts/sync_opencv_core_channel_cases.py --repo-root .
+python3 scripts/sync_opencv_core_channel_cases.py \
+  --opencv-root /path/to/opencv \
+  --repo-root .
 ```
 
-Outputs:
-
-- `channel_manifest.json`: source location, case id, status, blocker, hash.
-- `<opencv-commit>/*.channel_cases.cpp`: exact upstream TEST blocks.
+manifest 只记录 upstream project/commit、相对 source/snapshot 路径、case ID、
+状态和 hash，不记录本机 checkout 的绝对路径。

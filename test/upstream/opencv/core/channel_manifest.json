@@ -1,5 +1,4 @@
 {
-  "upstream_repo": "/home/moo/work/github/opencv",
   "upstream_commit": "d719c6d",
   "generated_by": "scripts/sync_opencv_core_channel_cases.py",
   "cases": [
@@ -9,11 +8,13 @@
       "source_line_end": 1195,
       "suite": "Core_Merge",
       "name": "shape_operations",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "851e4a2a6e114dc7f148954ce017468d0bc0289d9f1b0e5e5290b3242da67325",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Merge.shape_operations",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -21,11 +22,13 @@
       "source_line_end": 1196,
       "suite": "Core_Split",
       "name": "shape_operations",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "311d3cd4b7193f8cec092492e00e4ad30443a7a3806d6dcc457def737c30b6f5",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Split.shape_operations",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -33,11 +36,13 @@
       "source_line_end": 1994,
       "suite": "Core_Merge",
       "name": "hang_12171",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "c1f14d1d9d247f8c65c6139a817eee52f292d574fc6f2c335eeb920e48c8c208",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Merge.hang_12171",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -45,11 +50,13 @@
       "source_line_end": 2013,
       "suite": "Core_Split",
       "name": "hang_12171",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "815cadecbc54f735dd45783e0615de044cf93017943b8bb002d44c6803d0176b",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Split.hang_12171",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -57,11 +64,13 @@
       "source_line_end": 2032,
       "suite": "Core_Split",
       "name": "crash_12171",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "4d438816121e0501365eecb715b7f62aad24e9b2a6181101eca36eb438544772",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Split.crash_12171",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -69,11 +78,13 @@
       "source_line_end": 2055,
       "suite": "Core_Merge",
       "name": "bug_13544",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "1fe5abb118d8590cb7d19a4a96e0d4739f51b3b6f9b40c31a64e0a5d52b83126",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Merge.bug_13544",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -81,11 +92,13 @@
       "source_line_end": 1313,
       "suite": "Core_Mat",
       "name": "reinterpret_Mat_8UC3_8SC3",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "065985adc0723e9e2b09e1bc3425bd8044d641ded950aba99fac7bb4e24de60b",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Mat.reinterpret_Mat_8UC3_8SC3",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -93,11 +106,13 @@
       "source_line_end": 1322,
       "suite": "Core_Mat",
       "name": "reinterpret_Mat_8UC4_32FC1",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "b732bbdf111f93ae56960a91d9579cb9b978cca1def27f3571a06146642dfc72",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Mat.reinterpret_Mat_8UC4_32FC1",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -105,11 +120,13 @@
       "source_line_end": 1331,
       "suite": "Core_Mat",
       "name": "reinterpret_OutputArray_8UC3_8SC3",
-      "status": "PENDING_CHANNEL",
-      "reason": "by-design gap: OutputArray compatibility is out of scope in Mat-only v1",
-      "unblock_by": "non-goal (or add thin OutputArray adapter if strategy changes)",
+      "status": "OUT_OF_SCOPE",
+      "unblock_by": "reassess only if the public API adopts OutputArray",
       "sha256": "0390c117bd3b280cf841be2a0dd39ab8126f29c5c1423c33a245b322d6ed66db",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Mat.reinterpret_OutputArray_8UC3_8SC3",
+      "local_test": null,
+      "adaptation": "by-design gap: OutputArray compatibility is out of scope in Mat-only v1"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -117,11 +134,13 @@
       "source_line_end": 1340,
       "suite": "Core_Mat",
       "name": "reinterpret_OutputArray_8UC4_32FC1",
-      "status": "PENDING_CHANNEL",
-      "reason": "by-design gap: OutputArray compatibility is out of scope in Mat-only v1",
-      "unblock_by": "non-goal (or add thin OutputArray adapter if strategy changes)",
+      "status": "OUT_OF_SCOPE",
+      "unblock_by": "reassess only if the public API adopts OutputArray",
       "sha256": "968fb71e2fa8ee9ecf38f35e7e9afccfab38db10f332c39ed79decfce220c2a4",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_Mat.reinterpret_OutputArray_8UC4_32FC1",
+      "local_test": null,
+      "adaptation": "by-design gap: OutputArray compatibility is out of scope in Mat-only v1"
     },
     {
       "source_file": "modules/core/test/test_mat.cpp",
@@ -129,11 +148,13 @@
       "source_line_end": 2335,
       "suite": "Core_MatExpr",
       "name": "issue_16655",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "77a4f4b830614e6231894ae32869eff5acc9c0117b54b3fc9cd894f02ba0635a",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_mat.channel_cases.cpp",
+      "id": "Core_MatExpr.issue_16655",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_arithm.cpp",
@@ -141,11 +162,13 @@
       "source_line_end": 2293,
       "suite": "Subtract",
       "name": "scalarc1_matc3",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "8d605d71ffd5d7898b2632e6d6daad37272970c73e2b505b3deb449b455d1e34",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp",
+      "id": "Subtract.scalarc1_matc3",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_arithm.cpp",
@@ -153,11 +176,13 @@
       "source_line_end": 2302,
       "suite": "Subtract",
       "name": "scalarc4_matc4",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "2f9977c72c2109e7a42d449402fd3ca23a068c3ffc959eab3a77d975432aaec2",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp",
+      "id": "Subtract.scalarc4_matc4",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_arithm.cpp",
@@ -165,11 +190,13 @@
       "source_line_end": 2310,
       "suite": "Compare",
       "name": "empty",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "e1da844544f1fee6adcadb2bbec72c6a6fd9d2aa0fc328db41d4803d018e1c91",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp",
+      "id": "Compare.empty",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_arithm.cpp",
@@ -177,11 +204,13 @@
       "source_line_end": 2318,
       "suite": "Compare",
       "name": "regression_8999",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "24da21205f74fb7ee10a09485c4f4d0fc6c843ead8d76bfc48fa54b036524ee2",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp",
+      "id": "Compare.regression_8999",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_arithm.cpp",
@@ -189,11 +218,13 @@
       "source_line_end": 2326,
       "suite": "Compare",
       "name": "regression_16F_do_not_crash",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "d9ad56b6f02d3729b7088da04aa7c719e645debef2cbc2746f9ace93b4ec077c",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp",
+      "id": "Compare.regression_16F_do_not_crash",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     },
     {
       "source_file": "modules/core/test/test_arithm.cpp",
@@ -201,11 +232,13 @@
       "source_line_end": 3362,
       "suite": "Core_LUT",
       "name": "accuracy",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp (fixed-parameter subset)",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "efb4c264d95622dc1d629026cf2262777fb4b95cb48098a0cea029c4f7e6afcc",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp",
+      "id": "Core_LUT.accuracy",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp (fixed-parameter subset)"
     },
     {
       "source_file": "modules/core/test/test_arithm.cpp",
@@ -213,11 +246,13 @@
       "source_line_end": 3386,
       "suite": "Core_LUT",
       "name": "accuracy_multi",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp (fixed-parameter subset)",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "51d9f00fbd8891bec088cdca9d13a949c77a37e66dc7a08f703ac94a8934578c",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp",
+      "id": "Core_LUT.accuracy_multi",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp (fixed-parameter subset)"
     },
     {
       "source_file": "modules/core/test/test_arithm.cpp",
@@ -225,11 +260,13 @@
       "source_line_end": 3410,
       "suite": "Core_LUT",
       "name": "accuracy_multi2",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp (fixed-parameter subset)",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "9687b14dc511a97b819036fd63c0cedbf3e83f7733ec9bc15dc855d0121b5952",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_arithm.channel_cases.cpp",
+      "id": "Core_LUT.accuracy_multi2",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp (fixed-parameter subset)"
     },
     {
       "source_file": "modules/core/test/test_operations.cpp",
@@ -237,11 +274,14 @@
       "source_line_end": 1278,
       "suite": "Core_Array",
       "name": "expressions",
-      "status": "PASS_NOW",
-      "reason": "ported and runnable in test/core/mat_upstream_channel_port_test.cpp",
+      "status": "PASS",
       "unblock_by": "none",
       "sha256": "533ba6fc24266fa62cdf7c8a4e4c504e140234503b29249344b1ab941acebb80",
-      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_operations.channel_cases.cpp"
+      "snapshot_file": "test/upstream/opencv/core/d719c6d/test_operations.channel_cases.cpp",
+      "id": "Core_Array.expressions",
+      "local_test": "test/core/upstream/mat_channel_upstream_test.cpp",
+      "adaptation": "ported and runnable in test/core/upstream/mat_channel_upstream_test.cpp"
     }
-  ]
+  ],
+  "upstream_project": "opencv"
 }

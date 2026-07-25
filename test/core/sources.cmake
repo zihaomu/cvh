@@ -1,0 +1,44 @@
+set(CVH_CORE_TEST_SOURCES
+    test/core/internal/arithmetic_dispatch_test.cpp
+    test/core/internal/array_dispatch_test.cpp
+    test/core/internal/array_layout_dispatch_test.cpp
+    test/core/internal/gemm_dispatch_test.cpp
+    test/core/internal/math_dispatch_test.cpp
+    test/core/internal/reduction_arg_dispatch_test.cpp
+    test/core/internal/reduction_axis_dispatch_test.cpp
+    test/core/internal/reduction_minmax_dispatch_test.cpp
+    test/core/internal/reduction_nonzero_dispatch_test.cpp
+    test/core/internal/reduction_norm_dispatch_test.cpp
+    test/core/internal/reduction_statistics_dispatch_test.cpp
+    test/core/internal/transpose_kernel_test.cpp
+    test/core/mat/basic_operations_test.cpp
+    test/core/mat/channel_test.cpp
+    test/core/mat/conversion_test.cpp
+    test/core/mat/display_test.cpp
+    test/core/mat/expression_test.cpp
+    test/core/mat/layout_test.cpp
+    test/core/mat/lifecycle_test.cpp
+    test/core/mat/opencv_compat_test.cpp
+    test/core/mat/reshape_test.cpp
+    test/core/mat/roi_test.cpp
+    test/core/mat/scalar_ops_test.cpp
+    test/core/operations/arithmetic_test.cpp
+    test/core/operations/array_layout_test.cpp
+    test/core/operations/array_test.cpp
+    test/core/operations/gemm_fixture_test.cpp
+    test/core/operations/gemm_test.cpp
+    test/core/operations/math_test.cpp
+    test/core/operations/reduction_test.cpp
+    test/core/operations/transpose_fixture_test.cpp
+    test/core/operations/transpose_test.cpp
+    test/core/runtime/error_test.cpp
+    test/core/runtime/parallel_for_test.cpp
+    test/core/support/npy_reader_test.cpp
+    test/core/types/geometry_test.cpp
+    test/core/types/scalar_test.cpp
+    test/core/upstream/mat_channel_upstream_test.cpp
+)
+
+set(CVH_CORE_TEST_SUPPORT_SOURCES
+    test/utils/mat_load.cpp
+)
