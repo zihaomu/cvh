@@ -82,12 +82,19 @@ Current caveats:
 - Raw CSV/metadata and rolling `current_*` reports are generated artifacts.
   Curated date-named `*-opencv-upstream-performance.md` snapshots may be
   committed under `benchmark/opencv_compare/results/`.
+- New benchmark reports are written in English by default. Optional
+  translations use a locale suffix such as `.zh-CN.md`; the English report is
+  the canonical version linked from the project README.
 - A missing `headers_fast` specialization is not an unsupported case:
   `cvh::headers_fast` inherits the `cvh::headers` implementation and the case
   remains in the report as `dispatch_path=headers_baseline`.
 
 ## Dated Snapshots
 
+- [2026-07-25 OpenCV upstream performance (English)](results/2026-07-25-opencv-upstream-performance.en.md):
+  Apple M5, single-threaded full profile, with all Phase 1 benchmark families.
+  A [Chinese translation](results/2026-07-25-opencv-upstream-performance.md)
+  is also available.
 - [2026-07-24 OpenCV upstream performance](results/2026-07-24-opencv-upstream-performance.md):
   Apple M5, single-threaded full profile, including the current Core UI
   acceleration batches.

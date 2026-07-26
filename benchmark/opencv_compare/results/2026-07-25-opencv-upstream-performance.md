@@ -1,5 +1,7 @@
 # cvh vs OpenCV Benchmark Report (full)
 
+[English](2026-07-25-opencv-upstream-performance.en.md) | **中文**
+
 生成时间（UTC）：`2026-07-25 06:25:37Z`
 
 ## 当前项目状态
