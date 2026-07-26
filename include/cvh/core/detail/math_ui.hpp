@@ -41,6 +41,21 @@ inline uchar convert_scale_abs_scalar_f32(float value, float alpha, float beta)
     return static_cast<uchar>(std::nearbyint(transformed));
 }
 
+inline cv::v_int32 convert_scale_abs_vector_f32(
+    const cv::v_float32& value,
+    const cv::v_float32& alpha,
+    const cv::v_float32& beta,
+    const cv::v_float32& limit)
+{
+    const cv::v_float32 transformed =
+        cv::v_abs(cv::v_fma(value, alpha, beta));
+    const cv::v_float32 sanitized = cv::v_select(
+        cv::v_not_nan(transformed),
+        transformed,
+        cv::vx_setzero_f32());
+    return cv::v_round(cv::v_min(sanitized, limit));
+}
+
 inline bool apply_convert_scale_abs_f32(const float* src,
                                         size_t src_step,
                                         uchar* dst,
@@ -69,21 +84,20 @@ inline bool apply_convert_scale_abs_f32(const float* src,
         size_t x = 0;
         for (; x + block <= row_scalars; x += block)
         {
-            const cv::v_int32 i0 = cv::v_round(cv::v_min(
-                cv::v_abs(cv::v_fma(cv::vx_load(src_row + x), v_alpha, v_beta)),
-                v_limit));
-            const cv::v_int32 i1 = cv::v_round(cv::v_min(
-                cv::v_abs(cv::v_fma(
-                    cv::vx_load(src_row + x + lanes), v_alpha, v_beta)),
-                v_limit));
-            const cv::v_int32 i2 = cv::v_round(cv::v_min(
-                cv::v_abs(cv::v_fma(
-                    cv::vx_load(src_row + x + lanes * 2), v_alpha, v_beta)),
-                v_limit));
-            const cv::v_int32 i3 = cv::v_round(cv::v_min(
-                cv::v_abs(cv::v_fma(
-                    cv::vx_load(src_row + x + lanes * 3), v_alpha, v_beta)),
-                v_limit));
+            const cv::v_int32 i0 = convert_scale_abs_vector_f32(
+                cv::vx_load(src_row + x), v_alpha, v_beta, v_limit);
+            const cv::v_int32 i1 = convert_scale_abs_vector_f32(
+                cv::vx_load(src_row + x + lanes), v_alpha, v_beta, v_limit);
+            const cv::v_int32 i2 = convert_scale_abs_vector_f32(
+                cv::vx_load(src_row + x + lanes * 2),
+                v_alpha,
+                v_beta,
+                v_limit);
+            const cv::v_int32 i3 = convert_scale_abs_vector_f32(
+                cv::vx_load(src_row + x + lanes * 3),
+                v_alpha,
+                v_beta,
+                v_limit);
             cv::vx_store(
                 dst_row + x,
                 cv::v_pack(
