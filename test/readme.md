@@ -32,16 +32,21 @@ ctest --test-dir build-tests --output-on-failure
 `test/imgproc/sources.cmake` 显式列出 source；配置阶段会审计遗漏、重复和
 不存在的 `*_test.cpp`。
 
-完整发布门禁应运行两种 header 配置：
+完整发布门禁只运行启用 OpenCV Universal Intrinsics 的 header-only 配置：
 
 ```bash
 ./scripts/ci_headers_all.sh
-CVH_CI_OPENCV_INTRIN=OFF ./scripts/ci_headers_all.sh
 ```
 
-两者都构建默认 `all` 目标并运行完整 CTest；Core/Imgproc 的 XML、CTest
+该命令固定 `CVH_ENABLE_OPENCV_INTRIN=ON` 和
+`CVH_BUILD_NATIVE_BACKEND=OFF`，其中后者仅用于排除遗留 HighGUI `.cpp`
+实验。Core/Imgproc 的 UI fast path 和 scalar fallback 均为 header-only。
+门禁构建默认 `all` 目标并运行完整 CTest；Core/Imgproc 的 XML、CTest
 inventory 和 executed/failed/skipped 数量由
 `test/ci/header_gate_expectations.json` 校验。
+
+scalar-only 配置仅保留为本地诊断能力，不属于托管 CI 门禁；Core/Imgproc
+不存在另一套 native 实现。
 
 ## 维护约束
 

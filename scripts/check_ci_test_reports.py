@@ -92,7 +92,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--expectations", type=Path, required=True)
-    parser.add_argument("--profile", choices=("ui-on", "ui-off"), required=True)
+    parser.add_argument("--profile", choices=("ui-on",), required=True)
     parser.add_argument("--architecture", default=platform.machine())
     parser.add_argument("--core-report", type=Path, required=True)
     parser.add_argument("--imgproc-report", type=Path, required=True)
@@ -114,7 +114,7 @@ def main() -> int:
         return 2
 
     failures: list[str] = []
-    expected_option = "ON" if args.profile == "ui-on" else "OFF"
+    expected_option = "ON"
     actual_option = read_cache_value(
         args.build_dir, "CVH_ENABLE_OPENCV_INTRIN"
     )
@@ -135,7 +135,7 @@ def main() -> int:
         )
 
     avx2_decision = "not-applicable"
-    if args.profile == "ui-on" and architecture == "x86_64":
+    if architecture == "x86_64":
         avx2_value = read_cache_value(
             args.build_dir, "CVH_X86_AVX2_RUNTIME_SUPPORTED"
         )

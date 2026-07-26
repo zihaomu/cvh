@@ -17,6 +17,9 @@ This directory keeps only current project documents.
   `core`/`imgproc` operation families.
 - [benchmark-refactor-implementation-plan.md](benchmark-refactor-implementation-plan.md):
   implementation plan for the two-mode benchmark framework.
+- [ci-ui-only-workflow-redesign.md](ci-ui-only-workflow-redesign.md):
+  implemented design for a single required Universal Intrinsics header-only CI
+  gate and an optional UI-only OpenCV comparison.
 - [core-cpp-cleanup-plan.md](core-cpp-cleanup-plan.md): cleanup and
   header-only migration plan for core arithmetic, transpose, GEMM, and
   overlapping legacy `.cpp` implementations.

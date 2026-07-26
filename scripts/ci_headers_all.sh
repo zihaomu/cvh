@@ -6,24 +6,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXPECTATIONS="${ROOT_DIR}/test/ci/header_gate_expectations.json"
 ARCHITECTURE="$(uname -m)"
 PARALLELISM="${CVH_CI_PARALLEL:-2}"
+OPENCV_INTRIN=ON
+PROFILE=ui-on
 
-case "${CVH_CI_OPENCV_INTRIN:-ON}" in
-  ON|on|1|TRUE|true)
-    OPENCV_INTRIN=ON
-    PROFILE=ui-on
-    ;;
-  OFF|off|0|FALSE|false)
-    OPENCV_INTRIN=OFF
-    PROFILE=ui-off
-    ;;
-  *)
-    echo "CVH_CI_OPENCV_INTRIN must be ON or OFF." >&2
-    exit 2
-    ;;
-esac
-
-BUILD_DIR="${ROOT_DIR}/build-ci-headers-${PROFILE}"
+BUILD_DIR="${ROOT_DIR}/build-ci-headers-ui"
 REPORT_DIR="${BUILD_DIR}/test-reports"
+CTEST_REPORT="${REPORT_DIR}/ctest.xml"
 CORE_REPORT="${REPORT_DIR}/cvh_test_core.xml"
 IMGPROC_REPORT="${REPORT_DIR}/cvh_test_imgproc.xml"
 
@@ -48,26 +36,28 @@ run_gtest_report() {
 
   if [[ ! -x "${bin_path}" ]]; then
     echo "Missing test binary: ${bin_path}" >&2
-    exit 2
+    return 2
   fi
 
   echo "${tag}_report_begin"
+  local status
+  set +e
   "${bin_path}" \
     --gtest_brief=1 \
     "--gtest_output=xml:${report_path}"
+  status=$?
+  set -e
   echo "${tag}_report: ${report_path}"
+  echo "${tag}_status: ${status}"
   echo "${tag}_report_end"
+  return "${status}"
 }
 
 print_env_fingerprint
 
-if [[ "${OPENCV_INTRIN}" == "ON" ]]; then
-  echo "installed_header_contract_begin"
-  "${ROOT_DIR}/scripts/check_header_only_contract.sh"
-  echo "installed_header_contract_end"
-else
-  "${ROOT_DIR}/scripts/check_public_headers.sh"
-fi
+echo "installed_header_contract_begin"
+"${ROOT_DIR}/scripts/check_header_only_contract.sh"
+echo "installed_header_contract_end"
 
 python3 "${ROOT_DIR}/scripts/check_test_fixtures.py"
 
@@ -92,22 +82,45 @@ fi
 echo "ci_headers_cmake_cache_end"
 
 cmake --build "${BUILD_DIR}" --parallel "${PARALLELISM}"
-ctest --test-dir "${BUILD_DIR}" --output-on-failure
 
 cmake -E make_directory "${REPORT_DIR}"
-run_gtest_report \
+overall_status=0
+
+if ! ctest \
+  --test-dir "${BUILD_DIR}" \
+  --output-on-failure \
+  --output-junit "${CTEST_REPORT}"; then
+  echo "CTest failed; continuing to collect machine-readable reports." >&2
+  overall_status=1
+fi
+
+if ! run_gtest_report \
   "${BUILD_DIR}/cvh_test_core" \
   "${CORE_REPORT}" \
-  "cvh_test_core_headers_${PROFILE}"
-run_gtest_report \
+  "cvh_test_core_headers_${PROFILE}"; then
+  overall_status=1
+fi
+
+if ! run_gtest_report \
   "${BUILD_DIR}/cvh_test_imgproc" \
   "${IMGPROC_REPORT}" \
-  "cvh_test_imgproc_headers_${PROFILE}"
+  "cvh_test_imgproc_headers_${PROFILE}"; then
+  overall_status=1
+fi
 
-python3 "${ROOT_DIR}/scripts/check_ci_test_reports.py" \
-  --build-dir "${BUILD_DIR}" \
-  --expectations "${EXPECTATIONS}" \
-  --profile "${PROFILE}" \
-  --architecture "${ARCHITECTURE}" \
-  --core-report "${CORE_REPORT}" \
-  --imgproc-report "${IMGPROC_REPORT}"
+if [[ -f "${CORE_REPORT}" && -f "${IMGPROC_REPORT}" ]]; then
+  if ! python3 "${ROOT_DIR}/scripts/check_ci_test_reports.py" \
+    --build-dir "${BUILD_DIR}" \
+    --expectations "${EXPECTATIONS}" \
+    --profile "${PROFILE}" \
+    --architecture "${ARCHITECTURE}" \
+    --core-report "${CORE_REPORT}" \
+    --imgproc-report "${IMGPROC_REPORT}"; then
+    overall_status=1
+  fi
+else
+  echo "One or more GTest XML reports are missing." >&2
+  overall_status=1
+fi
+
+exit "${overall_status}"

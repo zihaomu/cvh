@@ -2,73 +2,36 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
-    inputs:
-      run_opencv_compare:
-        description: "Run optional cvh/cv compare job"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  headers_all:
-    name: Header-only (${{ matrix.profile }})
+  headers_ui:
+    name: Header-only UI
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - opencv_intrin: ON
-            profile: ui-on
-          - opencv_intrin: OFF
-            profile: ui-off
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Run complete header-only gate
+      - name: Run header-only UI gate
         env:
-          CVH_CI_OPENCV_INTRIN: ${{ matrix.opencv_intrin }}
+          CVH_CI_PARALLEL: "2"
         run: ./scripts/ci_headers_all.sh
 
       - name: Upload machine-readable test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: header-test-reports-${{ matrix.profile }}
-          path: build-ci-headers-${{ matrix.profile }}/test-reports/*.xml
-          if-no-files-found: error
-
-  native_all:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run native-backend compatibility suite
-        run: ./scripts/ci_native_all.sh
-
-  opencv_compare:
-    needs: [headers_all, native_all]
-    if: >
-      (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci/run-opencv-compare')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_opencv_compare == 'true')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run CVH/CV Compare (log-only)
-        env:
-          CVH_COMPARE_PROFILE: quick
-          CVH_COMPARE_IMPLS: full,lite
-          CVH_COMPARE_THREADS: "1"
-          CVH_COMPARE_OMP_DYNAMIC: "false"
-          CVH_COMPARE_OMP_PROC_BIND: "close"
-        run: ./scripts/ci_compare_log_only.sh
+          name: header-test-reports-ui
+          path: build-ci-headers-ui/test-reports/*.xml
+          if-no-files-found: warn

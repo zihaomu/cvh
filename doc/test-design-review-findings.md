@@ -320,6 +320,13 @@ Closure:
 
 ### 3.5 TDR-5: CI does not execute the complete header-only gate
 
+The original closure below introduced separate UI-enabled and UI-disabled
+lanes. That hosted-CI policy was superseded on 2026-07-26: the required gate is
+now UI-only, while the scalar fallback remains a local header-only diagnostic.
+Core and Imgproc have no native backend; the legacy native build switch only
+covers build-tree HighGUI `.cpp` experiments. See
+[`ci-ui-only-workflow-redesign.md`](ci-ui-only-workflow-redesign.md).
+
 `scripts/ci_headers_all.sh` has two layers of coverage. It first calls
 `scripts/check_header_only_contract.sh`, which creates its own temporary build
 and already builds and runs:

@@ -178,12 +178,15 @@ Header-only validation:
 
 ```bash
 ./scripts/ci_headers_all.sh
-CVH_CI_OPENCV_INTRIN=OFF ./scripts/ci_headers_all.sh
 ```
 
-The two commands run the complete UI-enabled and UI-disabled gates,
-respectively. `scripts/ci_lite_all.sh` remains as a deprecated compatibility
-wrapper for now.
+The command runs the required UI-enabled header-only gate with
+`CVH_ENABLE_OPENCV_INTRIN=ON`. Core and Imgproc have no native backend: their
+UI fast paths and scalar fallbacks are both header-only. The gate explicitly
+sets `CVH_BUILD_NATIVE_BACKEND=OFF` only to exclude legacy HighGUI `.cpp`
+experiments. Scalar-only configuration remains available for local diagnostics
+but is not a hosted CI gate. `scripts/ci_lite_all.sh` remains as a deprecated
+compatibility wrapper for now.
 
 Benchmark targets:
 
