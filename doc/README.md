@@ -29,6 +29,9 @@ This directory keeps only current project documents.
 - [test-design-review-findings.md](test-design-review-findings.md):
   resolved correctness, public API, SIMD dispatch, header self-containment, and
   CI findings from the 2026-07-25 test-suite review, including closure evidence.
+- [x86-correctness-hardening-plan.md](x86-correctness-hardening-plan.md):
+  ordered remediation and acceptance gates for x86 undefined behavior,
+  AVX2-width dispatch coverage, FMA-safe numeric tests, and sanitizer CI.
 - [opencv-ui-kernel-migration-checklist.md](opencv-ui-kernel-migration-checklist.md):
   checklist for porting OpenCV Universal Intrinsics kernel fragments.
 - [opencv-universal-intrinsics-adapter-plan.md](opencv-universal-intrinsics-adapter-plan.md):

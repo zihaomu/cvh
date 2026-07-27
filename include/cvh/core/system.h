@@ -218,6 +218,9 @@ for example:
 The macros CV_Assert evaluate the specified expression. If it is 0, the macros
 raise an error (see cvh::error). The macro CV_Assert checks the condition in both Debug and Release.
 */
+#ifdef CV_Assert
+#undef CV_Assert
+#endif
 #define CV_Assert( expr ) do { if(!!(expr)) ; else cvh::error( cvh::Error::StsAssert, #expr, CV_Func, __FILE__, __LINE__ ); } while(0)
 
 /**

@@ -49,4 +49,22 @@ inline cpu::DispatchTag expected_fixed_width_dispatch_tag()
         : cpu::DispatchTag::Scalar;
 }
 
+template<typename T>
+inline int fixed_width_opencv_ui_lanes()
+{
+#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    using Vector = decltype(cv::vx_load(static_cast<const T*>(nullptr)));
+    return cv::VTraits<Vector>::vlanes();
+#else
+    return 1;
+#endif
+}
+
+template<typename T>
+inline int accepted_fixed_width_test_length()
+{
+    return 2 * fixed_width_opencv_ui_lanes<T>() + 3;
+}
+
 }  // namespace cvh::test
