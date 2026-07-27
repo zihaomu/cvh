@@ -27,6 +27,67 @@ TEST(DerivativesTest, sobel_u8_to_f32_c4_roi_isolated_matches_reference)
     EXPECT_LE(max_abs_diff_f32(actual, expected), 1e-6f);
 }
 
+TEST(DerivativesTest, sobel_signed_gradients_match_reference_for_f32_and_s16)
+{
+    Mat src({9, 67}, CV_8UC1);
+    for (int y = 0; y < src.size[0]; ++y)
+    {
+        for (int x = 0; x < src.size[1]; ++x)
+        {
+            src.at<uchar>(y, x) = static_cast<uchar>(
+                (x < 22 ? 220 - 7 * x : 3 * x + 11 * y) & 0xff);
+        }
+    }
+
+    bool saw_positive = false;
+    bool saw_negative = false;
+    for (const int dx : {0, 1})
+    {
+        const int dy = 1 - dx;
+        const Mat expected =
+            sobel_reference_u8_to_f32(src, dx, dy, BORDER_REPLICATE);
+
+        Mat actual_f32;
+        Sobel(
+            src,
+            actual_f32,
+            CV_32F,
+            dx,
+            dy,
+            3,
+            1.0,
+            0.0,
+            BORDER_REPLICATE);
+        EXPECT_LE(max_abs_diff_f32(actual_f32, expected), 1e-6f);
+
+        Mat actual_s16;
+        Sobel(
+            src,
+            actual_s16,
+            CV_16S,
+            dx,
+            dy,
+            3,
+            1.0,
+            0.0,
+            BORDER_REPLICATE);
+        for (int y = 0; y < src.size[0]; ++y)
+        {
+            for (int x = 0; x < src.size[1]; ++x)
+            {
+                const float reference = expected.at<float>(y, x);
+                EXPECT_EQ(
+                    actual_s16.at<short>(y, x),
+                    saturate_cast<short>(reference));
+                saw_positive = saw_positive || reference > 0.0f;
+                saw_negative = saw_negative || reference < 0.0f;
+            }
+        }
+    }
+    EXPECT_TRUE(saw_positive);
+    EXPECT_TRUE(saw_negative);
+}
+
 #include "test/imgproc/support/kernel_family_test_utils.hpp"
 
 TEST(DerivativesTest, scharr_laplacian_and_spatial_gradient_share_semantics)

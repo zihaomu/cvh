@@ -1,0 +1,38 @@
+name: x86 correctness
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-x86-correctness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  x86_correctness:
+    name: x86-64-v3 and sanitizers
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run x86 correctness gate
+        env:
+          CVH_X86_CI_PARALLEL: "2"
+          CVH_X86_SANITIZER_PARALLEL: "2"
+        run: ./scripts/ci_x86_correctness.sh
+
+      - name: Upload x86 test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: x86-correctness-test-reports
+          path: |
+            build-ci-x86-v3/test-reports/*.xml
+            build-ci-x86-sanitizers/test-reports/*.xml
+          if-no-files-found: warn

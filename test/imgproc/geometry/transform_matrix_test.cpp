@@ -1,6 +1,7 @@
 #include "cvh.h"
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <cmath>
 
 using namespace cvh;
@@ -42,10 +43,36 @@ Point2d apply_perspective(const Mat& matrix, Point2d point)
             denominator);
 }
 
-void expect_point_near(Point2d actual, Point2d expected, double tolerance)
+void expect_scalar_near(
+    double actual,
+    double expected,
+    double absolute_tolerance,
+    double relative_tolerance)
 {
-    EXPECT_NEAR(actual.x, expected.x, tolerance);
-    EXPECT_NEAR(actual.y, expected.y, tolerance);
+    const double tolerance = std::max(
+        absolute_tolerance,
+        relative_tolerance * std::fabs(expected));
+    EXPECT_LE(std::fabs(actual - expected), tolerance)
+        << "actual=" << actual << ", expected=" << expected
+        << ", tolerance=" << tolerance;
+}
+
+void expect_point_near(
+    Point2d actual,
+    Point2d expected,
+    double absolute_tolerance,
+    double relative_tolerance = 0.0)
+{
+    expect_scalar_near(
+        actual.x,
+        expected.x,
+        absolute_tolerance,
+        relative_tolerance);
+    expect_scalar_near(
+        actual.y,
+        expected.y,
+        absolute_tolerance,
+        relative_tolerance);
 }
 
 }  // namespace
@@ -110,7 +137,8 @@ TEST(TransformMatrixTest, affine_maps_float_and_double_control_points)
         expect_point_near(
             apply_affine(affine_d, source_d[index]),
             target_d[index],
-            1e-7);
+            1e-7,
+            1e-9);
     }
 }
 

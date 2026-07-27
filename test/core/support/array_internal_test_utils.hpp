@@ -58,8 +58,9 @@ UInt raw_bits(const T& value)
 template<typename T>
 void expect_integer_ui_matches_scalar(int type)
 {
-    Mat a({3, 19}, type);
-    Mat b({3, 19}, type);
+    const int columns = cvh::test::accepted_fixed_width_test_length<T>();
+    Mat a({3, columns}, type);
+    Mat b({3, columns}, type);
     for (int y = 0; y < a.size[0]; ++y)
     {
         T* a_row = reinterpret_cast<T*>(a.data + static_cast<size_t>(y) * a.step(0));
@@ -120,8 +121,9 @@ void expect_integer_ui_matches_scalar(int type)
 template<typename T>
 void expect_basic_integer_ui_matches_scalar(int type)
 {
-    Mat a({3, 19}, type);
-    Mat b({3, 19}, type);
+    const int columns = cvh::test::accepted_fixed_width_test_length<T>();
+    Mat a({3, columns}, type);
+    Mat b({3, columns}, type);
     for (int y = 0; y < a.size[0]; ++y)
     {
         T* a_row = reinterpret_cast<T*>(a.data + static_cast<size_t>(y) * a.step(0));
@@ -178,7 +180,8 @@ void expect_basic_integer_ui_matches_scalar(int type)
 template<typename T>
 void expect_integer_scalar_ui_matches_scalar(int type)
 {
-    Mat src({3, 19}, type);
+    const int columns = cvh::test::accepted_fixed_width_test_length<T>();
+    Mat src({3, columns}, type);
     const size_t row_scalars =
         static_cast<size_t>(src.size[1]) *
         static_cast<size_t>(src.channels());

@@ -263,7 +263,7 @@ inline bool try_sobel_fastpath_u8(const Mat& src,
                     int gv = 0;
                     if (dx == 1)
                     {
-                        gv = (p02 - p00) + ((p12 - p10) << 1) + (p22 - p20);
+                        gv = (p02 - p00) + 2 * (p12 - p10) + (p22 - p20);
                     }
                     else
                     {
@@ -307,7 +307,7 @@ inline bool try_sobel_fastpath_u8(const Mat& src,
                 int gv = 0;
                 if (dx == 1)
                 {
-                    gv = (p02 - p00) + ((p12 - p10) << 1) + (p22 - p20);
+                    gv = (p02 - p00) + 2 * (p12 - p10) + (p22 - p20);
                 }
                 else
                 {

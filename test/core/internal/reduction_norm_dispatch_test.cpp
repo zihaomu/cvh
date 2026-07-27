@@ -10,16 +10,25 @@ TEST(ReductionNormDispatchInternalTest,
     }
     const int depths[] = {CV_8U, CV_16S, CV_32F};
     const int norm_types[] = {NORM_INF, NORM_L1, NORM_L2};
+    const int selected_run =
+        cvh::test::fixed_width_opencv_ui_lanes<uchar>() + 3;
+    const int mask_gap = 7;
+    const int roi_columns = 2 * selected_run + mask_gap;
+    const int parent_columns = roi_columns + 4;
 
     for (const int depth : depths)
     {
         for (int channels = 1; channels <= 4; ++channels)
         {
-            Mat first_parent({3, 71}, CV_MAKETYPE(depth, channels));
-            Mat second_parent({3, 71}, CV_MAKETYPE(depth, channels));
+            Mat first_parent(
+                {3, parent_columns},
+                CV_MAKETYPE(depth, channels));
+            Mat second_parent(
+                {3, parent_columns},
+                CV_MAKETYPE(depth, channels));
             for (int row = 0; row < 3; ++row)
             {
-                for (int column = 0; column < 71; ++column)
+                for (int column = 0; column < parent_columns; ++column)
                 {
                     for (int channel = 0; channel < channels; ++channel)
                     {
@@ -56,18 +65,21 @@ TEST(ReductionNormDispatchInternalTest,
                     }
                 }
             }
-            Mat first = first_parent.colRange(2, 69);
-            Mat second = second_parent.colRange(2, 69);
+            Mat first = first_parent.colRange(2, 2 + roi_columns);
+            Mat second = second_parent.colRange(2, 2 + roi_columns);
             ASSERT_FALSE(first.isContinuous());
             ASSERT_FALSE(second.isContinuous());
 
-            Mat mask({3, 67}, CV_8UC1);
+            Mat mask({3, roi_columns}, CV_8UC1);
             for (int row = 0; row < 3; ++row)
             {
-                for (int column = 0; column < 67; ++column)
+                for (int column = 0; column < roi_columns; ++column)
                 {
                     mask.at<uchar>(row, column) =
-                        (column < 29 || column >= 36) ? 255 : 0;
+                        (column < selected_run ||
+                         column >= selected_run + mask_gap)
+                        ? 255
+                        : 0;
                 }
             }
 
@@ -124,6 +136,27 @@ TEST(ReductionNormDispatchInternalTest,
         DispatchModeGuard guard(cpu::DispatchMode::Auto);
         cpu::reset_last_dispatch_tag();
         EXPECT_DOUBLE_EQ(norm(short_row, NORM_L1), 6.0);
+        EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
+    }
+
+    const int fragmented_columns =
+        cvh::test::accepted_fixed_width_test_length<uchar>();
+    Mat fragmented({1, fragmented_columns}, CV_8UC1);
+    Mat fragmented_mask({1, fragmented_columns}, CV_8UC1);
+    fragmented.setTo(Scalar::all(2.0));
+    int selected_count = 0;
+    for (int column = 0; column < fragmented_columns; ++column)
+    {
+        const bool selected = column % 2 == 0;
+        fragmented_mask.at<uchar>(0, column) = selected ? 255 : 0;
+        selected_count += selected ? 1 : 0;
+    }
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::Auto);
+        cpu::reset_last_dispatch_tag();
+        EXPECT_DOUBLE_EQ(
+            norm(fragmented, NORM_L1, fragmented_mask),
+            2.0 * selected_count);
         EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::Scalar);
     }
 }

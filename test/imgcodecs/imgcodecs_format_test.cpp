@@ -237,6 +237,38 @@ TEST(ImgcodecsFormat_TEST, imwrite_jpg_accepts_bgra_and_drops_alpha)
     std::filesystem::remove(filename);
 }
 
+TEST(ImgcodecsFormat_TEST, jpeg_writer_handles_multiple_quality_levels)
+{
+    const Mat bgr = make_pattern_bgr(31, 37);
+    std::vector<uchar> rgb(bgr.total() * 3);
+    for (size_t pixel = 0; pixel < bgr.total(); ++pixel)
+    {
+        rgb[pixel * 3] = bgr.data[pixel * 3 + 2];
+        rgb[pixel * 3 + 1] = bgr.data[pixel * 3 + 1];
+        rgb[pixel * 3 + 2] = bgr.data[pixel * 3];
+    }
+
+    for (const int quality : {35, 90, 100})
+    {
+        SCOPED_TRACE(quality);
+        const std::string filename = make_temp_file(".jpg");
+        ASSERT_NE(
+            stbi_write_jpg(
+                filename.c_str(),
+                bgr.size[1],
+                bgr.size[0],
+                3,
+                rgb.data(),
+                quality),
+            0);
+        const Mat loaded = imread(filename, IMREAD_COLOR);
+        ASSERT_FALSE(loaded.empty());
+        EXPECT_EQ(loaded.type(), CV_8UC3);
+        EXPECT_EQ(loaded.shape(), bgr.shape());
+        std::filesystem::remove(filename);
+    }
+}
+
 TEST(ImgcodecsFormat_TEST, imwrite_rejects_unsupported_extension_and_invalid_input)
 {
     const Mat valid = make_pattern_bgr(8, 8);

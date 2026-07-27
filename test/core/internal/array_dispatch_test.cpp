@@ -287,12 +287,15 @@ TEST(ArrayDispatchInternalTest, ui_masked_bitwise_matches_scalar_for_roi_alias_a
     if (!detail::arithm_ui::enabled())
         GTEST_SKIP() << "OpenCV UI arithmetic requires NEON or SSE/AVX";
 
-    Mat a_parent({4, 23}, CV_8UC3);
-    Mat b_parent({4, 23}, CV_8UC3);
-    Mat mask_parent({4, 23}, CV_8UC1);
+    const int pixels =
+        cvh::test::accepted_fixed_width_test_length<uchar>();
+    const int parent_columns = pixels + 4;
+    Mat a_parent({4, parent_columns}, CV_8UC3);
+    Mat b_parent({4, parent_columns}, CV_8UC3);
+    Mat mask_parent({4, parent_columns}, CV_8UC1);
     for (int y = 0; y < 4; ++y)
     {
-        for (int x = 0; x < 23; ++x)
+        for (int x = 0; x < parent_columns; ++x)
         {
             mask_parent.at<uchar>(y, x) =
                 (x + y) % 3 == 0 ? 0 : ((x + y) % 3 == 1 ? 1 : 255);
@@ -306,9 +309,9 @@ TEST(ArrayDispatchInternalTest, ui_masked_bitwise_matches_scalar_for_roi_alias_a
         }
     }
 
-    Mat a = a_parent.colRange(2, 21);
-    Mat b = b_parent.colRange(2, 21);
-    Mat mask = mask_parent.colRange(2, 21);
+    Mat a = a_parent.colRange(2, 2 + pixels);
+    Mat b = b_parent.colRange(2, 2 + pixels);
+    Mat mask = mask_parent.colRange(2, 2 + pixels);
     ASSERT_FALSE(a.isContinuous());
     ASSERT_FALSE(mask.isContinuous());
 
@@ -348,17 +351,19 @@ TEST(ArrayDispatchInternalTest, ui_masked_bitwise_matches_scalar_for_roi_alias_a
     EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
     expect_mat_bytes_equal(alias, scalar_alias);
 
-    Mat f32_a({2, 19}, CV_32FC1);
-    Mat f32_b({2, 19}, CV_32FC1);
-    Mat f32_mask({2, 19}, CV_8UC1);
+    Mat f32_a({2, pixels}, CV_32FC1);
+    Mat f32_b({2, pixels}, CV_32FC1);
+    Mat f32_mask({2, pixels}, CV_8UC1);
     for (int y = 0; y < 2; ++y)
     {
-        for (int x = 0; x < 19; ++x)
+        for (int x = 0; x < pixels; ++x)
         {
             const std::uint32_t a_bits =
-                0x3F000000u + static_cast<std::uint32_t>(y * 19 + x) * 0x10101u;
+                0x3F000000u +
+                static_cast<std::uint32_t>(y * pixels + x) * 0x10101u;
             const std::uint32_t b_bits =
-                0x7F00FF00u ^ static_cast<std::uint32_t>(y * 19 + x) * 0x010101u;
+                0x7F00FF00u ^
+                static_cast<std::uint32_t>(y * pixels + x) * 0x010101u;
             set_raw_bits(f32_a.at<float>(y, x), &a_bits);
             set_raw_bits(f32_b.at<float>(y, x), &b_bits);
             f32_mask.at<uchar>(y, x) = x % 2 == 0 ? 255 : 0;
@@ -376,8 +381,8 @@ TEST(ArrayDispatchInternalTest, ui_masked_bitwise_matches_scalar_for_roi_alias_a
     EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
     expect_mat_bytes_equal(actual_f32, scalar_f32);
 
-    Mat wide_pixel_a({2, 19}, CV_64FC1);
-    Mat wide_pixel_b({2, 19}, CV_64FC1);
+    Mat wide_pixel_a({2, pixels}, CV_64FC1);
+    Mat wide_pixel_b({2, pixels}, CV_64FC1);
     wide_pixel_a.setTo(Scalar::all(1.0));
     wide_pixel_b.setTo(Scalar::all(2.0));
     Mat wide_pixel_out;
@@ -400,12 +405,15 @@ TEST(ArrayDispatchInternalTest, ui_inrange_matches_scalar_for_bounds_roi_tail_an
     if (!detail::arithm_ui::enabled())
         GTEST_SKIP() << "OpenCV UI arithmetic requires NEON or SSE/AVX";
 
-    Mat src_parent({4, 23}, CV_8UC3);
-    Mat lower_parent({4, 23}, CV_8UC3);
-    Mat upper_parent({4, 23}, CV_8UC3);
+    const int pixels =
+        cvh::test::accepted_fixed_width_test_length<uchar>();
+    const int parent_columns = pixels + 4;
+    Mat src_parent({4, parent_columns}, CV_8UC3);
+    Mat lower_parent({4, parent_columns}, CV_8UC3);
+    Mat upper_parent({4, parent_columns}, CV_8UC3);
     for (int y = 0; y < 4; ++y)
     {
-        for (int x = 0; x < 23; ++x)
+        for (int x = 0; x < parent_columns; ++x)
         {
             for (int ch = 0; ch < 3; ++ch)
             {
@@ -419,9 +427,9 @@ TEST(ArrayDispatchInternalTest, ui_inrange_matches_scalar_for_bounds_roi_tail_an
         }
     }
 
-    Mat src = src_parent.colRange(2, 21);
-    Mat lower = lower_parent.colRange(2, 21);
-    Mat upper = upper_parent.colRange(2, 21);
+    Mat src = src_parent.colRange(2, 2 + pixels);
+    Mat lower = lower_parent.colRange(2, 2 + pixels);
+    Mat upper = upper_parent.colRange(2, 2 + pixels);
     ASSERT_FALSE(src.isContinuous());
 
     Mat scalar_bounds;
@@ -498,12 +506,13 @@ TEST(ArrayDispatchInternalTest, ui_inrange_matches_scalar_for_bounds_roi_tail_an
     EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
     expect_mat_bytes_equal(actual, scalar_u32);
 
-    Mat alias({2, 19}, CV_8UC1);
+    Mat alias({2, pixels}, CV_8UC1);
     for (int y = 0; y < 2; ++y)
     {
-        for (int x = 0; x < 19; ++x)
+        for (int x = 0; x < pixels; ++x)
         {
-            alias.at<uchar>(y, x) = static_cast<uchar>(x + y * 19);
+            alias.at<uchar>(y, x) =
+                static_cast<uchar>(x + y * pixels);
         }
     }
     Mat alias_expected;
