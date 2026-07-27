@@ -1,6 +1,6 @@
 # x86 Correctness Hardening Plan
 
-Status: implemented (validation complete; pending review/commit)
+Status: implemented
 Date: 2026-07-26
 Validation baseline: `main@32bf37f9fc2f85b2c7cd84d7d4969d784ab5cb35`
 Reference host: `local_x86`, AMD Ryzen 5 5600X, x86_64, AVX2/FMA,
@@ -416,7 +416,8 @@ When implementation is complete, replace `Status: proposed` with
 ### Implementation result (2026-07-27)
 
 - Branch: `codex/x86-correctness-hardening`.
-- Implementation commit: pending review and commit on the branch above.
+- Primary implementation commit:
+  `8e409baea2aa0a9e9bcad5036fbba26fc51f962a`.
 - Host/compiler: `local_x86`, AMD Ryzen 5 5600X, WSL2 x86_64,
   GCC 11.4.0, CMake 3.22.1; AVX2 and FMA available.
 - Canonical gate: `scripts/ci_headers_all.sh` passed the installed-header
@@ -436,6 +437,6 @@ When implementation is complete, replace `Status: proposed` with
   workflow run exists yet; local reports are the current artifact identifiers.
 - Resource behavior: all heavy builds used parallelism `2`; `local_x86`
   remained reachable throughout the sanitizer and canonical rebuilds.
-- Tree state: the remote branch intentionally contains the validated,
-  uncommitted implementation for review. The local transfer mirror is clean;
-  build directories and reports are ignored artifacts.
+- Tree state: after the closure-record commit, the remote branch and local
+  transfer mirror are clean; build directories and reports are ignored
+  artifacts.
