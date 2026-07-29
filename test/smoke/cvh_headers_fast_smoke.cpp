@@ -19,6 +19,10 @@
 #error "cvh::headers_fast must enable platform intrinsics"
 #endif
 
+#if !CVH_ENABLE_NATIVE_INTRINSICS
+#error "cvh::headers_fast must enable native intrinsics"
+#endif
+
 int main()
 {
     if (std::strcmp(cvh::detail::opencv_ui_backend_name(), "opencv_intrin") != 0)

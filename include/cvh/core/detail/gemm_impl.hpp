@@ -3,6 +3,7 @@
 
 #include "cvh/core/mat.h"
 #include "cvh/core/basic_op.h"
+#include "cvh/core/detail/gemm_native.hpp"
 #include "cvh/core/detail/gemm_ui.hpp"
 #include "cvh/core/parallel.h"
 #include "cvh/core/system.h"
@@ -227,6 +228,44 @@ GemmPackedB gemm_pack_b_impl(const Mat& b)
         }
     }
 
+    if (cpu::native_neon_runtime_available())
+    {
+        packed.native_packed_step =
+            detail::gemm_native::neon_packed_b_elements(K, N);
+        packed.native_packed_fp32.resize(
+            batch_count * packed.native_packed_step + 15);
+        packed.native_alignment_offset =
+            detail::gemm_native::aligned_float_offset(
+                packed.native_packed_fp32);
+        for (size_t i = 0; i < batch_count; ++i)
+        {
+            float* native_ptr =
+                packed.native_packed_fp32.data() +
+                packed.native_alignment_offset +
+                i * packed.native_packed_step;
+            if (packed.type == CV_32F)
+            {
+                detail::gemm_native::pack_neon_b(
+                    packed.packed_fp32.data() +
+                        i * packed.packed_step,
+                    native_ptr,
+                    K,
+                    N,
+                    false);
+            }
+            else
+            {
+                detail::gemm_native::pack_neon_b(
+                    packed.packed_fp16.data() +
+                        i * packed.packed_step,
+                    native_ptr,
+                    K,
+                    N,
+                    false);
+            }
+        }
+    }
+
     return packed;
 }
 
@@ -287,11 +326,22 @@ void gemm_impl_naive(const Mat& a, const Mat& b, Mat& c)
 
     const float* pa = (const float*)a.data;
     float* pc = (float*)c.data;
+    detail::gemm_native::Backend native_backend =
+        detail::gemm_native::select_backend(M, N, K);
+    if (b.type() == CV_16F &&
+        native_backend == detail::gemm_native::Backend::Avx2)
+    {
+        native_backend = detail::gemm_native::Backend::None;
+    }
     const bool use_ui =
-        b.type() == CV_32F && detail::gemm_ui::can_vectorize_nn(N);
+        b.type() == CV_32F &&
+        (N == 1 ? detail::gemm_ui::can_vectorize_nt(K)
+                : detail::gemm_ui::can_vectorize_nn(N));
     cpu::set_last_dispatch_tag(
-        use_ui ? cpu::DispatchTag::OpenCVUI
-               : cpu::DispatchTag::Scalar);
+        native_backend != detail::gemm_native::Backend::None
+            ? detail::gemm_native::dispatch_tag(native_backend)
+            : use_ui ? cpu::DispatchTag::OpenCVUI
+                     : cpu::DispatchTag::Scalar);
 
     for_each_gemm_batch(out_loop, M, N, K, [&](size_t i) {
         size_t tmp = i;
@@ -313,18 +363,35 @@ void gemm_impl_naive(const Mat& a, const Mat& b, Mat& c)
             const float* pb = reinterpret_cast<const float*>(b.data);
             const float* pbi = lin_b * step_b + pb;
 
-            for_each_gemm_row(M, N, K, [&](int mi) {
-                const float* a_row = pai + static_cast<size_t>(mi) * static_cast<size_t>(K);
-                float* c_row = pci + static_cast<size_t>(mi) * static_cast<size_t>(N);
-                if (use_ui)
+            if (detail::gemm_native::run_nn_f32(
+                    native_backend,
+                    pai,
+                    pbi,
+                    pci,
+                    M,
+                    N,
+                    K))
+            {
+                return;
+            }
+            if (use_ui)
+            {
+                if (N == 1)
                 {
-                    detail::gemm_ui::kernel_nn_row_f32(
-                        a_row, pbi, c_row, N, K);
+                    detail::gemm_ui::kernel_nn_n1_4rows_f32(
+                        pai, pbi, pci, M, K);
                 }
                 else
                 {
-                    gemm_kernel_nn_row_scalar(a_row, pbi, c_row, N, K);
+                    detail::gemm_ui::kernel_nn_4x2_f32(
+                        pai, pbi, pci, M, N, K);
                 }
+                return;
+            }
+            for_each_gemm_row(M, N, K, [&](int mi) {
+                const float* a_row = pai + static_cast<size_t>(mi) * static_cast<size_t>(K);
+                float* c_row = pci + static_cast<size_t>(mi) * static_cast<size_t>(N);
+                gemm_kernel_nn_row_scalar(a_row, pbi, c_row, N, K);
             });
         }
         else
@@ -332,6 +399,13 @@ void gemm_impl_naive(const Mat& a, const Mat& b, Mat& c)
             const hfloat* pb = reinterpret_cast<const hfloat*>(b.data);
             const hfloat* pbi = lin_b * step_b + pb;
 
+            if (native_backend ==
+                    detail::gemm_native::Backend::Neon &&
+                detail::gemm_native::run_neon(
+                    pai, pbi, pci, M, N, K, false))
+            {
+                return;
+            }
             for_each_gemm_row(M, N, K, [&](int mi) {
                 const float* a_row = pai + static_cast<size_t>(mi) * static_cast<size_t>(K);
                 float* c_row = pci + static_cast<size_t>(mi) * static_cast<size_t>(N);
@@ -393,12 +467,22 @@ void gemm_impl_naive_packed(const Mat& a, const GemmPackedB& packed_b, Mat& c)
 
     const float* pa = reinterpret_cast<const float*>(a.data);
     float* pc = reinterpret_cast<float*>(c.data);
+    detail::gemm_native::Backend native_backend =
+        detail::gemm_native::select_backend(M, N, K);
+    if (packed_b.type == CV_16F &&
+        native_backend == detail::gemm_native::Backend::Avx2)
+    {
+        native_backend = detail::gemm_native::Backend::None;
+    }
     const bool use_ui =
         packed_b.type == CV_32F &&
-        detail::gemm_ui::can_vectorize_nn(N);
+        (N == 1 ? detail::gemm_ui::can_vectorize_nt(K)
+                : detail::gemm_ui::can_vectorize_nn(N));
     cpu::set_last_dispatch_tag(
-        use_ui ? cpu::DispatchTag::OpenCVUI
-               : cpu::DispatchTag::Scalar);
+        native_backend != detail::gemm_native::Backend::None
+            ? detail::gemm_native::dispatch_tag(native_backend)
+            : use_ui ? cpu::DispatchTag::OpenCVUI
+                     : cpu::DispatchTag::Scalar);
 
     for_each_gemm_batch(out_loop, M, N, K, [&](size_t i) {
         size_t tmp = i;
@@ -418,24 +502,77 @@ void gemm_impl_naive_packed(const Mat& a, const GemmPackedB& packed_b, Mat& c)
         if (packed_b.type == CV_32F)
         {
             const float* packed_ptr = packed_b.packed_fp32.data() + lin_b * packed_b.packed_step;
-            for_each_gemm_row(M, N, K, [&](int mi) {
-                const float* a_row = pai + static_cast<size_t>(mi) * static_cast<size_t>(K);
-                float* c_row = pci + static_cast<size_t>(mi) * static_cast<size_t>(N);
-                if (use_ui)
+            if (native_backend ==
+                    detail::gemm_native::Backend::Neon &&
+                packed_b.native_packed_step ==
+                    detail::gemm_native::neon_packed_b_elements(K, N) &&
+                packed_b.native_packed_fp32.size() >=
+                    packed_b.native_alignment_offset +
+                        (lin_b + 1) *
+                            packed_b.native_packed_step &&
+                detail::gemm_native::run_neon_packed(
+                    pai,
+                    packed_b.native_packed_fp32.data() +
+                        packed_b.native_alignment_offset +
+                        lin_b * packed_b.native_packed_step,
+                    pci,
+                    M,
+                    N,
+                    K))
+            {
+                return;
+            }
+            if (native_backend ==
+                    detail::gemm_native::Backend::Avx2 &&
+                detail::gemm_avx2::kernel_nn_f32(
+                    pai, packed_ptr, pci, M, N, K))
+            {
+                return;
+            }
+            if (use_ui)
+            {
+                if (N == 1)
                 {
-                    detail::gemm_ui::kernel_nn_row_f32(
-                        a_row, packed_ptr, c_row, N, K);
+                    detail::gemm_ui::kernel_nn_n1_4rows_f32(
+                        pai, packed_ptr, pci, M, K);
                 }
                 else
                 {
-                    gemm_kernel_nn_row_scalar(
-                        a_row, packed_ptr, c_row, N, K);
+                    detail::gemm_ui::kernel_nn_4x2_f32(
+                        pai, packed_ptr, pci, M, N, K);
                 }
+                return;
+            }
+            for_each_gemm_row(M, N, K, [&](int mi) {
+                const float* a_row = pai + static_cast<size_t>(mi) * static_cast<size_t>(K);
+                float* c_row = pci + static_cast<size_t>(mi) * static_cast<size_t>(N);
+                gemm_kernel_nn_row_scalar(
+                    a_row, packed_ptr, c_row, N, K);
             });
         }
         else
         {
             const hfloat* packed_ptr = packed_b.packed_fp16.data() + lin_b * packed_b.packed_step;
+            if (native_backend ==
+                    detail::gemm_native::Backend::Neon &&
+                packed_b.native_packed_step ==
+                    detail::gemm_native::neon_packed_b_elements(K, N) &&
+                packed_b.native_packed_fp32.size() >=
+                    packed_b.native_alignment_offset +
+                        (lin_b + 1) *
+                            packed_b.native_packed_step &&
+                detail::gemm_native::run_neon_packed(
+                    pai,
+                    packed_b.native_packed_fp32.data() +
+                        packed_b.native_alignment_offset +
+                        lin_b * packed_b.native_packed_step,
+                    pci,
+                    M,
+                    N,
+                    K))
+            {
+                return;
+            }
             for_each_gemm_row(M, N, K, [&](int mi) {
                 const float* a_row = pai + static_cast<size_t>(mi) * static_cast<size_t>(K);
                 float* c_row = pci + static_cast<size_t>(mi) * static_cast<size_t>(N);
@@ -565,11 +702,24 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
     MatShape stride_c = make_strides(shape_c);
     const float* pa = (const float*)a.data;
     float* pc = (float*)c.data;
+    detail::gemm_native::Backend native_backend =
+        detail::gemm_native::select_backend(M, N, K);
+    if (b.type() == CV_16F &&
+        native_backend == detail::gemm_native::Backend::Avx2)
+    {
+        native_backend = detail::gemm_native::Backend::None;
+    }
+    if (b.type() == CV_8S)
+    {
+        native_backend = detail::gemm_native::Backend::None;
+    }
     const bool use_ui =
         b.type() == CV_32F && detail::gemm_ui::can_vectorize_nt(K);
     cpu::set_last_dispatch_tag(
-        use_ui ? cpu::DispatchTag::OpenCVUI
-               : cpu::DispatchTag::Scalar);
+        native_backend != detail::gemm_native::Backend::None
+            ? detail::gemm_native::dispatch_tag(native_backend)
+            : use_ui ? cpu::DispatchTag::OpenCVUI
+                     : cpu::DispatchTag::Scalar);
 
     for_each_gemm_batch(out_loop, M, N, K, [&](size_t i) {
         size_t tmp = i;
@@ -590,6 +740,17 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
         {
             const float* pb = reinterpret_cast<const float*>(b.data);
             const float* pbi = lin_b * step_b + pb;
+            if (detail::gemm_native::run_nt_f32(
+                    native_backend,
+                    pai,
+                    pbi,
+                    pci,
+                    M,
+                    N,
+                    K))
+            {
+                return;
+            }
             if (use_ui)
             {
                 for_each_gemm_row(M, N, K, [&](int row) {
@@ -618,6 +779,13 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
         {
             const hfloat* pb = reinterpret_cast<const hfloat*>(b.data);
             const hfloat* pbi = lin_b * step_b + pb;
+            if (native_backend ==
+                    detail::gemm_native::Backend::Neon &&
+                detail::gemm_native::run_neon(
+                    pai, pbi, pci, M, N, K, true))
+            {
+                return;
+            }
             gemm_kernel_nt_scalar(pai, pbi, nullptr, pci, M, N, K);
         }
         else

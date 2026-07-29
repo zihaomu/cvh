@@ -77,6 +77,7 @@ set_target_properties(cvh_headers_fast PROPERTIES EXPORT_NAME headers_fast)
 target_link_libraries(cvh_headers_fast INTERFACE cvh_headers)
 target_compile_definitions(cvh_headers_fast INTERFACE
     CVH_ENABLE_PLATFORM_INTRINSICS=1
+    CVH_ENABLE_NATIVE_INTRINSICS=1
 )
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64|AARCH64)$")
     target_compile_definitions(cvh_headers_fast INTERFACE CV_NEON=1)
@@ -403,6 +404,20 @@ if(CVH_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/test
     )
 
+    add_executable(cvh_test_gemm_native
+        test/core/internal/gemm_native_dispatch_test.cpp
+    )
+    target_link_libraries(
+        cvh_test_gemm_native
+        PRIVATE cvh::headers_fast gtest_main
+    )
+    target_compile_features(cvh_test_gemm_native PRIVATE cxx_std_17)
+    target_include_directories(cvh_test_gemm_native PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/test
+    )
+
     if(CVH_ENABLE_OPENCV_COMPARE)
         add_library(cvh_test_opencv_contract_backend_obj OBJECT
             test/opencv_contract/opencv_contract_backend.cpp
@@ -491,9 +506,14 @@ if(CVH_BUILD_TESTS)
         add_test(NAME cvh_test_imgproc COMMAND cvh_test_imgproc)
         add_test(NAME cvh_test_highgui COMMAND cvh_test_highgui)
         add_test(NAME cvh_test_core COMMAND cvh_test_core)
+        add_test(NAME cvh_test_gemm_native COMMAND cvh_test_gemm_native)
         set_tests_properties(
             cvh_test_core
             PROPERTIES LABELS "core;unit"
+        )
+        set_tests_properties(
+            cvh_test_gemm_native
+            PROPERTIES LABELS "core;unit;native"
         )
         set_tests_properties(
             cvh_core_headers_compile_smoke

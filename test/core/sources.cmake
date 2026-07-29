@@ -3,6 +3,7 @@ set(CVH_CORE_TEST_SOURCES
     test/core/internal/array_dispatch_test.cpp
     test/core/internal/array_layout_dispatch_test.cpp
     test/core/internal/gemm_dispatch_test.cpp
+    test/core/internal/gemm_native_dispatch_test.cpp
     test/core/internal/math_dispatch_test.cpp
     test/core/internal/reduction_arg_dispatch_test.cpp
     test/core/internal/reduction_axis_dispatch_test.cpp
