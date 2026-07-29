@@ -1,8 +1,12 @@
-# opencv-header-only 设计文档
+# cvh（cv-header-only）设计文档
 
 ## 当前定位
 
-`opencv-header-only` 是一个纯 header-only 的 OpenCV-style C++ 子集库。项目目标不是完整替代 OpenCV，而是在不引入必需库构建步骤的前提下，提供常用 `Mat`、`imgproc`、`imgcodecs` 能力，并为 AI vision preprocessing/postprocessing 的热点路径提供可验证的 header-only 加速。
+`cvh`（cv-header-only）是一个独立品牌的纯 header-only C++ 计算机视觉库。
+项目以 OpenCV 作为 API 风格和行为兼容参照，在不引入必需库构建步骤的
+前提下，提供常用 `Mat`、`core`、`imgproc`、`imgcodecs` 能力，并为 AI
+vision preprocessing/postprocessing 的热点路径提供可验证的 header-only
+加速。项目不是 OpenCV 的发行版，也不以完整替代 OpenCV 为目标。
 
 公开产品面只包含两个 CMake target：
 
@@ -135,6 +139,11 @@ OpenCV UI 原始表达，只替换 OpenCV runtime/module 依赖。
 
 公开文档必须保持一致：
 
+- 品牌短名统一写作 `cvh`，全称统一写作 `cv-header-only`。
+- `OpenCV-style`、`OpenCV-compatible` 或“与 OpenCV API 对齐”只描述 API
+  风格、兼容目标或对照基线，不作为项目名称。
+- 模块描述应明确 `core`、`imgproc`、`imgcodecs` 是有边界的兼容子集，
+  避免暗示全部 OpenCV API 均已实现。
 - 第一屏定位必须是 pure header-only。
 - 推荐用法只写 `cvh::headers` 和 `cvh::headers_fast`。
 - `.cpp` 历史代码只能被描述为 legacy/experimental。
@@ -160,4 +169,7 @@ OpenCV UI 原始表达，只替换 OpenCV runtime/module 依赖。
 
 ## 当前结论
 
-项目价值来自“真实可用的纯 header-only OpenCV-style 子集”，而不是 header 和 `.cpp` 扩展的混合叙事。后续工作应优先收口公开面、补齐 header-only contract，再用 direct OpenCV UI 迁移和 benchmark gate 扩展内部 SIMD 能力。
+项目价值来自“独立、真实可用的纯 header-only 计算机视觉库”和低学习成本的
+OpenCV-style API，而不是依附旧仓库名称，也不是 header 和 `.cpp` 扩展的
+混合叙事。后续工作应优先收口公开面、补齐 header-only contract，再用 direct
+OpenCV UI 迁移和 benchmark gate 扩展内部 SIMD 能力。

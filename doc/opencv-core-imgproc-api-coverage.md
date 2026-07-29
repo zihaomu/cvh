@@ -4,8 +4,8 @@ Last updated: 2026-07-24
 
 ## 1. Purpose
 
-This document tracks the CPU C++ API gap between OpenCV upstream and
-`opencv-header-only`. It answers three separate questions:
+This document tracks the CPU C++ API gap between OpenCV upstream and `cvh`.
+It answers three separate questions:
 
 1. How many public operation families are exposed by upstream `core` and
    `imgproc`?

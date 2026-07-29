@@ -121,7 +121,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--repo-root",
         default=".",
-        help="Path to opencv-header-only repository root",
+        help="Path to the cvh repository root",
     )
     return parser.parse_args()
 

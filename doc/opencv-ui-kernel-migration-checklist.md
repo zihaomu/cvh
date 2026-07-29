@@ -1,7 +1,7 @@
 # OpenCV UI Kernel Migration Checklist
 
-This checklist is the working rule for migrating OpenCV SIMD kernel fragments into
-`opencv-header-only` after P6.
+This checklist is the working rule for migrating OpenCV SIMD kernel fragments
+into `cvh` after P6.
 
 The goal is to keep OpenCV Universal Intrinsics as the internal SIMD dialect while
 preserving the pure header-only product boundary. Do not reintroduce a project

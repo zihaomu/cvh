@@ -1,4 +1,4 @@
-# OCVH Mat GEMM：OpenCV Universal Intrinsics Micro-kernel 加速计划
+# cvh Mat GEMM：OpenCV Universal Intrinsics Micro-kernel 加速计划
 
 > 状态：实施中（P0/P1 已完成，P2 待开始）  
 > 基线版本：`09fee0d8b7ca`（`main`）  
@@ -38,10 +38,10 @@ FP32 NN 4x2VL direct kernel
     → batch、转置与跨 ISA 调优
 ```
 
-默认 OpenCV 在 Apple 平台可能进入 Accelerate/LAPACK，因此它只作为外部库上限参考，不作为纯 header-only OpenCV UI 内核的硬性追赶门禁。主要性能门禁应是：
+默认 OpenCV 在 Apple 平台可能进入 Accelerate/LAPACK，因此它只作为外部库上限参考，不作为 `cvh` 纯头文件 OpenCV UI 内核的硬性追赶门禁。主要性能门禁应是：
 
-- 相对当前 OCVH UI kernel；
-- 相对 OCVH scalar；
+- 相对当前 cvh UI kernel；
+- 相对 cvh scalar；
 - 相对禁用 LAPACK/IPP/KleidiCV/Carotene/OpenCL 的 upstream CPU-only OpenCV。
 
 ### 1.1 实施进度（2026-07-27）
@@ -162,12 +162,12 @@ FP16 与 INT8 目前仍走 scalar。`gemm_pack_b()` 当前只是复制 B，没�
 最新 Mode B 单线程数据来自  
 [`benchmark/opencv_compare/results/2026-07-25-opencv-upstream-performance.md`](../benchmark/opencv_compare/results/2026-07-25-opencv-upstream-performance.md)。
 
-| Shape `M×K×N` | OCVH FP32 NN | 默认 OpenCV | OCVH/OpenCV |
+| Shape `M×K×N` | cvh FP32 NN | 默认 OpenCV | cvh/OpenCV |
 | --- | ---: | ---: | ---: |
 | `128×128×128` | 0.091630 ms | 0.003266 ms | 28.06x |
 | `256×256×256` | 0.850262 ms | 0.020437 ms | 41.60x |
 | `256×32×256` | 0.071660 ms | 0.005169 ms | 13.86x |
-| `32×512×64` | 0.055151 ms | 0.108692 ms | OCVH 快 1.97x |
+| `32×512×64` | 0.055151 ms | 0.108692 ms | cvh 快 1.97x |
 | `512×512×512` | 7.132458 ms | 0.178250 ms | 40.01x |
 
 这组结果不能直接解释为 “OpenCV UI kernel 快 28–40 倍”。在 Apple 平台，默认 OpenCV 方阵和 wide/small-K case 会进入 Accelerate/LAPACK。
@@ -176,13 +176,13 @@ FP16 与 INT8 目前仍走 scalar。`gemm_pack_b()` 当前只是复制 B，没�
 
 既有归因测试关闭了 LAPACK、IPP、KleidiCV、Carotene 与 OpenCL：
 
-| Shape `M×K×N` | OCVH | 默认 OpenCV | CPU-only OpenCV | OCVH 相对 CPU-only |
+| Shape `M×K×N` | cvh | 默认 OpenCV | CPU-only OpenCV | cvh 相对 CPU-only |
 | --- | ---: | ---: | ---: | ---: |
 | `128×128×128` | 0.090635 ms | 0.003374 ms | 0.161422 ms | 快 1.78x |
 | `32×512×64` | 0.055685 ms | 0.109595 ms | 0.108082 ms | 快 1.94x |
 | `256×32×256` | 0.065286 ms | 0.004887 ms | 0.222794 ms | 快 3.41x |
 
-因此，本计划的目标不是通过引入 BLAS 复制默认 OpenCV 的外部库路径，而是在保持 header-only、OpenCV UI 和无链接依赖的前提下，继续提高 OCVH 内建 CPU kernel 的吞吐与覆盖面。
+因此，本计划的目标不是通过引入 BLAS 复制默认 OpenCV 的外部库路径，而是在保持 header-only、OpenCV UI 和无链接依赖的前提下，继续提高 cvh 内建 CPU kernel 的吞吐与覆盖面。
 
 ## 4. GEMM 分类模型
 

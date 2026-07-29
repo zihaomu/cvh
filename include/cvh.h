@@ -1,9 +1,9 @@
-// main header of this project, include this in every source file instead of including opencv headers directly
-// cvh means "opencv header only", it is a header-only library that provides a subset of opencv functionalities, and it is designed to be easy to use and integrate into other projects.
+// Convenience entry point for cvh (cv-header-only).
+// Prefer <cvh/cvh.h> in new code; this forwarding header is kept for compatibility.
 
-#ifndef OPENCV_HEADER_ONLY_H
-#define OPENCV_HEADER_ONLY_H
+#ifndef CVH_FORWARDING_HEADER_H
+#define CVH_FORWARDING_HEADER_H
 
 #include "cvh/cvh.h"
 
-#endif //OPENCV_HEADER_ONLY_H
+#endif // CVH_FORWARDING_HEADER_H

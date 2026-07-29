@@ -2,7 +2,7 @@
 
 ## 目录职责
 
-`include` 是项目最终对外发布的头文件根目录。  
+`include` 是 `cvh`（cv-header-only）最终对外发布的头文件根目录。
 用户只需把该目录加入 include path 即可使用公开 API。
 
 ## 结构约定

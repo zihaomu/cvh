@@ -1,4 +1,4 @@
-# OCVH GEMM 第三阶段加速计划：BLIS 分块体系与 KleidiAI 风格 NEON 微内核
+# cvh GEMM 第三阶段加速计划：BLIS 分块体系与 KleidiAI 风格 NEON 微内核
 
 > 状态：核心实现已落地；本机正确性/兼容性门禁通过，性能发布门禁部分通过
 >
@@ -26,10 +26,10 @@
 
 - 从 BLISlab 采用五层循环、`MC/NC/KC` cache blocking、B panel 共享、A workspace 所有权以及 macro-kernel/micro-kernel 分层。
 - 从 KleidiAI 采用 FP32 NEON `6×16`/`6×8` 内核族、K×4 主循环、加载/FMLA 交错、直接 LHS、packed RHS、按高度处理 M tail、按 8/4/2/1 处理 N tail，以及“内核不分配、不调度”的接口边界。
-- 对 OCVH 的 row-major `Mat` 做有意识的适配：NN 主路径优先使用 `Direct A + Packed B`，避免当前 full A packing 的额外搬运；`transA` 或实测证明有收益的超大 shape 再进入线程私有 A packing。
+- 对 cvh 的 row-major `Mat` 做有意识的适配：NN 主路径优先使用 `Direct A + Packed B`，避免当前 full A packing 的额外搬运；`transA` 或实测证明有收益的超大 shape 再进入线程私有 A packing。
 - 将并行粒度提高到 `MC×NC` 输出宏块，一个任务内部完成全部 K block，消除 micro-tile 级调度。
 
-第三阶段的首选 FP32 NEON 内核不是直接照搬 KleidiAI 源码，而是以其寄存器和流水策略为参考，在 OCVH 内以 inline AArch64 NEON intrinsic 重新实现：
+第三阶段的首选 FP32 NEON 内核不是直接照搬 KleidiAI 源码，而是以其寄存器和流水策略为参考，在 cvh 内以 inline AArch64 NEON intrinsic 重新实现：
 
 | Shape 类别 | 第三阶段首选 | 说明 |
 | --- | --- | --- |
@@ -92,7 +92,7 @@ parallel task=(ic,jc), task 内完成全部 pc
 
 ### 0.4 本机性能结果
 
-环境：Apple arm64、AppleClang 21、Release、`cvh::headers_fast`、7 repeats；表中为 median。起始基线来自本轮实施前保存的 `/tmp/ocvh-gemm-phase3-baseline.csv`，最终数据来自重建后二进制的 `/tmp/ocvh-gemm-phase3-final-*.csv`。
+环境：Apple arm64、AppleClang 21、Release、`cvh::headers_fast`、7 repeats；表中为 median。起始基线来自本轮实施前保存的 `/tmp/cvh-gemm-phase3-baseline.csv`，最终数据来自重建后二进制的 `/tmp/cvh-gemm-phase3-final-*.csv`。
 
 单线程 public API：
 
@@ -191,7 +191,7 @@ BLISlab 是教学工程，ARM 示例面向较老的 Cortex-A15，具体 `MC/NC/K
   - [16 列 RHS packer wrapper](https://github.com/ARM-software/kleidiai/blob/c5a9a970a7782c81e21f0307913a9e4c5689bca4/kai/ukernels/matmul/pack/kai_rhs_pack_kxn_x32p16x1b_x32_x32_neon.c)
   - [16 列 RHS packer 汇编实现](https://github.com/ARM-software/kleidiai/blob/c5a9a970a7782c81e21f0307913a9e4c5689bca4/kai/ukernels/matmul/pack/kai_rhs_pack_kxn_x32p16x1b_x32_x32_neon_asm.S)
 
-KleidiAI 是 micro-kernel 库，不是完整 GEMM operator。它明确不负责动态内存、内存管理或内部线程调度，调用方通过 tile step 和 offset API 决定处理哪一部分输出。这个边界非常适合映射到 OCVH 已有的 dispatch、workspace 和 `parallel_for_`。
+KleidiAI 是 micro-kernel 库，不是完整 GEMM operator。它明确不负责动态内存、内存管理或内部线程调度，调用方通过 tile step 和 offset API 决定处理哪一部分输出。这个边界非常适合映射到 cvh 已有的 dispatch、workspace 和 `parallel_for_`。
 
 ## 2. 从 BLISlab 提炼的 GEMM 策略
 
@@ -231,7 +231,7 @@ BLISlab 的关键不只是“做 packing”，而是“packing 一次后被谁�
 - B pack buffer 可被线程共享只读。
 - A pack buffer 由 worker 私有，避免写竞争和 false sharing。
 
-当前 OCVH 一次性 pack 整张 A/B，但计算仍按 micro-tile 分发，尚未形成上述明确的 cache ownership。
+当前 cvh 一次性 pack 整张 A/B，但计算仍按 micro-tile 分发，尚未形成上述明确的 cache ownership。
 
 ### 2.3 macro-kernel 与 micro-kernel 分工
 
@@ -247,7 +247,7 @@ BLISlab 的 micro-kernel 只负责一个固定 `MR×NR` 输出 tile；edge、pan
 
 BLISlab Step 4 按 `ic` 范围切分工作，每个线程拥有自己的 A packing 空间，共享 B panel，而不是为每个 `MR×NR` tile 创建任务。
 
-这直接对应当前 OCVH 的主要问题：`8×12` tile 在 `128³` 上有 176 个左右的小任务，调度成本会覆盖计算收益。第三阶段任务应提升到 `MC×NC` 或至少 `MC×N` 级别。
+这直接对应当前 cvh 的主要问题：`8×12` tile 在 `128³` 上有 176 个左右的小任务，调度成本会覆盖计算收益。第三阶段任务应提升到 `MC×NC` 或至少 `MC×N` 级别。
 
 ## 3. 从 KleidiAI 提炼的 NEON GEMM 策略
 
@@ -269,7 +269,7 @@ KleidiAI 的通用 FP32 Advanced SIMD kernel 使用：
 - `v6-v7`：轮转装载 packed B；
 - 加载与 FMLA 交错，避免一次同时保留全部 B 向量。
 
-当前 OCVH `8×12` 同样有 96 个输出和 24 个 accumulator，但其 K 循环逐项运行，没有形成 KleidiAI 的 K×4 软件流水。
+当前 cvh `8×12` 同样有 96 个输出和 24 个 accumulator，但其 K 循环逐项运行，没有形成 KleidiAI 的 K×4 软件流水。
 
 ### 3.2 `6×8` 是必要的第二内核
 
@@ -291,7 +291,7 @@ KleidiAI 在进入 K 主循环前按 `m=1..6` 选择高度路径；N tail 使用
 - N tail 不写出目标矩阵边界；
 - 同一 packed B 可以被全部高度变体复用。
 
-OCVH 第三阶段应通过模板实例化或小型 wrapper 生成 `H1..H6`，只在 macro-kernel 中做一次 switch。
+cvh 第三阶段应通过模板实例化或小型 wrapper 生成 `H1..H6`，只在 macro-kernel 中做一次 switch。
 
 ### 3.4 K×4 软件流水和预取
 
@@ -308,7 +308,7 @@ KleidiAI 的 FP32 NEON 主循环具备以下特征：
 
 ### 3.5 无状态 micro-kernel 契约
 
-KleidiAI 的接口将 `m_step/n_step/nr/kr/sr`、LHS offset、packed RHS offset、DST offset 与 `run` 分开。OCVH 不需要照搬函数指针 ABI，但应采用相同思想：
+KleidiAI 的接口将 `m_step/n_step/nr/kr/sr`、LHS offset、packed RHS offset、DST offset 与 `run` 分开。cvh 不需要照搬函数指针 ABI，但应采用相同思想：
 
 ```cpp
 struct NeonF32KernelTraits
@@ -324,7 +324,7 @@ inline void run_6x16(...);
 
 所有 traits/offset helper 必须是 `constexpr` 或 `inline`，保持 header-only 和零外部依赖。
 
-## 4. 当前 OCVH 实现审计
+## 4. 当前 cvh 实现审计
 
 ### 4.1 当前结构
 
@@ -358,17 +358,17 @@ inline void run_6x16(...);
 
 Apple M5、Release、FP32 NN 的当前对比数据如下。OpenCV 列为 upstream 默认 Accelerate 路径：
 
-| Shape `M×K×N` | 当前 OCVH | OpenCV Accelerate | 当前差距 |
+| Shape `M×K×N` | 当前 cvh | OpenCV Accelerate | 当前差距 |
 | --- | ---: | ---: | ---: |
-| `128×128×128` | 0.049105 ms | 0.003237 ms | OCVH 慢 15.17x |
-| `32×512×64` | 0.024781 ms | 0.112530 ms | OCVH 快 4.54x |
-| `256×32×256` | 0.048069 ms | 0.004999 ms | OCVH 慢 9.62x |
-| `256×256×256` | 0.311320 ms | 0.020487 ms | OCVH 慢 15.20x |
-| `512×512×512` | 2.207084 ms | 0.161083 ms | OCVH 慢 13.70x |
+| `128×128×128` | 0.049105 ms | 0.003237 ms | cvh 慢 15.17x |
+| `32×512×64` | 0.024781 ms | 0.112530 ms | cvh 快 4.54x |
+| `256×32×256` | 0.048069 ms | 0.004999 ms | cvh 慢 9.62x |
+| `256×256×256` | 0.311320 ms | 0.020487 ms | cvh 慢 15.20x |
+| `512×512×512` | 2.207084 ms | 0.161083 ms | cvh 慢 13.70x |
 
-当前 OCVH 设置 8 线程后：
+当前 cvh 设置 8 线程后：
 
-| Shape | OCVH 1T | OCVH 8T | 8T/1T |
+| Shape | cvh 1T | cvh 8T | 8T/1T |
 | --- | ---: | ---: | ---: |
 | `128³` | 0.049105 ms | 0.064943 ms | 0.76x，倒退 |
 | `32×512×64` | 0.024781 ms | 0.035073 ms | 0.71x，倒退 |
@@ -397,7 +397,7 @@ N3-0 必须把上述结果重新生成到带日期、commit、编译器、线程
 ### 5.2 本阶段不做
 
 - 不链接 Accelerate、KleidiAI、BLAS、LAPACK 或任何外部二进制库。
-- 不因为参考 KleidiAI 而把其 `.c`/`.S` 变为 OCVH 必需编译单元。
+- 不因为参考 KleidiAI 而把其 `.c`/`.S` 变为 cvh 必需编译单元。
 - 不优化 AVX2、SVE、SME/SME2、Apple 私有矩阵指令或 INT8 dot-product。
 - 不新增运行时 autotune；只允许离线调参后固化少量 profile。
 - 不以 benchmark 中最快的一次结果替代稳定 median/p90。
@@ -426,7 +426,7 @@ flowchart TD
 
 ### 6.2 NN Direct-A 主路径
 
-为适配 row-major OCVH，并避免每次全量 pack A，NN 主路径采用：
+为适配 row-major cvh，并避免每次全量 pack A，NN 主路径采用：
 
 ```text
 pack B once to native panel v2
@@ -446,7 +446,7 @@ parallel task over (ic, jc) macro output block
 - packed B 被全部任务只读共享；
 - A 直接按六个 row pointer 读取，不需要 workspace。
 
-这不是机械复制 BLISlab 的循环顺序，而是保留其 blocking/ownership 原则后，对 OCVH `parallel_for_` 和 row-major A 做的适配。
+这不是机械复制 BLISlab 的循环顺序，而是保留其 blocking/ownership 原则后，对 cvh `parallel_for_` 和 row-major A 做的适配。
 
 ### 6.3 packed-A 辅助路径
 
@@ -568,9 +568,9 @@ N tail：
 
 - 本次研究的 BLISlab 源文件带 BSD 3-clause 风格版权声明；
 - KleidiAI 使用 Apache-2.0，并在每个实现中保留 SPDX 和 Arm copyright；
-- OCVH 首选基于自身接口和 row-major 数据布局重新实现 intrinsic kernel；
+- cvh 首选基于自身接口和 row-major 数据布局重新实现 intrinsic kernel；
 - 如果实施中确实复用了可识别的上游代码片段，必须保留对应许可证/版权声明，在提交中记录原始文件、固定 commit 和改动范围；
-- 性能数字和算法事实可以引用上游，但不能把“参考策略”描述成 OCVH 自主发明。
+- 性能数字和算法事实可以引用上游，但不能把“参考策略”描述成 cvh 自主发明。
 
 ## 8. B packing v2
 
@@ -786,7 +786,7 @@ gemm_neon_store.hpp
 - 保存当前 commit 的 1/2/4/8 线程 raw CSV；
 - 增加 `pack_b_v1/v2`、kernel family、U4、MC/NC/KC、task count、effective threads 元数据；
 - 将 OpenCV upstream 分为 CPU-only 和 Accelerate 两列；
-- 输出 median、p90、GFLOP/s、相对当前 OCVH、相对 upstream；
+- 输出 median、p90、GFLOP/s、相对当前 cvh、相对 upstream；
 - 增加可选阶段计时：allocation、pack B、pack A、compute、scheduler。
 
 退出条件：
@@ -928,7 +928,7 @@ K: 1,2,3,4,5,7,8,15,16,17,127,128,129,191,192,193,255,256,257
 
 必须验证：
 
-- 用户只 include OCVH header 即可使用；
+- 用户只 include cvh header 即可使用；
 - 不要求 CMake 才能获得 NEON 路径；
 - 不新增外部链接参数；
 - generic x86 编译不解析 `<arm_neon.h>` 主体；
@@ -938,7 +938,7 @@ K: 1,2,3,4,5,7,8,15,16,17,127,128,129,191,192,193,255,256,257
 
 ## 15. 性能门槛
 
-### 15.1 合入硬门槛：相对当前 OCVH
+### 15.1 合入硬门槛：相对当前 cvh
 
 同机、同编译器、同线程数、配对运行：
 
@@ -966,7 +966,7 @@ K: 1,2,3,4,5,7,8,15,16,17,127,128,129,191,192,193,255,256,257
 - 第三阶段必须证明差距下降；
 - 不因无法追平 Accelerate 而引入链接依赖；
 - 不把 Accelerate 的结果用于决定 NEON 与 UI 之间的 `Auto` 门槛；
-- 主要合入对手是“当前 OCVH Auto”和“OpenCV CPU-only”，不是平台专用外部数学库。
+- 主要合入对手是“当前 cvh Auto”和“OpenCV CPU-only”，不是平台专用外部数学库。
 
 ### 15.3 稳定性
 

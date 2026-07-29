@@ -1,4 +1,8 @@
-# Documentation Index
+# cvh Documentation
+
+`cvh`（cv-header-only）是独立的 header-only C++ 计算机视觉库。文档中
+OpenCV 仅作为 API 风格、行为兼容和性能对照的参照；名称中包含 `opencv` 的
+文档用于记录这类对齐或迁移工作，不代表项目品牌。
 
 This directory keeps only current project documents.
 

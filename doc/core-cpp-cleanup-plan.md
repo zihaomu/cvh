@@ -2,7 +2,7 @@
 
 ## 背景
 
-`opencv-header-only` 的公共产品目标是纯 header-only，但 `core` 中仍有一批
+`cvh` 的公共产品目标是纯 header-only，但 `core` 中仍有一批
 公开 API 只有声明，实际实现位于 `src/core/*.cpp`。当前最直接的例子是：
 
 - `add` / `subtract` / `multiply` / `divide`

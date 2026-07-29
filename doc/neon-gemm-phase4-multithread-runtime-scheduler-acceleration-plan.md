@@ -1,4 +1,4 @@
-# OCVH GEMM 第四阶段加速计划：常驻线程运行时与分层并行调度
+# cvh GEMM 第四阶段加速计划：常驻线程运行时与分层并行调度
 
 > 状态：主要实现已落地，性能发布门禁部分通过（2026-07-28）
 >
@@ -92,14 +92,14 @@
 
 最终 OpenCV compare smoke 使用项目的 OpenCV/Accelerate build，并通过 upstream correctness：
 
-| Shape | 路径 | OCVH | OpenCV/Accelerate | 当前差距 |
+| Shape | 路径 | cvh | OpenCV/Accelerate | 当前差距 |
 | --- | --- | ---: | ---: | ---: |
-| `128³` | one-shot | `0.045408 ms` | `0.004867 ms` | OCVH 慢 `9.33×` |
-| `128³` | pack-once | `0.030400 ms` | `0.003958 ms` | OCVH 慢 `7.68×` |
-| `256³` | one-shot | `0.102933 ms` | `0.021175 ms` | OCVH 慢 `4.86×` |
-| `256³` | pack-once | `0.096425 ms` | `0.020625 ms` | OCVH 慢 `4.68×` |
-| `512³` | one-shot | `0.587125 ms` | `0.160959 ms` | OCVH 慢 `3.65×` |
-| `512³` | pack-once | `0.498625 ms` | `0.169291 ms` | OCVH 慢 `2.95×` |
+| `128³` | one-shot | `0.045408 ms` | `0.004867 ms` | cvh 慢 `9.33×` |
+| `128³` | pack-once | `0.030400 ms` | `0.003958 ms` | cvh 慢 `7.68×` |
+| `256³` | one-shot | `0.102933 ms` | `0.021175 ms` | cvh 慢 `4.86×` |
+| `256³` | pack-once | `0.096425 ms` | `0.020625 ms` | cvh 慢 `4.68×` |
+| `512³` | one-shot | `0.587125 ms` | `0.160959 ms` | cvh 慢 `3.65×` |
+| `512³` | pack-once | `0.498625 ms` | `0.169291 ms` | cvh 慢 `2.95×` |
 
 该 smoke 的 `512³` 每 repeat 仅 1 iteration，且在整套测试之后执行，只用于验证当前差距趋势，不替代前述同轮性能门禁数据。
 
@@ -717,7 +717,7 @@ shape class + layout + dtype + pool state + worker budget
 | `include/cvh/core/detail/gemm_impl.hpp` | operator 级 batch/pack/compute 计划，禁止 nested parallel |
 | `include/cvh/core/detail/gemm_dispatch.hpp` | 保持 kernel dispatch；提供 cache traits，不直接决定 worker |
 | `benchmark/core_mat_header_benchmark.cpp` | cold/warm、pool/scheduler/barrier、worker/task 真实元数据 |
-| `benchmark/opencv_compare_header_benchmark.cpp` | 继续输出 OCVH/Accelerate 趋势，不混淆 requested/chosen workers |
+| `benchmark/opencv_compare_header_benchmark.cpp` | 继续输出 cvh/Accelerate 趋势，不混淆 requested/chosen workers |
 | `test/core/runtime/parallel_for_test.cpp` | pool 生命周期、异常、重配、nested、并发 caller |
 | `test/core/internal/gemm_native_dispatch_test.cpp` | 1/2/4/8 worker correctness、batch/M/MN axis、tail/race |
 
@@ -957,7 +957,7 @@ requested = 1,2,3,4,6,8,hardware_default
 - MC/NC/KC 与 worker 数联合扫描；
 - M-only/MN A/B；
 - cold/warm/one-shot/pack-once 最终表；
-- OCVH vs 阶段三、OpenCV CPU-only、OpenCV/Accelerate 趋势；
+- cvh vs 阶段三、OpenCV CPU-only、OpenCV/Accelerate 趋势；
 - 全平台和 sanitizer 报告；
 - 更新第三/第四阶段状态。
 

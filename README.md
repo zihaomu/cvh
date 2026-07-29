@@ -1,8 +1,18 @@
-# opencv-header-only (cvh)
+# cvh — cv-header-only
 
-**A pure header-only OpenCV-style C++ subset for common CV operators and AI vision preprocessing/postprocessing.**
+**An independent, header-only C++ computer vision library with familiar OpenCV-style APIs.**
 
-`opencv-header-only (cvh)` targets projects that want familiar OpenCV-style APIs without carrying the full OpenCV dependency. The public product direction is intentionally header-only: include headers, link an interface CMake target, and avoid a required library build step.
+`cvh` stands for **cv-header-only**. It provides a focused set of `core`,
+`imgproc`, and `imgcodecs` APIs for applications that want familiar
+OpenCV-style types and call patterns without linking the OpenCV libraries.
+Include the headers directly or link an interface CMake target—there is no
+required library build step.
+
+`cvh` is its own project and brand. OpenCV is the compatibility reference for
+API shape, naming, and behavior; `cvh` is not an OpenCV distribution and is not
+affiliated with or endorsed by the OpenCV project.
+
+Repository: [github.com/zihaomu/cvh](https://github.com/zihaomu/cvh)
 
 > **Latest performance report:** [cvh vs OpenCV upstream benchmark (2026-07-25, English)](benchmark/opencv_compare/results/2026-07-25-opencv-upstream-performance.en.md) · [中文](benchmark/opencv_compare/results/2026-07-25-opencv-upstream-performance.md)
 >
@@ -11,24 +21,27 @@
 ## Status
 
 - **Project direction:** pure header-only
+- **Brand:** `cvh` (cv-header-only)
 - **Default target:** `cvh::headers`
 - **Fast target:** `cvh::headers_fast`
-- **Scope:** a focused OpenCV-style subset, not a full OpenCV replacement
+- **API scope:** an intentionally aligned subset of OpenCV `core`, `imgproc`,
+  and `imgcodecs`, not a drop-in replacement for every OpenCV module
 - **Performance goal:** benchmark-gated speedups on practical preprocessing/postprocessing hot paths
 
 ## Why this project exists
 
-Many real-world deployments only need a small and predictable part of OpenCV:
+Many real-world deployments need a compact computer vision foundation:
 
 - common image processing operators
 - small dependency surface
 - simple integration in constrained build environments
 - predictable `Mat` memory/layout behavior
+- familiar OpenCV-style APIs that reduce migration and learning cost
 - fast AI vision preprocessing and postprocessing on selected hot paths
 
 ## CMake Targets
 
-`opencv-header-only` exposes two public header-only targets:
+The `cvh` CMake package exposes two public header-only targets:
 
 | Target | Role | Behavior |
 |---|---|---|
@@ -48,14 +61,14 @@ For CMake users, `cvh::headers` propagates all required include roots. For non-C
 CMake baseline integration:
 
 ```cmake
-find_package(opencv_header_only CONFIG REQUIRED)
+find_package(cvh CONFIG REQUIRED)
 target_link_libraries(app PRIVATE cvh::headers)
 ```
 
 CMake fast-profile integration:
 
 ```cmake
-find_package(opencv_header_only CONFIG REQUIRED)
+find_package(cvh CONFIG REQUIRED)
 target_link_libraries(app PRIVATE cvh::headers_fast)
 ```
 

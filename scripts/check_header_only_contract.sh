@@ -77,14 +77,14 @@ ctest --test-dir "${BUILD_DIR}" --output-on-failure \
   -R 'cvh_header_compile_smoke|cvh_core_header_odr_smoke|cvh_core_headers_compile_smoke|cvh_imgproc_header_odr_smoke|cvh_imgproc_headers_compile_smoke|cvh_include_only_smoke|cvh_headers_fast_smoke'
 
 cmake --install "${BUILD_DIR}" --prefix "${INSTALL_DIR}" >/dev/null
-require_no_legacy_export "${INSTALL_DIR}/lib/cmake/opencv_header_only"
+require_no_legacy_export "${INSTALL_DIR}/lib/cmake/cvh"
 
 mkdir -p "${HEADERS_CONSUMER_DIR}"
 cat > "${HEADERS_CONSUMER_DIR}/CMakeLists.txt" <<'EOF'
 cmake_minimum_required(VERSION 3.16)
 project(cvh_headers_consumer LANGUAGES CXX)
 
-find_package(opencv_header_only CONFIG REQUIRED)
+find_package(cvh CONFIG REQUIRED)
 
 if(NOT TARGET cvh::headers)
     message(FATAL_ERROR "Missing cvh::headers target")
@@ -168,7 +168,7 @@ cat > "${FAST_CONSUMER_DIR}/CMakeLists.txt" <<'EOF'
 cmake_minimum_required(VERSION 3.16)
 project(cvh_headers_fast_consumer LANGUAGES CXX)
 
-find_package(opencv_header_only CONFIG REQUIRED)
+find_package(cvh CONFIG REQUIRED)
 
 if(NOT TARGET cvh::headers)
     message(FATAL_ERROR "Missing cvh::headers target")
@@ -240,6 +240,6 @@ cmake -S "${ROOT_DIR}" -B "${LEGACY_ON_BUILD_DIR}" \
   -DCVH_BUILD_BENCHMARKS=OFF \
   >/dev/null
 cmake --install "${LEGACY_ON_BUILD_DIR}" --prefix "${LEGACY_ON_INSTALL_DIR}" >/dev/null
-require_no_legacy_export "${LEGACY_ON_INSTALL_DIR}/lib/cmake/opencv_header_only"
+require_no_legacy_export "${LEGACY_ON_INSTALL_DIR}/lib/cmake/cvh"
 
 echo "Header-only contract check passed."

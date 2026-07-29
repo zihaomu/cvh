@@ -1,4 +1,4 @@
-# OCVH 计算密集型算子二阶段加速计划：OpenCV UI、原生 NEON 与原生 AVX2
+# cvh 计算密集型算子二阶段加速计划：OpenCV UI、原生 NEON 与原生 AVX2
 
 > 状态：本地实现完成；Apple ARM 门禁已关闭，真实 x86/Linux/Windows 发布门禁待验证  
 > 计划日期：2026-07-27  
@@ -115,7 +115,7 @@ native norm 保持关闭，默认继续使用 UI；这满足“完成一组共�
 ## 1. 结论摘要
 
 第一阶段已经证明，通用 OpenCV Universal Intrinsics（下文简称 OpenCV UI）
-micro-kernel 能显著改善 OCVH GEMM，但对方阵和 wide shape，当前代码仍无法充分控制：
+micro-kernel 能显著改善 cvh GEMM，但对方阵和 wide shape，当前代码仍无法充分控制：
 
 - 架构相关的 MR/NR 寄存器分块；
 - A/B panel 的物理布局和对齐；
@@ -159,16 +159,16 @@ packing 或指令选择能稳定超过 UI 路径时，才进入默认 `Auto` 分
 
 Apple ARM、Release、单线程、FP32 NN、端到端 stable benchmark：
 
-| Shape `M×K×N` | OCVH P1 | 默认 OpenCV | 当前差距 |
+| Shape `M×K×N` | cvh P1 | 默认 OpenCV | 当前差距 |
 | --- | ---: | ---: | ---: |
-| `128×128×128` | 0.057001 ms | 0.003292 ms | OCVH 慢 17.32x |
-| `32×512×64` | 0.030841 ms | 0.110484 ms | OCVH 快 3.58x |
-| `256×32×256` | 0.045179 ms | 0.004988 ms | OCVH 慢 9.06x |
-| `256×256×256` | 0.488052 ms | 0.020474 ms | OCVH 慢 23.84x |
+| `128×128×128` | 0.057001 ms | 0.003292 ms | cvh 慢 17.32x |
+| `32×512×64` | 0.030841 ms | 0.110484 ms | cvh 快 3.58x |
+| `256×32×256` | 0.045179 ms | 0.004988 ms | cvh 慢 9.06x |
+| `256×256×256` | 0.488052 ms | 0.020474 ms | cvh 慢 23.84x |
 
 默认 OpenCV 在 Apple 平台可能进入 Accelerate/LAPACK，因此上述差距不能全部归因于
 OpenCV UI 或原生 NEON kernel。已有 CPU-only upstream 数据关闭
-LAPACK、IPP、KleidiCV、Carotene 和 OpenCL 后，OCVH 当前在已测 shape 上快约
+LAPACK、IPP、KleidiCV、Carotene 和 OpenCL 后，cvh 当前在已测 shape 上快约
 `2.83x–4.93x`。
 
 二阶段仍然需要优化方阵，因为：

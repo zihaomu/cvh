@@ -50,7 +50,7 @@ For this workspace, the preferred OpenCV source tree is:
 /Users/zmu/work/my_project/ocvh/opencv
 ```
 
-From the `opencv-header-only` repository root this is:
+From the `cvh` repository root this is:
 
 ```text
 ../opencv

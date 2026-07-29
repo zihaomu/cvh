@@ -6,7 +6,7 @@ if(NOT CVH_PROJECT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
     message(FATAL_ERROR "VERSION.txt must be semantic version (MAJOR.MINOR.PATCH), got: '${CVH_PROJECT_VERSION}'")
 endif()
 
-project(opencv_header_only VERSION ${CVH_PROJECT_VERSION} LANGUAGES CXX)
+project(cvh VERSION ${CVH_PROJECT_VERSION} LANGUAGES CXX)
 
 # default to Release build
 if(NOT CMAKE_BUILD_TYPE)
@@ -539,35 +539,35 @@ if(CVH_BUILD_TESTS)
 
 endif()
 
-set(CVH_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/opencv_header_only" CACHE STRING "Install path for CMake package config files")
+set(CVH_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/cvh" CACHE STRING "Install path for the cvh CMake package")
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 install(TARGETS cvh_headers cvh_headers_fast
-    EXPORT opencv_header_onlyTargets
+    EXPORT cvhTargets
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(EXPORT opencv_header_onlyTargets
+install(EXPORT cvhTargets
     NAMESPACE cvh::
-    FILE opencv_header_onlyTargets.cmake
+    FILE cvhTargets.cmake
     DESTINATION ${CVH_INSTALL_CMAKEDIR}
 )
 
 configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/opencv_header_onlyConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/opencv_header_onlyConfig.cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/cvhConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/cvhConfig.cmake"
     INSTALL_DESTINATION ${CVH_INSTALL_CMAKEDIR}
 )
 
 write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/opencv_header_onlyConfigVersion.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/cvhConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
 
 install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/opencv_header_onlyConfig.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/opencv_header_onlyConfigVersion.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/cvhConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/cvhConfigVersion.cmake"
     DESTINATION ${CVH_INSTALL_CMAKEDIR}
 )

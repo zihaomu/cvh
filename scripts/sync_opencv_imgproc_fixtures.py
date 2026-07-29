@@ -65,7 +65,7 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Path to opencv_extra root (or directly to testdata directory).",
     )
-    parser.add_argument("--repo-root", default=".", help="Path to opencv-header-only repository root.")
+    parser.add_argument("--repo-root", default=".", help="Path to the cvh repository root.")
     parser.add_argument(
         "--with-large",
         action="store_true",

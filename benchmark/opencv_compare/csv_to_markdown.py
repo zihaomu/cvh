@@ -195,7 +195,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("")
     lines.append("## Current Project Status")
     lines.append("")
-    lines.append("- `opencv-header-only` is publicly positioned as a pure header-only library and does not depend on an in-project `.cpp` extension layer.")
+    lines.append("- `cvh` (cv-header-only) is an independent pure header-only library and does not depend on an in-project `.cpp` extension layer.")
     lines.append("- Mode B compares the current `cvh::headers_fast` against upstream OpenCV built on the same machine; `cvh::headers_fast` represents the fastest header-only build configuration.")
     lines.append("- `cvh::headers_fast` fully inherits `cvh::headers`. When an operator has no dedicated fast path, it continues to use the inherited header implementation and remains in the benchmark instead of being skipped for lack of a SIMD specialization.")
     lines.append("- After Phase 1 for Core and Imgproc, callable API-name coverage is `107/220`: Core `57/97` and Imgproc `50/123`.")

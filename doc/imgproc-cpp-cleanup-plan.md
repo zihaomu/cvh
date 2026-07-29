@@ -2,7 +2,7 @@
 
 ## 背景
 
-`opencv-header-only` 的公共产品定位是纯 header-only。当前 `imgproc` 的公开
+`cvh` 的公共产品定位是纯 header-only。当前 `imgproc` 的公开
 header 已经包含可工作的 fallback，但 `src/imgproc` 仍保留约 6,400 行 `.cpp`
 实现，并通过 `backend_registry.cpp` 在 `CVH_NATIVE` 模式下把运行时函数指针
 替换为编译型 fast-path。
