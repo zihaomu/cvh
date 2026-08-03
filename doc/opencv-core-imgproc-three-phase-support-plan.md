@@ -16,10 +16,10 @@ P2-P0 的 17 个操作族已完成并通过最终阶段 gate；当前共有 124 
 - 每个阶段支持哪些 `imgproc` 算子；
 - 为什么把这些算子放在该阶段。
 
-本清单不描述实现方法、测试步骤、SIMD 策略或交付流程。P2-P0 的详细支持
-矩阵和验收顺序由
-[第二阶段 P0 落地计划](opencv-core-imgproc-phase2-p0-implementation-plan.md)
-负责。`220 / 220` 只作为 upstream 操作族盘点上限，不再作为发布承诺。
+本清单不描述实现方法、测试步骤、SIMD 策略或交付流程。P2-P0 的当前
+可调用范围以 API coverage 为准，参数子集以 Core/Imgproc 模块 README
+为准，正确性以单测和 OpenCV contract 差分为准。`220 / 220` 只作为
+upstream 操作族盘点上限，不再作为发布承诺。
 
 ## 2. 三阶段总览
 
@@ -36,9 +36,8 @@ P2-P0 的 17 个操作族已完成并通过最终阶段 gate；当前共有 124 
 基础能力。
 
 第一阶段已经完成；当前可调用范围及限制以
-[API coverage](opencv-core-imgproc-api-coverage.md) 为准。
-第一阶段当时的拆分、支持矩阵与逐项验收记录见恢复后的
-[第一阶段落地计划](opencv-core-imgproc-phase1-implementation-plan.md)。
+[API coverage](opencv-core-imgproc-api-coverage.md) 为准。完成的拆分与逐项
+验收记录由 Git 历史归档。
 
 ### 3.1 Core 支持列表
 
@@ -67,7 +66,8 @@ P2-P0 的 17 个操作族已完成并通过最终阶段 gate；当前共有 124 
 
 P2-P0 建立在第一阶段的 Mat、归约、滤波、布局和几何能力之上，只选择能够
 形成完整实际流水线且依赖边界可控的操作族。17 个操作族已从 public umbrella
-header 可调用并计入 available coverage，并已通过落地计划的 S7 gate。
+header 可调用并计入 available coverage，并已进入长期单测、header
+contract 和 OpenCV 差分门禁。
 
 ### 4.1 P2-P0 Core：4 个
 

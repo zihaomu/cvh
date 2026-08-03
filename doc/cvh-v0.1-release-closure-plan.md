@@ -2,7 +2,7 @@
 
 更新时间：2026-08-03
 
-状态：执行中；CL1/CL2 已完成，CL3 阶段文档归档前置条件审计中
+状态：执行中；CL1–CL3 已完成，CL4 v0.1 术语与当前事实收口中
 
 ## 1. 目标
 
@@ -145,6 +145,15 @@ policy 使用，不属于本轮直接删除范围。
 4. 同步删除 `doc/README.md` 中的索引项和其他文档链接；
 5. 运行文档一致性检查。
 
+执行结果（2026-08-03）：
+
+- 两份当前实施与验收记录已由提交 `33045f1` 纳入 Git 历史；
+- API coverage、三阶段支持清单和模块 README 已接管当前支持事实；
+- 两份阶段实施文档和 `doc/README.md` 索引已删除；
+- 三阶段支持清单已改为直接引用 coverage、模块 README、单测和
+  OpenCV contract，不再依赖阶段实施计划解释当前范围；
+- `check_docs.sh` 通过，当前维护文档由 33 份收口为 31 份。
+
 ## 7. 文档术语收口
 
 ### 7.1 模块 README
@@ -178,8 +187,8 @@ layout、flag 和 unsupported 边界，不缩减技术细节。
 | CL0 | 审计引用、分类删除/合并/保留内容 | 已完成 | 已形成第 4 至第 7 节清单；尚未删除文件。 |
 | CL1 | 删除 deprecated shim、旧诊断 benchmark、无引用脚本和无效 CMake 变量 | 已完成 | 目标文件、target、脚本、CMake 变量及残余引用已删除；文档检查、default/test/benchmark 配置和 `git diff --check` 通过。 |
 | CL2 | 把 26 条 Phase 2 benchmark case 合入 canonical Core/Imgproc suite | 已完成 | Core 7 条、Imgproc 19 条已合并；quick 26/26 checksum 及关键字段一致，full smoke 26/26 `OK`，专项 target/source 已删除。 |
-| CL3 | 归档并删除已完成的阶段性文档 | 进行中 | 正在确认两份实施记录的 Git 可追溯性以及 coverage/README 事实接管情况。 |
-| CL4 | 修改 v0.1 support matrix 名称并同步测试、coverage、索引和 benchmark 文档 | 待开始 | `check_docs.sh` 和 coverage 计数检查通过。 |
+| CL3 | 归档并删除已完成的阶段性文档 | 已完成 | 两份验收记录已进入 `33045f1` 的 Git 历史后删除；coverage/README/三阶段清单接管当前事实，文档检查通过。 |
+| CL4 | 修改 v0.1 support matrix 名称并同步测试、coverage、索引和 benchmark 文档 | 进行中 | 正在收口 Core/Imgproc 标题，并核对 213/192 测试及 61/63/124 coverage 事实。 |
 | CL5 | 完整代码与文档回归 | 待开始 | 第 9 节全部门禁通过，工作树只剩预期修改。 |
 
 每完成一个 Step，必须更新本表状态和实际验证结果。不得在 benchmark 尚未合并时
@@ -245,7 +254,7 @@ git diff --check
 - [x] documentation cleanup 执行记录及检查特例已删除。
 - [x] Phase 2 benchmark case 已进入 canonical Core/Imgproc suite。
 - [x] Phase 2 专项 benchmark target/source 已删除。
-- [ ] Phase 1/Phase 2 实施记录已进入 Git 历史并从当前文档树移除。
+- [x] Phase 1/Phase 2 实施记录已进入 Git 历史并从当前文档树移除。
 - [ ] Core/Imgproc README 使用 `v0.1 Support Matrix`。
 - [ ] 测试台账更新为 Core 213、Imgproc 192。
 - [ ] coverage 保持 61/63/124，declared-only 保持 0。

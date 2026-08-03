@@ -19,9 +19,6 @@ binary dependency of the normal cvh package.
   pinned upstream operation-family inventory and current callable cvh subset.
 - [opencv-core-imgproc-three-phase-support-plan.md](opencv-core-imgproc-three-phase-support-plan.md):
   remaining Core and Imgproc expansion roadmap.
-- [opencv-core-imgproc-phase2-p0-implementation-plan.md](opencv-core-imgproc-phase2-p0-implementation-plan.md):
-  selected 17-family P2-P0 scope, support matrix, implementation order, and
-  acceptance gates.
 - [opencv-ui-kernel-migration-checklist.md](opencv-ui-kernel-migration-checklist.md):
   current rules for OpenCV Universal Intrinsics and specialized ISA kernels.
 - [cvh-v0.1-release-readiness-and-next-stage-plan.md](cvh-v0.1-release-readiness-and-next-stage-plan.md):
@@ -30,11 +27,6 @@ binary dependency of the normal cvh package.
 - [cvh-v0.1-release-closure-plan.md](cvh-v0.1-release-closure-plan.md):
   current code/document cleanup for deprecated compatibility shims, unused
   diagnostics, phase documents, and the Phase 2 benchmark consolidation.
-## Restored Historical Records
-
-- [opencv-core-imgproc-phase1-implementation-plan.md](opencv-core-imgproc-phase1-implementation-plan.md):
-  restored Phase 1 operator implementation and acceptance record. Use API
-  coverage and the three-phase plan for current support and remaining gaps.
 
 ## Ownership Rules
 
@@ -56,8 +48,8 @@ current product facts.
 
 ## Maintenance Rules
 
-- Documents describe current behavior or unfinished work. Explicitly restored
-  historical records are reference material only.
+- Documents describe current behavior or unfinished work. Git history retains
+  completed implementation and acceptance records.
 - Local paths use portable placeholders.
 - Dated benchmark reports are immutable artifacts; corrections require a new
   dated report.
