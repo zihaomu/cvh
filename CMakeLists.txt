@@ -124,6 +124,7 @@ if(CVH_BUILD_BENCHMARKS)
         add_library(cvh_benchmark_opencv_compare_backend_obj OBJECT
             benchmark/opencv_compare_opencv_backend.cpp
             benchmark/opencv_compare_phase1_opencv_backend.cpp
+            benchmark/opencv_compare_phase2_opencv_backend.cpp
         )
         target_compile_features(cvh_benchmark_opencv_compare_backend_obj PRIVATE cxx_std_17)
         target_include_directories(cvh_benchmark_opencv_compare_backend_obj PRIVATE
@@ -133,6 +134,7 @@ if(CVH_BUILD_BENCHMARKS)
         add_executable(cvh_benchmark_opencv_compare_ui
             benchmark/opencv_compare_header_benchmark.cpp
             benchmark/opencv_compare_phase1_header_benchmark.cpp
+            benchmark/opencv_compare_phase2_header_benchmark.cpp
             $<TARGET_OBJECTS:cvh_benchmark_opencv_compare_backend_obj>
         )
         target_link_libraries(cvh_benchmark_opencv_compare_ui PRIVATE cvh::headers ${OpenCV_LIBS})

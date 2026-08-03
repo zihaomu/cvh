@@ -3,6 +3,7 @@
 #include "common/benchmark_common.h"
 #include "opencv_compare_backend.h"
 #include "opencv_compare_phase1_benchmark.h"
+#include "opencv_compare_phase2_benchmark.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -95,7 +96,8 @@ void usage()
     std::cout
         << "Usage: cvh_benchmark_opencv_compare_ui "
         << "[--profile quick|stable|full] [--warmup N] [--iters N] [--repeats N] "
-        << "[--threads N] [--impl name] [--ops GEMM] [--output path]\n";
+        << "[--threads N] [--impl name] [--ops GEMM|PHASE2_P0] "
+        << "[--output path]\n";
 }
 
 Args parse_args(int argc, char** argv)
@@ -171,10 +173,11 @@ Args parse_args(int argc, char** argv)
                   << " (Mode B only compares cvh_ui against upstream OpenCV)\n";
         std::exit(2);
     }
-    if (!args.ops.empty() && args.ops != "GEMM")
+    if (!args.ops.empty() && args.ops != "GEMM" &&
+        args.ops != "PHASE2_P0")
     {
         std::cerr << "Unsupported --ops value: " << args.ops
-                  << " (currently supported: GEMM)\n";
+                  << " (currently supported: GEMM, PHASE2_P0)\n";
         std::exit(2);
     }
     return args;
@@ -356,6 +359,37 @@ void append_phase1_cases(const Args& args, std::vector<CompareRow>& rows)
             result.opencv_ms,
             result.note);
         rows.back().layout = result.layout;
+    }
+}
+
+void append_phase2_cases(const Args& args, std::vector<CompareRow>& rows)
+{
+    const Phase2BenchmarkConfig config {
+        args.profile,
+        args.warmup,
+        args.iters,
+        args.repeats,
+    };
+    for (const Phase2BenchmarkResult& result :
+         run_phase2_benchmarks(config))
+    {
+        append_row(
+            rows,
+            args,
+            result.suite,
+            result.op,
+            result.variant,
+            result.dispatch_path,
+            result.depth,
+            result.channels,
+            result.shape,
+            result.cvh_ms,
+            result.opencv_ms,
+            result.note);
+        rows.back().layout = result.layout;
+        g_sink ^=
+            static_cast<std::uint64_t>(result.cvh_ms * 1.0e9) ^
+            static_cast<std::uint64_t>(result.opencv_ms * 1.0e9);
     }
 }
 
@@ -1769,6 +1803,10 @@ int main(int argc, char** argv)
         cvh_bench_compare::append_gemm_compare_cases(
             args, rows);
     }
+    else if (args.ops == "PHASE2_P0")
+    {
+        cvh_bench_compare::append_phase2_cases(args, rows);
+    }
     else
     {
         cvh_bench_compare::append_core_mat_cases(args, rows);
@@ -1780,6 +1818,7 @@ int main(int argc, char** argv)
         cvh_bench_compare::append_imgproc_resize_color_cases(args, rows);
         cvh_bench_compare::append_imgproc_roi_cases(args, rows);
         cvh_bench_compare::append_phase1_cases(args, rows);
+        cvh_bench_compare::append_phase2_cases(args, rows);
     }
 
     cvh_bench_compare::validate_ui_only_rows(rows);

@@ -43,6 +43,8 @@ def maintained_markdown() -> list[Path]:
     files = []
     for path in ROOT.rglob("*.md"):
         relative = path.relative_to(ROOT)
+        if relative.parts and relative.parts[0].startswith("build-"):
+            continue
         if relative.parts[:3] == ("benchmark", "opencv_compare", "results"):
             continue
         if relative.parts[:2] == ("test", "3rdparty"):

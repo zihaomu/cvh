@@ -42,6 +42,13 @@ micro cases dominate the total benchmark runtime.
 CVH and upstream OpenCV always receive the same effective values. Each result
 row records the effective micro settings in its `note` field.
 
+P2-P0 shape-vector and 256-bin histogram comparison cases use the same fixed
+micro policy. Image, random, transform, connected-region, contour, histogram
+construction, and template-matching cases use the selected profile values.
+The five random rows align type, shape, layout, range/mean, and standard
+deviation, but CVH and OpenCV advance independent random streams because CVH
+does not expose public RNG seed/state control.
+
 ## Local OpenCV Source
 
 Provide an existing OpenCV/slim checkout with:
@@ -72,6 +79,10 @@ Existing files:
 - `opencv_compare_header_benchmark.cpp`: pure header-only `cvh` compare cases.
 - `opencv_compare_opencv_backend.cpp`: OpenCV-side implementation, compiled
   without `cvh::headers` include paths.
+- `opencv_compare_phase2_header_benchmark.cpp`: CVH-side P2-P0 timing and case
+  metadata for 26 representative rows.
+- `opencv_compare_phase2_opencv_backend.cpp`: matching upstream OpenCV P2-P0
+  kernels, compiled without `cvh::headers` include paths.
 
 Current caveats:
 
@@ -136,6 +147,21 @@ Explicit implementation:
 
 `cvh_ui` is accepted as an alias for `ui`.
 
+Focused P2-P0 operator comparison:
+
+```bash
+CVH_COMPARE_SKIP_OPENCV_SETUP=1 \
+CVH_OPENCV_DIR=../opencv \
+CVH_OPENCV_CONFIG_DIR=../opencv/build-slim \
+./benchmark/opencv_compare/run_compare.sh \
+  --profile quick --ops PHASE2_P0 \
+  --warmup 1 --iters 5 --repeats 1 --threads 1
+```
+
+This produces 26 rows covering all 17 P2-P0 operation families. Rows without
+a CVH UI kernel remain valid comparisons and record
+`dispatch_path=public_header_scalar` plus `no_ui_fastpath` in the note.
+
 Focused GEMM attribution:
 
 ```bash
@@ -171,6 +197,8 @@ configuration used by the regular Mode B report.
 
 - Stable covers the core compute matrix plus representative imgproc U8/F32
   C1/C3/C4 cases.
+- P2-P0 contributes 7 Core and 19 Imgproc rows in every profile; the focused
+  `PHASE2_P0` filter runs only those rows.
 - Full adds odd-width and non-contiguous ROI cases plus representative
   I420/YUY2/NV12 layouts.
 - Raw CSV and metadata stay generated under

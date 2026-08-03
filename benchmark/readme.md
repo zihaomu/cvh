@@ -178,6 +178,8 @@ benchmark/results/opencv/<suite>/<profile>/meta.json
 现状：
 
 - `benchmark/opencv_compare/` 已经可以生成 `cvh vs OpenCV` 报告。
+- P2-P0 的 17 个操作族已接入 26 条同参数 upstream 对比 case，可以
+  通过 `--ops PHASE2_P0` 独立运行，不必重跑全部历史矩阵。
 - 该目录已经裁剪为纯 header-only compare：只用 `cvh_ui` 对比 OpenCV。
 
 ## Suites

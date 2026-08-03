@@ -217,6 +217,24 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
                     "Fast paths mainly cover F32 C1; the matrix also includes multi-channel, dual-input, and high-precision paths",
                     "Split gates by variant; do not trade precision for a better aggregate ratio",
                 ],
+                [
+                    "P2 random / point transform",
+                    group_result({"RANDU", "RANDN", "TRANSFORM", "PERSPECTIVE_TRANSFORM"}),
+                    "The v0.1 implementations are scalar public-header paths; upstream uses optimized RNG and transform kernels",
+                    "Treat the focused P2-P0 report as optimization prioritization, not a release gate",
+                ],
+                [
+                    "P2 regions / contours / shape",
+                    group_result({"CONNECTED_COMPONENTS", "CONNECTED_COMPONENTS_WITH_STATS", "FIND_CONTOURS", "BOUNDING_RECT", "CONTOUR_AREA", "ARC_LENGTH", "APPROX_POLY_DP", "CONVEX_HULL", "IS_CONTOUR_CONVEX", "MOMENTS"}),
+                    "CVH currently favors explicit scalar correctness and deterministic ordering over specialized scans",
+                    "Separate scan-heavy region work from micro shape primitives when selecting fast paths",
+                ],
+                [
+                    "P2 histogram / template",
+                    group_result({"CALC_HIST", "COMPARE_HIST", "MATCH_TEMPLATE"}),
+                    "Histogram and direct-spatial template kernels have no CVH UI fast path in v0.1",
+                    "Prioritize template matching by absolute runtime, then histogram construction",
+                ],
             ],
         )
     )
