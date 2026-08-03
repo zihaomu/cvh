@@ -2,7 +2,7 @@
 
 更新时间：2026-08-03
 
-状态：执行中；CL1–CL4 已完成，CL5 完整回归进行中
+状态：已完成；CL1–CL5 全部通过
 
 ## 1. 目标
 
@@ -201,7 +201,7 @@ layout、flag 和 unsupported 边界，不缩减技术细节。
 | CL2 | 把 26 条 Phase 2 benchmark case 合入 canonical Core/Imgproc suite | 已完成 | Core 7 条、Imgproc 19 条已合并；quick 26/26 checksum 及关键字段一致，full smoke 26/26 `OK`，专项 target/source 已删除。 |
 | CL3 | 归档并删除已完成的阶段性文档 | 已完成 | 两份验收记录已进入 `33045f1` 的 Git 历史后删除；coverage/README/三阶段清单接管当前事实，文档检查通过。 |
 | CL4 | 修改 v0.1 support matrix 名称并同步测试、coverage、索引和 benchmark 文档 | 已完成 | README 标题已收口；测试台账/gate expectation 为 213/192，coverage 按条目复核为 61/63/124 且 declared-only 为 0，文档检查通过。 |
-| CL5 | 完整代码与文档回归 | 进行中 | 开始执行第 9 节的静态、header contract、完整 CI、OpenCV 差分和 benchmark 门禁。 |
+| CL5 | 完整代码与文档回归 | 已完成 | 静态与 header contract、CTest 20/20、Core 213/213、Imgproc 192/192、Phase 2 差分 5/5、全量差分 24/24 和 canonical benchmark 门禁全部通过。 |
 
 每完成一个 Step，必须更新本表状态和实际验证结果。不得在 benchmark 尚未合并时
 提前删除专项 case，也不得在实施记录尚未进入 Git 历史时删除未跟踪文档。
@@ -256,9 +256,28 @@ git diff --check
 - 同一输入合并前后的 checksum 一致；
 - 已删除 target 不再出现在 CMake、README、CI 或 gate policy 中。
 
+### 9.5 实际回归结果（2026-08-03）
+
+- `check_docs.sh` 通过：31 份当前维护 Markdown；
+- `check_public_headers.sh` 通过：公开头边界、依赖和宏检查无误；
+- `check_header_only_contract.sh` 通过：独立头编译、aggregate、ODR、
+  include-only、pipeline 和 install consumer 等 12/12 通过；
+- `ci_headers_all.sh` 通过：CTest 20/20，Core 213/213、Imgproc
+  192/192，failed=0，skipped=0；
+- OpenCV contract Phase 2 过滤组 5/5 通过，全量组 24/24 通过；
+- benchmark 配置与 canonical Core/Imgproc target 编译通过，quick 搬迁
+  case 26/26 为 `OK` 且关键字段/checksum 与原 CSV 一致，full smoke
+  26/26 为 `OK`；
+- 7 个 Phase 2 public umbrella header 入口均在，deprecated SIMD shim 不在安装
+  头树中；
+- 删除的 target、source、脚本、CMake 变量和文档路径在非构建树中
+  残余引用为 0；
+- coverage 为 Core 61 / Imgproc 63 / 总计 124，declared-only 0；
+- `git diff --check` 通过。
+
 ## 10. 完成条件
 
-- [ ] Phase 2-P0 17 个操作族及全部正确性设施保持不变。
+- [x] Phase 2-P0 17 个操作族及全部正确性设施保持不变。
 - [x] `core/simd/simd.h` 已删除且无引用。
 - [x] 两个旧 Imgproc 诊断 benchmark target/source 已删除。
 - [x] 三个无引用 benchmark 脚本已删除。
@@ -270,8 +289,8 @@ git diff --check
 - [x] Core/Imgproc README 使用 `v0.1 Support Matrix`。
 - [x] 测试台账更新为 Core 213、Imgproc 192。
 - [x] coverage 保持 61/63/124，declared-only 保持 0。
-- [ ] 文档、header contract、完整 CI、upstream 差分和 benchmark quick 通过。
-- [ ] `git diff --check` 通过，删除清单之外没有意外改动。
+- [x] 文档、header contract、完整 CI、upstream 差分和 benchmark quick 通过。
+- [x] `git diff --check` 通过，删除清单之外没有意外改动。
 
 全部条件满足后，本轮代码与文档收口完成。后续发布打包和平台验证由独立计划
 处理，不回填到本计划。
