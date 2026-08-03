@@ -144,16 +144,16 @@ OpenCV 对比模式回答的问题是：当前 `cvh` header-only 实现和官方
 - 每份结果必须记录 `cvh` commit、OpenCV commit、编译器、平台、CPU、线程数、profile 和 CMake 选项。
 - 不生成 scalar、NEON-only、AVX2-only、`native` 或 `lite` 产品实现行。
 
-本机 OpenCV 源码位置：
+本地 OpenCV 源码或 slim benchmark checkout 通过环境变量提供，例如：
 
 ```text
-/Users/zmu/work/my_project/ocvh/opencv
+CVH_OPENCV_DIR=/path/to/opencv-bench-slim
 ```
 
-从当前仓库相对路径看，它等价于：
+仓库自带 runner 的默认位置是：
 
 ```text
-../opencv
+benchmark/opencv_compare/opencv-bench-slim
 ```
 
 推荐输出位置：
@@ -290,54 +290,12 @@ cvh_benchmark_imgproc_header
 
 - 新生成结果放入 `benchmark/results/` 或 `benchmark/opencv_compare/results/`，不再放在 `benchmark/` 根目录。
 - `benchmark/*.csv` 视为历史阶段产物，不再作为长期文档入口。
-- OpenCV compare 的 raw CSV/metadata 是生成产物；日期命名的 curated
-  Markdown 快照可跟踪在 `benchmark/opencv_compare/results/`。
+- OpenCV compare 的滚动 `current_*` 文件是生成产物；审核过的日期命名快照将
+  英文 Markdown、raw CSV 和 metadata 一起跟踪在
+  `benchmark/opencv_compare/results/`。
 - `core_mat` / `imgproc` 聚合 target 是产品 benchmark；专项 target 只在
   聚合覆盖等价后裁剪。
 
-## Implementation Plan
-
-Detailed execution steps live in
-[`doc/benchmark-refactor-implementation-plan.md`](../doc/benchmark-refactor-implementation-plan.md).
-
-1. **P-Bench-0：目录和文档收口** - complete
-   - 明确两种模式、两个 suite、输出目录和 schema。
-   - 清理 tracked 的阶段性 CSV/Markdown 报告。
-   - 增加 ignore 规则，避免新结果再次进入源码树。
-
-2. **P-Bench-1：公共 benchmark helper** - complete
-   - 新增 header-only benchmark 公共 helper。
-   - 统一计时、CSV、metadata、checksum 和 profile 解析。
-
-3. **P-Bench-2：内部回归 runner** - complete
-   - 新增 `benchmark/internal/run_header_regression.sh`。
-   - 支持 `--baseline-ref <git-ref>`，用临时 `git worktree` 构建旧版本。
-   - 输出 baseline/current/report/meta。
-
-4. **P-Bench-3：`core_mat` header-only target** - complete
-   - 已删除旧 `cvh_benchmark_core_ops`，`cvh_benchmark_core_mat_header`
-     只链接 header-only targets。
-   - canonical 产品 benchmark 固定链接 `cvh::headers`。
-   - 覆盖 `Mat` create/copy/convert/layout 成本。
-
-5. **P-Bench-4：`imgproc` header-only target** - complete
-   - 合并 `cvtColor` 和 `resize` 专项 benchmark 的可复用测量代码。
-   - 形成 `cvh_benchmark_imgproc_header`。
-   - scalar/direct UI/micro 维度保留在专项诊断 target。
-
-6. **P-Bench-5：统一 report/gate** - complete
-   - 统一 CSV to Markdown/JSON summary。
-   - 让内部回归可按 suite/op/variant 设置阈值。
-   - OpenCV compare 继续保持 log-only，但输出 gap 排序和 unsupported matrix。
-
-7. **P-Bench-6：OpenCV 主仓库 compare** - complete
-   - 支持本地 `../opencv` 源码和用户指定 OpenCV build dir。
-   - 只用 `cvh::headers` 的 forced-UI 结果对比 OpenCV。
-   - 移除 compare 报告里的产品层 `native` / `lite` 叙事。
-
-8. **P-Bench-7：CI integration** - complete
-   - 内部回归进入 quick gate。
-   - OpenCV compare 保持 on-demand/log-only。
-
-P-Bench-8 之后的完成状态及当前后续阶段见
-[`doc/benchmark-refactor-implementation-plan.md`](../doc/benchmark-refactor-implementation-plan.md)。
+The framework is implemented. Current behavior is owned by this README, the
+OpenCV compare README, executable scripts, and the result schema rather than a
+completed rollout plan.

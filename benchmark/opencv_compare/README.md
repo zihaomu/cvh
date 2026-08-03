@@ -44,16 +44,16 @@ row records the effective micro settings in its `note` field.
 
 ## Local OpenCV Source
 
-For this workspace, the preferred OpenCV source tree is:
+Provide an existing OpenCV/slim checkout with:
 
 ```text
-/Users/zmu/work/my_project/ocvh/opencv
+CVH_OPENCV_DIR=/path/to/opencv-bench-slim
 ```
 
-From the `cvh` repository root this is:
+The runner default is:
 
 ```text
-../opencv
+benchmark/opencv_compare/opencv-bench-slim
 ```
 
 The full OpenCV tree should be built separately and passed to the compare
@@ -78,9 +78,9 @@ Current caveats:
 - Mode B has one CVH implementation: `cvh_ui`. The benchmark links
   `cvh::headers`, sets `OpenCVUIOnly`, and fails if a specialized ISA tag is
   observed or an explicitly UI-required case does not report `opencv_ui`.
-- Raw CSV/metadata and rolling `current_*` reports are generated artifacts.
-  Curated date-named `*-opencv-upstream-performance.md` snapshots may be
-  committed under `benchmark/opencv_compare/results/`.
+- Rolling `current_*` reports are generated artifacts. A reviewed date-named
+  snapshot may commit its English Markdown, raw CSV, and metadata together
+  under `benchmark/opencv_compare/results/`.
 - New benchmark reports are written in English by default. Optional
   translations use a locale suffix such as `.zh-CN.md`; the English report is
   the canonical version linked from the project README.
@@ -90,15 +90,20 @@ Current caveats:
 
 ## Dated Snapshots
 
+- [2026-08-03 OpenCV upstream performance (English)](results/2026-08-03-opencv-upstream-performance.en.md):
+  current Apple M5, single-threaded full profile; all CVH rows use `cvh_ui`.
 - [2026-07-25 OpenCV upstream performance (English)](results/2026-07-25-opencv-upstream-performance.en.md):
-  Apple M5, single-threaded full profile, with all Phase 1 benchmark families.
+  historical Apple M5, single-threaded full profile from before the current
+  single-target CPU configuration.
   A [Chinese translation](results/2026-07-25-opencv-upstream-performance.md)
   is also available.
 - [2026-07-24 OpenCV upstream performance](results/2026-07-24-opencv-upstream-performance.md):
-  Apple M5, single-threaded full profile, including the current Core UI
-  acceleration batches.
+  historical Apple M5, single-threaded full profile.
 - [2026-07-23 OpenCV upstream performance](results/2026-07-23-opencv-upstream-performance.md):
-  Apple M5, single-threaded stable profile, `core_mat` plus `imgproc`.
+  historical Apple M5, single-threaded stable profile.
+
+See the [result index](results/README.md) for raw artifacts and the snapshot
+retention rule.
 
 ## Current Commands
 
@@ -169,6 +174,6 @@ configuration used by the regular Mode B report.
 - Full adds odd-width and non-contiguous ROI cases plus representative
   I420/YUY2/NV12 layouts.
 - Raw CSV and metadata stay generated under
-  `benchmark/opencv_compare/results/`; date-named Markdown snapshots may be
-  tracked.
+  `benchmark/opencv_compare/results/`; a reviewed date-named snapshot tracks
+  its English Markdown, CSV, and metadata together.
 - Missing upstream operations remain explicit `UNSUPPORTED` rows.

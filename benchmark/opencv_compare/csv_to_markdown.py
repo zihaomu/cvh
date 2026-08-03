@@ -10,89 +10,6 @@ from pathlib import Path
 from typing import Optional
 
 
-PHASE1_BENCHMARK_OPS = {
-    "ABSDIFF",
-    "BITWISE_AND",
-    "BITWISE_NOT",
-    "BITWISE_OR",
-    "BITWISE_XOR",
-    "IN_RANGE",
-    "MIN",
-    "MAX",
-    "SCALE_ADD",
-    "CONVERT_SCALE_ABS",
-    "CONVERT_FP16",
-    "SQRT",
-    "POW",
-    "EXP",
-    "LOG",
-    "CHECK_RANGE",
-    "PATCH_NANS",
-    "NORM",
-    "SUM",
-    "MEAN",
-    "MEAN_STD_DEV",
-    "COUNT_NON_ZERO",
-    "HAS_NON_ZERO",
-    "FIND_NON_ZERO",
-    "MIN_MAX_IDX",
-    "MIN_MAX_LOC",
-    "REDUCE",
-    "REDUCE_ARG_MAX",
-    "REDUCE_ARG_MIN",
-    "NORMALIZE",
-    "BORDER_INTERPOLATE",
-    "COPY_TO",
-    "EXTRACT_CHANNEL",
-    "INSERT_CHANNEL",
-    "MIX_CHANNELS",
-    "FLIP",
-    "FLIP_ND",
-    "ROTATE",
-    "REPEAT",
-    "HCONCAT",
-    "VCONCAT",
-    "BROADCAST",
-    "SWAP",
-    "GET_STRUCTURING_ELEMENT",
-    "GET_GAUSSIAN_KERNEL",
-    "GET_DERIV_KERNELS",
-    "GET_GABOR_KERNEL",
-    "CREATE_HANNING_WINDOW",
-    "INTEGRAL",
-    "SCHARR",
-    "LAPLACIAN",
-    "SPATIAL_GRADIENT",
-    "SQR_BOX_FILTER",
-    "MEDIAN_BLUR",
-    "BILATERAL_FILTER",
-    "STACK_BLUR",
-    "ADAPTIVE_THRESHOLD",
-    "THRESHOLD_WITH_MASK",
-    "EQUALIZE_HIST",
-    "APPLY_COLOR_MAP",
-    "ACCUMULATE",
-    "ACCUMULATE_PRODUCT",
-    "ACCUMULATE_SQUARE",
-    "ACCUMULATE_WEIGHTED",
-    "BLEND_LINEAR",
-    "PYR_DOWN",
-    "PYR_UP",
-    "BUILD_PYRAMID",
-    "CVT_COLOR_TWO_PLANE",
-    "DEMOSAICING",
-    "REMAP",
-    "CONVERT_MAPS",
-    "WARP_PERSPECTIVE",
-    "GET_AFFINE_TRANSFORM",
-    "GET_PERSPECTIVE_TRANSFORM",
-    "GET_ROTATION_MATRIX_2D",
-    "GET_ROTATION_MATRIX_2D_",
-    "INVERT_AFFINE_TRANSFORM",
-    "GET_RECT_SUB_PIX",
-}
-
-
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Render cvh vs OpenCV compare CSV to Markdown")
     p.add_argument("--input", required=True, help="Input CSV path")
@@ -125,10 +42,6 @@ def row_suite(row: dict) -> str:
     return "core_mat" if (row.get("op", "") or "").startswith("MAT_") else "imgproc"
 
 
-def phase_label(op: str) -> str:
-    return "P1 added" if op in PHASE1_BENCHMARK_OPS else "Existing"
-
-
 def geometric_mean(values) -> float:
     positive = [x for x in values if x > 0.0]
     if not positive:
@@ -157,21 +70,6 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     opencv_faster_or_equal = sum(1 for x in speedups if x <= 1.0)
     geo_speedup = geometric_mean(speedups)
     median_speedup = statistics.median(speedups) if speedups else 0.0
-    measured_phase1_core = {
-        r.get("op", "")
-        for r in supported
-        if row_suite(r) == "core_mat" and r.get("op", "") in PHASE1_BENCHMARK_OPS
-    }
-    measured_phase1_imgproc = {
-        r.get("op", "")
-        for r in supported
-        if row_suite(r) == "imgproc" and r.get("op", "") in PHASE1_BENCHMARK_OPS
-    }
-    measured_phase1 = measured_phase1_core | measured_phase1_imgproc
-    phase1_case_count = sum(
-        1 for r in supported if r.get("op", "") in PHASE1_BENCHMARK_OPS
-    )
-
     def group_result(op_names) -> str:
         values = [
             to_float(r.get("speedup", "0"))
@@ -193,62 +91,22 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("")
     lines.append(f"Generated at (UTC): `{generated_at}`")
     lines.append("")
-    lines.append("## Current Project Status")
+    lines.append("## Scope")
     lines.append("")
-    lines.append("- `cvh` (cv-header-only) is an independent pure header-only library and does not depend on an in-project `.cpp` extension layer.")
-    lines.append("- Mode B compares `cvh::headers` with `OpenCVUIOnly` forced against upstream OpenCV built on the same machine; the CVH implementation label is `cvh_ui`.")
-    lines.append("- Specialized NEON/AVX2 dispatch is rejected. Operators without a UI kernel remain in the report through their public header fallback rather than becoming a second product implementation.")
-    lines.append("- After Phase 1 for Core and Imgproc, callable API-name coverage is `107/220`: Core `57/97` and Imgproc `50/123`.")
-    lines.append("- Core `add/subtract/multiply/divide/transpose/GEMM` have moved into ODR-safe headers; this report measures through the public API without linking legacy core objects.")
-    lines.append("- OpenCV Universal Intrinsics are the default SIMD dialect, and kernels use OpenCV UI directly; the xsimd performance path has been removed.")
-    lines.append("- Core F32 `patchNaNs/exp/log/pow` use UI; `pow` separates integer and general exponents while retaining a scalar fallback for special-value blocks.")
-    lines.append("- Core `countNonZero/hasNonZero` use UI; counting uses segmented widening reduction, and existence checks exit early by block.")
-    lines.append("- Core `findNonZero` uses sparsity-aware UI; all-zero blocks are skipped, contiguous dense blocks adaptively fall back to typed-lane enumeration, and row-major coordinate order is preserved.")
-    lines.append("- Core `sum/mean/meanStdDev` use C1-C4 channel-aware UI; `sum/mean` share widening sum/count logic, and `meanStdDev` uses centered block statistics with Chan merging.")
-    lines.append("- Core `minMaxIdx/minMaxLoc/reduceArgMin/reduceArgMax` use UI; extrema and indices are updated in a single pass while preserving first/last tie semantics.")
-    lines.append("- Core `norm/normalize` use UI; `norm` covers L1/L2/Inf for single- and dual-input U8/F32, while `normalize` reuses norm/min-max reductions and vectorizes F32 scale application.")
-    lines.append("- P-ACC-2 through P-ACC-8 complete the Apple ARM work across Core reductions, layouts, channels, and GEMM, plus Imgproc filtering, geometry, nonlinear operations, morphology, accumulation, and intensity transforms; validation on real x86 SSE/AVX hardware remains an external gate.")
-    lines.append("- P-ACC-8 adds pyramid ring workspaces, specialized nonlinear-filter algorithms, fixed-coordinate geometry blocks, S16 derivative UI, a wide sliding sum for `sqrBoxFilter`, and an F32 C1 reduction fast path.")
-    lines.append("- ARM work currently targets NEON, and this run used Apple ARM; x86 targets the SSE/AVX families, while RVV is deferred because of scalable-vector design considerations.")
-    lines.append("- Legacy Imgproc `.cpp` fast paths have moved into ODR-safe detail headers; resize/cvtColor, shared filters, geometric sampling, morphology, threshold, LUT/histogram, and the accumulate family all enter through the public header API.")
-    lines.append(f"- All `79` Phase 1 operation families are covered by Mode B; this report contains `{phase1_case_count}` P1 performance cases.")
-    lines.append(f"- `{meta.get('profile', 'unknown')}` profile covers representative `CV_8U` / `CV_32F`, C1/C3/C4, dimensions, layouts, and non-contiguous ROI extensions.")
+    lines.append("- `cvh` is a pure header-only library; every CVH row enters through the public `cvh::headers` API.")
+    lines.append("- The benchmark forces `OpenCVUIOnly`, and every CVH implementation label must therefore be `cvh_ui`.")
+    lines.append("- Direct architecture-specific dispatch is rejected. Operators without a Universal Intrinsics kernel use their normal public-header fallback, whose actual path is recorded in `CVH dispatch`.")
+    lines.append("- The reference is the upstream OpenCV build recorded in the metadata, running on the same host with matching inputs and parameters.")
     lines.append("")
 
-    lines.append("## Phase 1 Added Operators")
-    lines.append("")
-    lines.append("This section records API operation families added in Phase 1 relative to the previous coverage. An implemented API is not necessarily part of this Mode B performance matrix; an operator counts as measured only when a matching OpenCV case uses the same input and parameters.")
-    lines.append("")
-    lines.append("| Module | Added in Phase 1 | Measured in This Report | Implemented but Not Measured |")
-    lines.append("| --- | ---: | ---: | ---: |")
-    lines.append(f"| Core | 43 | {len(measured_phase1_core)} | {43 - len(measured_phase1_core)} |")
-    lines.append(f"| Imgproc | 36 | {len(measured_phase1_imgproc)} | {36 - len(measured_phase1_imgproc)} |")
-    lines.append(f"| **Total** | **79** | **{len(measured_phase1)}** | **{79 - len(measured_phase1)}** |")
-    lines.append("")
-    lines.append("| Module / Category | Added Operation Families | Count | Mode B Status in This Report |")
-    lines.append("| --- | --- | ---: | --- |")
-    lines.append("| Core: element-wise and logical | `absdiff`, `bitwise_and`, `bitwise_not`, `bitwise_or`, `bitwise_xor`, `inRange`, `min`, `max` | 8 | 8/8 measured |")
-    lines.append("| Core: conversion, math, and validation | `scaleAdd`, `convertScaleAbs`, `convertFp16`, `sqrt`, `pow`, `exp`, `log`, `checkRange`, `patchNaNs` | 9 | 9/9 measured |")
-    lines.append("| Core: reductions and statistics | `norm`, `sum`, `mean`, `meanStdDev`, `countNonZero`, `hasNonZero`, `findNonZero`, `minMaxIdx`, `minMaxLoc`, `reduce`, `reduceArgMax`, `reduceArgMin`, `normalize` | 13 | 13/13 measured |")
-    lines.append("| Core: layout, copying, and channels | `borderInterpolate`, `copyTo`, `extractChannel`, `insertChannel`, `mixChannels`, `flip`, `flipND`, `rotate`, `repeat`, `hconcat`, `vconcat`, `broadcast`, `swap` | 13 | 13/13 measured |")
-    lines.append("| Imgproc: kernels, filtering, and intensity | `getStructuringElement`, `getGaussianKernel`, `getDerivKernels`, `getGaborKernel`, `createHanningWindow`, `integral`, `Scharr`, `Laplacian`, `spatialGradient`, `sqrBoxFilter`, `medianBlur`, `bilateralFilter`, `stackBlur`, `adaptiveThreshold`, `thresholdWithMask`, `equalizeHist`, `applyColorMap` | 17 | 17/17 measured |")
-    lines.append("| Imgproc: accumulation, pyramids, and color | `accumulate`, `accumulateProduct`, `accumulateSquare`, `accumulateWeighted`, `blendLinear`, `pyrDown`, `pyrUp`, `buildPyramid`, `cvtColorTwoPlane`, `demosaicing` | 10 | 10/10 measured |")
-    lines.append("| Imgproc: geometric transforms | `remap`, `convertMaps`, `warpPerspective`, `getAffineTransform`, `getPerspectiveTransform`, `getRotationMatrix2D`, `getRotationMatrix2D_`, `invertAffineTransform`, `getRectSubPix` | 9 | 9/9 measured |")
-    lines.append("")
-    lines.append("Operators such as `ADD`, `GEMM`, `resize`, and `cvtColor` remain existing baselines in the tables below; rows marked `P1 added` were added in this phase and included in the performance comparison.")
-    lines.append("")
-
-    lines.append("## High-Level Optimization Structure")
+    lines.append("## Comparison Model")
     lines.append("")
     lines.append("| Layer | Current Implementation | Meaning in This Report |")
     lines.append("| --- | --- | --- |")
-    lines.append("| Public API | OpenCV-compatible header API | All cases call `cvh::headers` with `OpenCVUIOnly` forced |")
-    lines.append("| SIMD dialect | OpenCV Universal Intrinsics | Maps to NEON on Apple ARM |")
-    lines.append("| Specialized kernel | `cvtColor`, selected `resize`, Core element-wise operations, statistics/nonzero reductions, F32 math, pyramid, and derivative UI kernels | Recorded as `dispatch_path=opencv_ui` |")
-    lines.append("| Header fast-path | Row-parallel filters, LUT, border, Sobel, Canny, morphology, sliding sums, and specialized nonlinear kernels | Records the actual `header_fastpath` / `sliding_*` / `precomputed_lut` path |")
-    lines.append("| Geometric sampling | shared fixed-coordinate blocks, U8 bilinear sampler with interior/border routing | Recorded as `dispatch_path=fixed_coordinate_block` |")
-    lines.append("| Generic implementation | `cvh::headers` header baseline | Inherited automatically when no dedicated fast path exists; recorded as `headers_baseline` or `public_header_scalar` |")
-    lines.append("| Reference implementation | upstream OpenCV `core` / `imgproc` | Same input, dimensions, border, and thread configuration |")
+    lines.append("| Public candidate | `cvh::headers` | Built with `OpenCVUIOnly`; implementation label `cvh_ui` |")
+    lines.append("| Vector dialect | OpenCV Universal Intrinsics | Portable UI kernels selected by the compiler and intrinsics layer |")
+    lines.append("| Public fallback | Header-only scalar or generic fast path | Same product target; actual path recorded by `dispatch_path` |")
+    lines.append("| Reference | Upstream OpenCV `core` / `imgproc` | Same input, dimensions, borders, parameters, and thread setting |")
     lines.append("")
 
     if meta:
@@ -315,9 +173,9 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
         )
         lines.append("")
 
-    lines.append("## Remaining P-ACC-8 Gaps")
+    lines.append("## Performance Priorities")
     lines.append("")
-    lines.append("The multipliers below are within-group geometric means for this run. They are intended only to prioritize follow-up work and do not indicate API support status. P-ACC-8 passed its acceptance gates relative to the previous internal paths, but some operators still trail upstream significantly.")
+    lines.append("The multipliers below are within-group geometric means for this run. They prioritize follow-up work and do not indicate API support status.")
     lines.append("")
     lines.append(
         md_table(
@@ -327,36 +185,36 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
                     "`GEMM`",
                     group_result({"GEMM"}),
                     "The default upstream build can use Accelerate/LAPACK; this is not a pure SIMD comparison against built-in OpenCV UI kernels",
-                    "Keep the current header-only micro-kernel and do not add a link-time dependency merely to chase external BLAS performance",
+                    "Keep the header-only boundary explicit when evaluating future improvements",
                 ],
                 [
                     "filter / derivative",
                     group_result({"BOX_FILTER", "FILTER2D", "GAUSSIAN", "SEP_FILTER2D", "SCHARR", "LAPLACIAN", "SPATIAL_GRADIENT"}),
                     "CVH still has generic filter dispatch, border materialization, and intermediate-row processing; upstream specializes more deeply by type and kernel size",
-                    "Prioritize a shared row/column engine and fused U8-to-S16/F32 kernels next",
+                    "Prioritize shared row/column work and fused U8-to-S16/F32 kernels",
                 ],
                 [
                     "nonlinear",
                     group_result({"BILATERAL_FILTER", "MEDIAN_BLUR", "STACK_BLUR"}),
                     "Repeated window scans are gone, but bilateral weight accumulation, the median lane network, and large-image cache behavior still lag",
-                    "Keep the accepted algorithms and continue separating pixel kernels from memory access based on absolute runtime",
+                    "Separate pixel-kernel cost from memory-access cost using absolute runtime",
                 ],
                 [
                     "pyramid",
                     group_result({"PYR_DOWN", "PYR_UP", "BUILD_PYRAMID"}),
                     "The ring workspace and UI are in place, but C3 interleaving, boundary rows, and up/downsample writeback still trail specialized upstream kernels",
-                    "Continue reusing the current ring infrastructure without reverting to full-image temporaries",
+                    "Reuse the current ring infrastructure and avoid full-image temporaries",
                 ],
                 [
                     "geometry",
                     group_result({"CONVERT_MAPS", "REMAP", "WARP_AFFINE", "WARP_PERSPECTIVE"}),
                     "Coordinate blocks are shared, but interpolation, border masks, and multi-channel gather/store still contain substantial scalar work",
-                    "Extend only U8 C1/C3/C4 interior SIMD without duplicating three public kernels",
+                    "Extend U8 C1/C3/C4 interior SIMD without duplicating public kernels",
                 ],
                 [
                     "reduction",
                     group_result({"MEAN_STD_DEV", "NORM", "REDUCE"}),
-                    "This round's fast paths mainly cover F32 C1; Mode B still includes multi-channel, dual-input, and high-precision contract paths",
+                    "Fast paths mainly cover F32 C1; the matrix also includes multi-channel, dual-input, and high-precision paths",
                     "Split gates by variant; do not trade precision for a better aggregate ratio",
                 ],
             ],
@@ -386,7 +244,6 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
             op_rows.append(
                 [
                     op,
-                    phase_label(op),
                     ", ".join(dispatches),
                     str(len(values)),
                     f"{ratio:.4f}",
@@ -395,7 +252,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
             )
         lines.append(
             md_table(
-                ["Op", "Phase", "CVH dispatch", "Cases", "geometric mean OpenCV/CVH", "Leader"],
+                ["Op", "CVH dispatch", "Cases", "geometric mean OpenCV/CVH", "Leader"],
                 op_rows,
             )
         )
@@ -425,7 +282,6 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
             table_rows.append(
                 [
                     r.get("op", ""),
-                    phase_label(r.get("op", "")),
                     r.get("variant", "") or "default",
                     r.get("dispatch_path", "") or "unknown",
                     r.get("depth", ""),
@@ -440,7 +296,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
             )
         lines.append(
             md_table(
-                ["Op", "Phase", "Variant", "CVH dispatch", "Depth", "Ch", "Layout", "Shape", "CVH ms", "OpenCV ms", "OpenCV/CVH", "Note"],
+                ["Op", "Variant", "CVH dispatch", "Depth", "Ch", "Layout", "Shape", "CVH ms", "OpenCV ms", "OpenCV/CVH", "Note"],
                 table_rows,
             )
         )

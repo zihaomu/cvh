@@ -2,7 +2,7 @@
 
 ## Source
 
-- Repository: `/Users/zmu/work/my_project/ocvh/opencv`
+- Repository: `https://github.com/opencv/opencv.git`
 - Version describe: `4.13.0-457-gd48bf69f65`
 - Commit: `d48bf69f65444a13f8a34b8982b083c1b78fa0e8`
 - OpenCV version header: `4.14.0-pre`

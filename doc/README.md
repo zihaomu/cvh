@@ -1,53 +1,56 @@
 # cvh Documentation
 
-`cvh`（cv-header-only）是独立的 header-only C++ 计算机视觉库。文档中
-OpenCV 仅作为 API 风格、行为兼容和性能对照的参照；名称中包含 `opencv` 的
-文档用于记录这类对齐或迁移工作，不代表项目品牌。
+`cvh` is an independent header-only C++ computer vision library. OpenCV is an
+API, behavior, and performance reference; it is not the product identity or a
+binary dependency of the normal cvh package.
 
-This directory keeps only current project documents.
+## Current Documents
 
-- [design.md](design.md): product direction, public targets, module boundaries,
-  and SIMD strategy.
-- [cvh-v0.1-release-readiness-and-next-stage-plan.md](cvh-v0.1-release-readiness-and-next-stage-plan.md):
-  `cvh 0.1` release-readiness work, product-boundary cleanup, cross-platform
-  CI, performance-baseline rebuild, and the prioritized post-release roadmap.
-- [mat-contract-v1.md](mat-contract-v1.md): current `cvh::Mat` behavior
-  contract.
+- [design.md](design.md): product direction, header-only contract, public
+  targets, module boundaries, and optimization principles.
+- [ci.md](ci.md): required correctness CI, x86 validation, optional UI-only
+  OpenCV comparison, artifacts, and local reproduction.
+- [cpu-optimization.md](cpu-optimization.md): public optimization policy,
+  compile/runtime capability detection, and dispatch modes.
+- [gemm-optimization.md](gemm-optimization.md): current GEMM API, numeric
+  contract, ISA/UI/scalar selection, packed weights, and real thread model.
+- [mat-contract-v1.md](mat-contract-v1.md): stable `cvh::Mat` behavior contract.
 - [opencv-core-imgproc-api-coverage.md](opencv-core-imgproc-api-coverage.md):
-  upstream `core`/`imgproc` operation-family inventory and current cvh support
-  gaps.
+  pinned upstream operation-family inventory and current callable cvh subset.
 - [opencv-core-imgproc-three-phase-support-plan.md](opencv-core-imgproc-three-phase-support-plan.md):
-  three-phase `core` and `imgproc` operator support scope, grouped by
-  importance and dependency.
-- [opencv-core-imgproc-phase1-implementation-plan.md](opencv-core-imgproc-phase1-implementation-plan.md):
-  ordered implementation steps and acceptance gates for the first 79
-  `core`/`imgproc` operation families.
-- [benchmark-refactor-implementation-plan.md](benchmark-refactor-implementation-plan.md):
-  implementation plan for the two-mode benchmark framework.
-- [ci-ui-only-workflow-redesign.md](ci-ui-only-workflow-redesign.md):
-  implemented design for a single required Universal Intrinsics header-only CI
-  gate and an optional UI-only OpenCV comparison.
-- [cpu-optimization-configuration-redesign.md](cpu-optimization-configuration-redesign.md):
-  proposed simplification of public optimization configuration, internal CPU
-  capability detection, runtime dispatch, public targets, and UI-only CI.
-- [core-cpp-cleanup-plan.md](core-cpp-cleanup-plan.md): cleanup and
-  header-only migration plan for core arithmetic, transpose, GEMM, and
-  overlapping legacy `.cpp` implementations.
-- [core-imgproc-test-refactor-plan.md](core-imgproc-test-refactor-plan.md):
-  source-of-truth, naming, layout, fixture, and validation plan for
-  reorganizing the `core` and `imgproc` tests.
-- [test-design-review-findings.md](test-design-review-findings.md):
-  resolved correctness, public API, SIMD dispatch, header self-containment, and
-  CI findings from the 2026-07-25 test-suite review, including closure evidence.
-- [x86-correctness-hardening-plan.md](x86-correctness-hardening-plan.md):
-  ordered remediation and acceptance gates for x86 undefined behavior,
-  AVX2-width dispatch coverage, FMA-safe numeric tests, and sanitizer CI.
+  remaining Core and Imgproc expansion roadmap.
 - [opencv-ui-kernel-migration-checklist.md](opencv-ui-kernel-migration-checklist.md):
-  checklist for porting OpenCV Universal Intrinsics kernel fragments.
-- [opencv-universal-intrinsics-adapter-plan.md](opencv-universal-intrinsics-adapter-plan.md):
-  current OpenCV UI SIMD status summary. The filename is kept for existing
-  references, but the old adapter/facade execution log has been removed.
+  current rules for OpenCV Universal Intrinsics and specialized ISA kernels.
+- [cvh-v0.1-release-readiness-and-next-stage-plan.md](cvh-v0.1-release-readiness-and-next-stage-plan.md):
+  P7.2 onboarding, P7.3 platforms, P7.4 performance baseline, and `0.1.0`
+  release gates.
+- [documentation-current-state-cleanup-plan.md](documentation-current-state-cleanup-plan.md):
+  requested execution record for the 2026-08-03 documentation cleanup.
 
-Historical rollout notes, old native-backend planning, old xsimd TODOs, and
-stale compatibility-test plans have been removed from `doc/`. Current behavior
-should be checked through README, this directory, and the header-only tests.
+## Ownership Rules
+
+| Fact | Owner |
+| --- | --- |
+| Public usage and current report entry | top-level `README.md` |
+| Product/module/target boundary | `design.md` |
+| CPU configuration and dispatch | `cpu-optimization.md` |
+| GEMM implementation facts | `gemm-optimization.md` |
+| Supported operation families | API coverage |
+| Unfinished release work | release-readiness plan |
+| Test status | test manifests and `test/failing-tests.md` |
+| Performance numbers | dated benchmark report plus CSV/metadata |
+
+Completed rollout logs do not remain in this directory. Git history is the
+archive.
+
+## Maintenance Rules
+
+- Documents describe current behavior or unfinished work, not completed
+  migration narration.
+- Local paths use portable placeholders.
+- Dated benchmark reports are immutable artifacts; corrections require a new
+  dated report.
+- New benchmark reports are written in English.
+- Public claims must trace to code, tests, or report metadata.
+- Add, remove, or rename a document and this index in the same change.
+- Run `scripts/check_docs.sh` before committing documentation changes.

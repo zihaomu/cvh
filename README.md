@@ -14,9 +14,12 @@ affiliated with or endorsed by the OpenCV project.
 
 Repository: [github.com/zihaomu/cvh](https://github.com/zihaomu/cvh)
 
-> **Latest performance report:** [cvh vs OpenCV upstream benchmark (2026-07-25, English)](benchmark/opencv_compare/results/2026-07-25-opencv-upstream-performance.en.md) · [中文](benchmark/opencv_compare/results/2026-07-25-opencv-upstream-performance.md)
+> **Latest performance report:** [cvh vs OpenCV upstream benchmark (2026-08-03, English)](benchmark/opencv_compare/results/2026-08-03-opencv-upstream-performance.en.md)
 >
-> This is the project's stable public performance checkpoint. This link will be updated to the newest dated report as optimization work lands. We commit to continuous, benchmark-backed speed improvements while keeping regressions and the remaining gap to upstream OpenCV visible.
+> Apple M5, single-threaded full profile: 344 cases using the single public
+> `cvh::headers` target with the forced `cvh_ui` comparison policy. Raw data,
+> metadata, and immutable older snapshots are listed in the
+> [benchmark result index](benchmark/opencv_compare/results/README.md).
 
 ## Status
 

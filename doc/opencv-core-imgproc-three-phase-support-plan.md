@@ -1,6 +1,6 @@
 # OpenCV Core / Imgproc 三阶段支持清单
 
-更新时间：2026-07-24
+更新时间：2026-08-03
 
 ## 1. 文档范围
 
@@ -32,8 +32,8 @@
 第一阶段优先补齐调用频率高、复用范围广，并且会被第二、三阶段反复依赖的
 基础能力。
 
-详细落地顺序与验收标准见
-[opencv-core-imgproc-phase1-implementation-plan.md](opencv-core-imgproc-phase1-implementation-plan.md)。
+第一阶段已经完成；当前可调用范围及限制以
+[API coverage](opencv-core-imgproc-api-coverage.md) 为准。
 
 ### 3.1 Core 支持列表
 

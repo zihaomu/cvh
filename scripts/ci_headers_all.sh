@@ -55,6 +55,10 @@ run_gtest_report() {
 
 print_env_fingerprint
 
+echo "documentation_contract_begin"
+"${ROOT_DIR}/scripts/check_docs.sh"
+echo "documentation_contract_end"
+
 echo "installed_header_contract_begin"
 "${ROOT_DIR}/scripts/check_header_only_contract.sh"
 echo "installed_header_contract_end"

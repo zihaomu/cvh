@@ -1,41 +1,38 @@
-# `include/cvh/imgcodecs` 目录规划
+# Imgcodecs Module
 
-## 目录职责
+## Responsibility
 
-提供最小可用的图像读写接口，让 `Mat` 和文件系统可打通（`imread`/`imwrite` 主链路）。
+Imgcodecs provides the file I/O portion of the minimum cvh pipeline:
 
-## 技术路线
+```text
+read image -> Core/Imgproc processing -> write image
+```
 
-- 基础实现基于：
-  - `include/cvh/3rdparty/std/stb_image.h`
-  - `include/cvh/3rdparty/std/stb_image_write.h`
-- API 风格尽量贴近 OpenCV，但先做能力子集，不追求一次性全格式覆盖。
+The implementation uses the vendored stb image headers and does not link an
+external codec library.
 
-## 阶段计划
+## Current Surface
 
-### P1：最小链路
+```cpp
+#include <cvh/imgcodecs/imgcodecs.h>
+```
 
-- `imread`：支持 `png/jpg` 读取到 `Mat`（`CV_8U` 主路径）。
-- `imwrite`：支持 `png/jpg` 写出。
-- 颜色布局明确（默认 BGR 或 RGB，需要文档固定）。
+- Decode: PNG, JPEG, BMP, GIF, PPM, and optional HDR coverage represented by
+  current tests.
+- Encode: PNG, JPEG, and BMP.
+- Primary output is an 8-bit cvh `Mat`; behavior is a documented subset rather
+  than complete OpenCV Imgcodecs compatibility.
 
-### P2：行为对齐
+Video codecs, animated-image writing, large-format streaming, and a general
+codec plugin system are outside the current scope.
 
-- 对齐读取失败、格式不支持、路径错误等异常语义。
-- 增加通道转换与 bit depth 约束说明。
+## Validation
 
-### P3：稳定化
+- `test/imgcodecs/` owns functional and failure-path tests.
+- `test/imgcodecs/data/manifest.json` owns synchronized fixture provenance.
+- `test/smoke/imgcodecs_headers/` verifies public-header self-containment.
+- `cvh_pipeline_smoke` verifies the read/process/write chain with deterministic
+  generated input.
 
-- 补齐 `test/imgcodecs` 数据驱动测试。
-- 增加跨平台路径与编码稳定性验证（Linux/macOS/Windows）。
-
-## 边界与约束
-
-- 先不做视频编解码、动画格式、超大格式矩阵优化。
-- 不在该目录引入与 `Mat` 无关的额外 I/O 框架依赖。
-
-## 完成定义（DoD）
-
-- 能完成“读图 -> core/imgproc 处理 -> 写图”的端到端流程。
-- 失败场景有可预测错误码/异常信息。
-- `example/` 至少包含一个完整 I/O 示例。
+New format claims require fixtures, manifest entries, error-path coverage, and
+cross-platform verification.

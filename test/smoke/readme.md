@@ -1,37 +1,52 @@
-# `test/smoke` 目录规划
+# Smoke Test Responsibilities
 
-## 目录职责
+Smoke tests provide fast structural evidence that is not efficiently expressed
+as operator unit tests.
 
-提供最快速的可用性验证，确保入口头和最小运行链路不被破坏。
+## Retained Categories
 
-## 阶段计划
+### Public-header compilation
 
-### P0：基础 smoke
+- Core, Imgproc, Imgcodecs, and HighGUI top-level headers compile independently.
+- Aggregate `cvh/cvh.h` and compatibility `cvh.h` compile independently.
+- Configure-time manifests fail when a public header lacks a compile source.
 
-- `cvh_header_compile_smoke`：验证公开头可编译。
-- `cvh_include_only_smoke`：验证直接 include 场景可编译运行，包含主 `include/` 和 vendored OpenCV UI include root。
-- `cvh_pipeline_smoke`：验证 Imgcodecs → Imgproc 的最小纯头文件处理链路。
-- `cvh_resize_dispatch_smoke`：验证默认 target 的基础 Imgproc dispatch 和输出。
-- `cvh_opencv_intrin_smoke`：验证 `cvh/core/simd/opencv_ui.h` gateway 可独立 include，并能直接使用 OpenCV UI `cv::v_*` / `cv::VTraits`。
-- `cvh_opencv_intrin_x86_smoke`：在 x86 AVX2 编译参数下验证 direct OpenCV UI 128-bit 和 256-bit 类型。
-- `cvh_imgproc_header_odr_smoke`：两个 translation unit 同时包含并调用
-  imgproc header fast-path，验证 inline/telemetry 的 ODR 链接安全。
-- `cvh_core_headers_compile_smoke`：逐个编译 Core 顶层公共头，并在配置期校验头文件清单完整性。
-- `cvh_imgproc_headers_compile_smoke`：逐个编译 Imgproc 顶层公共头，并在配置期校验头文件清单完整性。
-- `cvh_imgcodecs_headers_compile_smoke`：逐个编译 Imgcodecs 顶层公共头，并在配置期校验头文件清单完整性。
-- `cvh_highgui_headers_compile_smoke`：使用 `cvh::highgui` 编译可选 HighGUI 公共头。
-- `cvh_highgui_header_odr_smoke`：以无显示测试模式验证两个 translation unit 共享 inline HighGUI 状态。
-- `cvh_aggregate_headers_compile_smoke`：分别编译 `cvh/cvh.h` 与兼容转发头 `cvh.h`。
+### ODR and target contracts
 
-### P1：主线优先
+- Core, Imgproc, and HighGUI are linked from multiple translation units.
+- Inline dispatch telemetry and HighGUI state do not create duplicate symbols.
+- Installed `cvh::headers` and `cvh::highgui` consumers build outside the source
+  tree.
 
-- 增加纯 header-only 路径 smoke。
+### Minimal runtime pipelines
 
-### P2：发布门禁
+- direct include and basic Mat behavior;
+- Imgcodecs to Imgproc read/process/write flow;
+- default dispatch and output sanity;
+- optimization-disabled scalar behavior;
+- OpenCV UI and architecture-specific compile/runtime capability where
+  applicable.
 
-- 将 smoke 作为 CI 必跑项。
-- 任意公共头破坏必须在 smoke 阶段被拦截。
+## Boundary With Unit Tests
 
-## 完成定义（DoD）
+A smoke test should remain small and answer one structural availability
+question. Broad operator matrices, numerical edge cases, and detailed dispatch
+behavior belong in `test/core`, `test/imgproc`, or the dedicated ISA tests.
 
-- 新环境下可通过 smoke 快速确认项目可用性。
+When a smoke grows into a large functional suite, move its cases to the owning
+module and retain only the smallest end-to-end check here.
+
+## Required Gate
+
+The header-only install/consumer contract runs the public compile, ODR, include,
+and minimal pipeline smoke set:
+
+```bash
+./scripts/check_header_only_contract.sh
+```
+
+The complete hosted gate is:
+
+```bash
+./scripts/ci_headers_all.sh
+```

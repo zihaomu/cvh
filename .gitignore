@@ -69,6 +69,9 @@ big_models
 /benchmark/opencv_compare/opencv-bench-slim/
 /benchmark/opencv_compare/results/*
 !/benchmark/opencv_compare/results/.gitkeep
+!/benchmark/opencv_compare/results/README.md
+!/benchmark/opencv_compare/results/*-opencv-upstream-performance.csv
+!/benchmark/opencv_compare/results/*-opencv-upstream-performance.meta.json
 !/benchmark/opencv_compare/results/*-opencv-upstream-performance.md
 !/benchmark/opencv_compare/results/*-opencv-upstream-performance.en.md
 /benchmark/*.csv

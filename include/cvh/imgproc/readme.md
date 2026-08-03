@@ -1,182 +1,50 @@
-# `include/cvh/imgproc` 目录规划
+# Imgproc Module
 
-## 目录职责
+## Responsibility
 
-承载图像处理 API（与 OpenCV `imgproc` 风格对齐），包括颜色转换、几何变换、滤波和基础特征提取。
+Imgproc provides the accepted OpenCV-style image-processing subset, including:
 
-## 当前文件组织（已落地）
+- color conversion and Bayer/YUV input handling;
+- resize, remap, affine/perspective transforms, and sub-pixel sampling;
+- threshold, LUT, histogram equalization, and colormaps;
+- box, Gaussian, separable, median, bilateral, stack, and derivative filters;
+- pyramids, Canny, morphology, accumulation, and image blending.
 
-- `imgproc.h`：唯一聚合入口（对外建议只包含这个头）。
-- `detail/common.h`：枚举、公共 helper、后端注册初始化。
-- `resize.h`：`resize` 算子与 dispatch/fallback。
-- `cvtcolor.h`：`cvtColor` 算子与 dispatch/fallback。
-- `threshold.h`：`threshold` 算子与 dispatch/fallback。
-- `lut.h`：`LUT` 算子与 dispatch/fallback。
-- `copy_make_border.h`：`copyMakeBorder` 算子与 dispatch/fallback。
-- `filter2d.h`：`filter2D` 算子与 dispatch/fallback。
-- `sep_filter2d.h`：`sepFilter2D` 算子与 dispatch/fallback。
-- `box_filter.h`：`boxFilter` 算子与 dispatch/fallback。
-- `blur.h`：`blur`（对 `boxFilter` 的语义封装）。
-- `gaussian_blur.h`：`GaussianBlur` 算子与 dispatch/fallback。
-- `kernels.h`：结构元素、Gaussian/derivative/Gabor/Hanning kernel 生成器。
-- `integral.h`：`integral` sum 基础路径。
-- `derivatives.h`：`Scharr/Laplacian/spatialGradient` 导数扩展。
-- `sqr_box_filter.h`：`sqrBoxFilter` 宽累积平方盒滤波。
-- `median_blur.h`：`medianBlur` 通用中值路径。
-- `bilateral_filter.h`：`bilateralFilter` 预计算权重参考路径。
-- `stack_blur.h`：`stackBlur` 可分离三角核路径。
-- `adaptive_threshold.h`：mean/Gaussian 自适应阈值。
-- `equalize_hist.h`：固定 256-bin U8 histogram equalization。
-- `colormap.h`：首批内置与用户 LUT colormap。
-- `accumulate.h`：四个 F32 destination 累积算子。
-- `blend_linear.h`：双图加权融合。
-- `pyramid.h`：`pyrDown/pyrUp/buildPyramid` 固定 Gaussian 金字塔。
-- `cvtcolor_two_plane.h`：独立 Y/UV plane 的 NV12/NV21 decode。
-- `demosaicing.h`：首批 U8 Bayer bilinear decode。
-- `geometry_transform.h`：affine/perspective/rotation 矩阵生成与 affine inverse。
-- `convert_maps.h`：float/fixed remap map 的正反转换。
-- `remap.h`：三种 map 表示的 nearest/linear 通用采样。
-- `warp_perspective.h`：3x3 透视变换。
-- `rect_sub_pix.h`：bilinear 亚像素矩形提取。
-- `canny.h`：`Canny`（图像输入与导数输入两种重载）与 dispatch/fallback。
-- `morphology.h`：`erode/dilate/morphologyEx`（最小形态学）与 dispatch/fallback。
-- `warp_affine.h`：`warpAffine` 算子与 dispatch/fallback。
+The precise callable-family inventory and parameter subsets are owned by
+[`doc/opencv-core-imgproc-api-coverage.md`](../../../doc/opencv-core-imgproc-api-coverage.md).
+This module README does not duplicate the full support matrix.
 
-## 当前能力快照（2026-07）
+## Public Entry
 
-- `resize`：`CV_8U/CV_32F`，`INTER_NEAREST/INTER_NEAREST_EXACT/INTER_LINEAR`
-- `cvtColor`：`CV_8U/CV_32F`，`GRAY2BGR/BGR2GRAY/GRAY2BGRA/BGRA2GRAY/GRAY2RGBA/RGBA2GRAY/BGR2RGB/RGB2BGR/BGR2BGRA/BGRA2BGR/RGB2RGBA/RGBA2RGB/BGR2RGBA/RGBA2BGR/RGB2BGRA/BGRA2RGB/BGRA2RGBA/RGBA2BGRA/BGR2YUV/YUV2BGR/RGB2YUV/YUV2RGB/BGR2YUV_NV12/RGB2YUV_NV12/BGR2YUV_NV21/RGB2YUV_NV21/BGR2YUV_I420/RGB2YUV_I420/BGR2YUV_YV12/RGB2YUV_YV12/BGR2YUV_NV16/RGB2YUV_NV16/BGR2YUV_NV61/RGB2YUV_NV61/BGR2YUV_YUY2/RGB2YUV_YUY2/BGR2YUV_UYVY/RGB2YUV_UYVY/BGR2YUV_NV24/RGB2YUV_NV24/BGR2YUV_NV42/RGB2YUV_NV42/BGR2YUV_I444/RGB2YUV_I444/BGR2YUV_YV24/RGB2YUV_YV24/YUV2BGR_NV12/YUV2RGB_NV12/YUV2BGR_NV21/YUV2RGB_NV21/YUV2BGR_I420/YUV2RGB_I420/YUV2BGR_YV12/YUV2RGB_YV12/YUV2BGR_I444/YUV2RGB_I444/YUV2BGR_YV24/YUV2RGB_YV24/YUV2BGR_NV16/YUV2RGB_NV16/YUV2BGR_NV61/YUV2RGB_NV61/YUV2BGR_NV24/YUV2RGB_NV24/YUV2BGR_NV42/YUV2RGB_NV42/YUV2BGR_YUY2/YUV2RGB_YUY2/YUV2BGR_UYVY/YUV2RGB_UYVY`（`NV12/NV21/I420/YV12/NV16/NV61/YUY2/UYVY/NV24/NV42/I444/YV24` 均已支持 `CV_8U` encode/decode）
-- `threshold`：`CV_8U` 全基础阈值；`CV_32F` 固定阈值（`OTSU/TRIANGLE` 仅 `CV_8UC1`）
-- `LUT`：`src=CV_8U`，`lut.total()==256`，`lut.channels()==1` 或 `src.channels()`
-- `copyMakeBorder`：`CV_8U/CV_32F`（`BORDER_CONSTANT/REPLICATE/REFLECT/REFLECT_101/WRAP`）
-- `filter2D`：`src=CV_8U/CV_32F`，`kernel=CV_32F(C1)`，`ddepth=-1/CV_8U/CV_32F`，`BORDER_CONSTANT/REPLICATE/REFLECT/REFLECT_101`
-- `sepFilter2D`：`src=CV_8U/CV_32F`，`kernelX/kernelY=CV_32F(C1, 1xN/Nx1)`，`ddepth=-1/CV_8U/CV_32F`，`BORDER_CONSTANT/REPLICATE/REFLECT/REFLECT_101`
-- `warpAffine`：`CV_8U/CV_32F`（`INTER_NEAREST/INTER_LINEAR` + `WARP_INVERSE_MAP`，`BORDER_CONSTANT/REPLICATE/REFLECT/REFLECT_101`）
-- `boxFilter/blur`：`CV_8U/CV_32F`（`BORDER_CONSTANT/REPLICATE/REFLECT/REFLECT_101`）
-- `GaussianBlur`：`CV_8U/CV_32F`（odd `ksize` + `sigma` 基础路径）
-- `Sobel`：`CV_8U/CV_16S/CV_32F -> CV_16S/CV_32F`（当前支持 `ksize=3/5`，`dx/dy` 一阶）
-- kernel generators：`getStructuringElement/getGaussianKernel/getDerivKernels/getGaborKernel/createHanningWindow`
-- `integral`：`CV_8U C1/C3/C4 -> CV_32S/CV_64F` sum
-- `Scharr/Laplacian/spatialGradient`：沿用已支持导数类型的首批子集
-- `sqrBoxFilter`：`CV_8U/CV_32F C1/C3/C4 -> CV_8U/CV_32F/CV_64F`
-- `medianBlur`：`CV_8U/CV_32F C1/C3/C4`（F32 限 3x3/5x5）
-- `bilateralFilter`：`CV_8U/CV_32F C1/C3`，不支持原地
-- `stackBlur`：`CV_8U/CV_32F C1/C3/C4`
-- `adaptiveThreshold/equalizeHist`：`CV_8UC1`
-- `thresholdWithMask`：继承 threshold 的 U8/F32 子集
-- `applyColorMap`：`CV_8UC1` 输入，首批 5 种内置 map 或用户 U8 C1/C3 LUT
-- accumulate family：`CV_8U/CV_32F C1/C3/C4 -> CV_32F` destination
-- `blendLinear`：U8/F32 image + F32C1 weights
-- `pyrDown/pyrUp/buildPyramid`：`CV_8U/CV_32F C1/C3/C4`
-- `cvtColorTwoPlane`：U8 Y + U8C2 UV，NV12/NV21 到 BGR/RGB
-- `demosaicing`：U8 Bayer BG/GB/RG/GR 到 U8C3
-- geometry matrix family：Point2f/Point2d 到 CV_64F 矩阵；F32/F64 affine inverse
-- `remap/convertMaps`：float pair、float C2、fixed pair，nearest/linear
-- `warpPerspective/getRectSubPix`：U8/F32 C1/C3/C4 几何采样
-- `Canny`：`CV_8UC1`（`apertureSize=3/5`，`L1/L2` 梯度）+ `CV_16SC1` 导数输入重载
-- `erode/dilate`：`CV_8U`（支持自定义 kernel + 迭代 + 基础 border）
-- `morphologyEx`：当前支持 `MORPH_ERODE/MORPH_DILATE/MORPH_OPEN/MORPH_CLOSE/MORPH_GRADIENT/MORPH_TOPHAT/MORPH_BLACKHAT/MORPH_HITMISS`
+```cpp
+#include <cvh/imgproc/imgproc.h>
+```
 
-## 支持矩阵（当前实现）
+Top-level `include/cvh/imgproc/*.h` files are public. Implementation helpers in
+`detail/**` are internal even though they are installed with the header-only
+package.
 
-| 算子 | 已支持类型/通道 | 当前优化重点 | 说明 |
-|---|---|---|---|
-| `resize` | `CV_8U/CV_32F`, `C1/C3/C4` | `INTER_NEAREST/INTER_NEAREST_EXACT/INTER_LINEAR` | fast-path + fallback，`cvh_test_imgproc` 已覆盖 ROI/边界尺寸 |
-| `cvtColor` | `CV_8U/CV_32F`, `GRAY(C1) <-> BGR(C3)/BGRA(C4)/RGBA(C4)`, `BGR(C3) <-> RGB(C3)`, `BGR/RGB(C3) <-> BGRA/RGBA(C4)`, `BGRA(C4) <-> RGBA(C4)`, `BGR/RGB(C3) <-> YUV(C3)`, `BGR/RGB(C3) <-> NV12/NV21(C1, H*3/2 x W)`, `BGR/RGB(C3) <-> I420/YV12(C1, H*3/2 x W)`, `BGR/RGB(C3) <-> I444/YV24(C1, H*3 x W)`, `BGR/RGB(C3) <-> NV16/NV61(C1, H*2 x W)`, `BGR/RGB(C3) <-> NV24/NV42(C1, H*3 x W)`, `BGR/RGB(C3) <-> YUY2/UYVY(C2, H x W)` | `GRAY family`、`BGR2GRAY`、`GRAY2BGR`、`RGB/BGR/RGBA/BGRA family`、`YUV family`、`YUV420/YUV422/YUV444 decode/encode` | `NV12/NV21/I420/YV12/NV16/NV61/YUY2/UYVY/NV24/NV42/I444/YV24` 已覆盖 `CV_8U` encode/decode；已覆盖连续/ROI/单行单列与 benchmark 主组合 |
-| `threshold` | `CV_8U`, `CV_32F` | `THRESH_BINARY/...` 固定阈值 | `THRESH_OTSU/THRESH_TRIANGLE` 仅 `CV_8UC1` |
-| `LUT` | `src=CV_8U`, `lut.total()==256`, `lut C1/Csrc` | 查表映射（逐像素） | 输出深度由 `lut.depth()` 决定，支持 ROI/non-contiguous |
-| `copyMakeBorder` | `CV_8U/CV_32F`, `C1/C3/C4` | 常用 border 路径 | 支持 `BORDER_CONSTANT/REPLICATE/REFLECT/REFLECT_101/WRAP` |
-| `filter2D` | `src=CV_8U/CV_32F`, `kernel=CV_32FC1`, `C1/C3/C4` | 通用卷积主路径 | 支持 `ddepth=-1/CV_8U/CV_32F`、`delta`、自定义 `anchor`，覆盖 ROI/non-contiguous 与 in-place |
-| `sepFilter2D` | `src=CV_8U/CV_32F`, `kernelX/kernelY=CV_32FC1 vector`, `C1/C3/C4` | 可分离卷积主路径 | 支持 `ddepth=-1/CV_8U/CV_32F`、`delta`、自定义 `anchor`，并与 `filter2D` 外积卷积交叉校验 |
-| `warpAffine` | `CV_8U/CV_32F`, `C1/C3/C4` | `INTER_NEAREST/INTER_LINEAR` | 支持 `WARP_INVERSE_MAP`，覆盖 ROI/non-contiguous 与 in-place |
-| `boxFilter/blur` | `CV_8U/CV_32F`, `C1/C3/C4` | `3x3` 热路径 | `blur` 为 `boxFilter` 语义封装 |
-| `GaussianBlur` | `CV_8U/CV_32F`, `C1/C3/C4` | odd `ksize` 可分离卷积 | 当前 benchmark 主打 `5x5` |
-| `Sobel` | `CV_8U/CV_16S/CV_32F -> CV_16S/CV_32F`, `C1/C3/C4` | `ksize=3/5` 一阶梯度 | 当前聚焦 `(dx,dy)=(1,0)/(0,1)` |
-| kernel generators | F32/F64 单通道 kernel | 可复用的公开构造路径 | 覆盖 structuring/Gaussian/Sobel-Scharr/Gabor/Hanning；Hanning 遵循 upstream 平方根外积语义 |
-| `integral` | `CV_8U`, `C1/C3/C4 -> CV_32S/CV_64F` | 行累计 + 跨行累计 | 当前仅公开 sum 输出，输出尺寸为 `(rows+1)x(cols+1)` |
-| `Scharr/Laplacian/spatialGradient` | 导数首批类型子集 | 复用 Sobel/可分离采样 | `spatialGradient` 当前为 `CV_8UC1 -> CV_16SC1` |
-| `sqrBoxFilter` | `CV_8U/CV_32F`, `C1/C3/C4 -> CV_8U/CV_32F/CV_64F` | 宽累积 scalar baseline | 支持 normalize 与常用 border |
-| `medianBlur` | `CV_8U/CV_32F`, `C1/C3/C4` | scalar reference | F32 限 3x3/5x5；内部使用 replicate border |
-| `bilateralFilter` | `CV_8U/CV_32F`, `C1/C3` | 预计算空间权重 | 不支持原地；支持选定 border |
-| `stackBlur` | `CV_8U/CV_32F`, `C1/C3/C4` | 可分离三角核 | 正奇数 kernel，replicate border |
-| `adaptiveThreshold` | `CV_8UC1` | 复用 box/Gaussian | MEAN/GAUSSIAN + BINARY/BINARY_INV |
-| `thresholdWithMask` | threshold 的 U8/F32 子集 | 复用 threshold 语义 | mask 未命中像素保留调用前 dst |
-| `equalizeHist` | `CV_8UC1` | 256-bin histogram | 支持 ROI 与原地 |
-| `applyColorMap` | `CV_8UC1 -> CV_8UC1/CV_8UC3` | LUT lookup | 内置 AUTUMN/JET/WINTER/COOL/HOT；用户表为 256-entry U8 C1/C3 |
-| accumulate family | `CV_8U/CV_32F`, `C1/C3/C4 -> CV_32F` | scalar update loop | 支持可选 U8C1 mask；destination 必须预初始化 |
-| `blendLinear` | matching U8/F32 C1/C3/C4 + F32C1 weights | scalar baseline | 分母遵循 upstream `w1+w2+1e-5` |
-| pyramid family | `CV_8U/CV_32F`, `C1/C3/C4` | fixed 5x5 Gaussian | `pyrUp` 当前只支持 BORDER_DEFAULT |
-| `cvtColorTwoPlane` | `CV_8UC1 Y + CV_8UC2 UV -> CV_8UC3` | direct plane traversal | NV12/NV21 到 BGR/RGB，支持独立 ROI stride |
-| `demosaicing` | `CV_8UC1 -> CV_8UC3` | bilinear scalar baseline | Bayer BG/GB/RG/GR 与 RGB aliases |
-| geometry matrix family | Point2f/Point2d；F32/F64 2x3 matrix | fixed-size scalar solve | affine/perspective/rotation 生成；inverse 支持原地 |
-| `remap/convertMaps` | U8/F32 C1/C3/C4；F32/fixed maps | shared scalar sampler | nearest/linear，四种常用 border，5-bit fixed fraction |
-| `warpPerspective` | U8/F32 C1/C3/C4；F32/F64 3x3 | shared scalar sampler | 支持 `WARP_INVERSE_MAP` 与 alias-safe source snapshot |
-| `getRectSubPix` | U8/F32 C1/C3/C4 | shared bilinear sampler | U8 可输出 U8/F32；边缘使用 replicate |
-| `Canny` | 图像重载：`CV_8UC1`；导数重载：`dx/dy=CV_16SC1` | `apertureSize=3/5`，`L1/L2` 梯度 | NMS + 双阈值滞后连接（fallback） |
-| `erode/dilate` | `CV_8U`, `C1/C3/C4` | kernel + iterations correctness | fallback 路径 |
-| `morphologyEx` | `CV_8U`, `C1/C3/C4`（`HITMISS` 限 `C1`） | `MORPH_ERODE/MORPH_DILATE/MORPH_OPEN/MORPH_CLOSE/MORPH_GRADIENT/MORPH_TOPHAT/MORPH_BLACKHAT/MORPH_HITMISS` | 其它 `MORPH_*` 暂未支持 |
+## Implementation Rules
 
-## 当前限制
+- Scalar behavior is the correctness fallback.
+- OpenCV Universal Intrinsics and specialized ISA paths must have narrow
+  type/shape/layout predicates.
+- Unsupported combinations fail explicitly or use the documented fallback.
+- ROI, non-contiguous rows, aliasing, borders, interpolation, and lane tails
+  must follow the public operator contract.
+- No runtime backend registry or compiled project implementation is permitted.
 
-- `cvtColor` 目前已覆盖 `GRAY(C1) <-> BGR(C3)/BGRA(C4)/RGBA(C4)`、`BGR(C3) <-> RGB(C3)`、`BGR/RGB(C3) <-> BGRA/RGBA(C4)`、`BGRA(C4) <-> RGBA(C4)`、`BGR/RGB(C3) <-> YUV(C3)`、`BGR/RGB(C3) <-> NV12/NV21(C1, H*3/2 x W)`、`BGR/RGB(C3) <-> I420/YV12(C1, H*3/2 x W)`、`BGR/RGB(C3) <-> I444/YV24(C1, H*3 x W)`、`BGR/RGB(C3) <-> NV16/NV61(C1, H*2 x W)`、`BGR/RGB(C3) <-> NV24/NV42(C1, H*3 x W)`、`BGR/RGB(C3) <-> YUY2/UYVY(C2, H x W)`；本轮计划内 YUV family 已收口。
-- `NV12/NV21` 输入/输出约定为单 `Mat` 的 `CV_8UC1(H*3/2 x W)`：上 `H` 行为 `Y`，下 `H/2` 行为连续 `UV` / `VU` 字节流，每 `2x2` 像素块共享一组 `U/V`。
-- `I420/YV12` 输入/输出约定为单 `Mat` 的 `CV_8UC1(H*3/2 x W)`：上 `H` 行为 `Y`，下 `H/2` 行按平面排列；`I420` 为 `U` 后 `V`，`YV12` 为 `V` 后 `U`，每 `2x2` 像素块共享一组 `U/V`。
-- `NV16/NV61` 输入/输出约定为单 `Mat` 的 `CV_8UC1(H*2 x W)`：上 `H` 行为 `Y`，下 `H` 行为连续 `UV` / `VU` 字节流，每 2 个水平像素共享一组 `U/V`。
-- `YUY2/UYVY` 输入/输出约定为单 `Mat` 的 `CV_8UC2(H x W)`：`YUY2` 按 `[Y0 U][Y1 V]` 写出，`UYVY` 按 `[U Y0][V Y1]` 写出，每 2 个水平像素共享一组 `U/V`。
-- `NV24/NV42` 输入/输出约定为单 `Mat` 的 `CV_8UC1(H*3 x W)`：上 `H` 行为 `Y`，下 `2H` 行分别按连续 `UV` / `VU` 字节流解释。
-- `I444/YV24` 输入/输出约定为单 `Mat` 的 `CV_8UC1(H*3 x W)`：上 `H` 行为 `Y`，中间 `H` 行为 `U/V` 平面，最后 `H` 行为 `V/U` 平面。
-- `threshold` 的自动阈值（`OTSU/TRIANGLE`）仍严格限定 `CV_8UC1`，对 `CV_32F` 会显式报错。
-- `LUT` 当前限定 `src.depth()==CV_8U`；`lut.total()` 必须为 `256`，且 `lut.channels()` 必须是 `1` 或 `src.channels()`。
-- `filter2D` 当前限定 `kernel.depth()==CV_32F && kernel.channels()==1`，暂不支持 `CV_64F` kernel。
-- `sepFilter2D` 当前限定 `kernelX/kernelY` 为 `CV_32F` 单通道向量（`1xN` 或 `Nx1`）。
-- `warpAffine` 当前支持 `INTER_NEAREST/INTER_LINEAR` 与 `WARP_INVERSE_MAP`，不支持 `INTER_NEAREST_EXACT` / `WARP_FILL_OUTLIERS` 等扩展 flag。
-- `getPerspectiveTransform` 当前只支持 `DECOMP_LU`；退化 affine/perspective 点集显式报错，奇异 affine inverse 输出零矩阵。
-- `remap/warpPerspective` 当前只支持 nearest/linear 和 CONSTANT/REPLICATE/REFLECT/REFLECT_101；不支持 relative map、transparent border 或高阶插值。
-- `Sobel` 当前支持 `ksize=3/5` 与一阶导数组合；输出 `ddepth` 当前支持 `CV_16S/CV_32F`。
-- `Canny` 当前图像重载仅支持 `CV_8UC1`，导数重载仅支持 `CV_16SC1` 的 `dx/dy`，`apertureSize` 支持 `3/5`。
-- `erode/dilate` 当前仅支持 `CV_8U`。
-- `morphologyEx` 当前支持 `MORPH_ERODE/MORPH_DILATE/MORPH_OPEN/MORPH_CLOSE/MORPH_GRADIENT/MORPH_TOPHAT/MORPH_BLACKHAT/MORPH_HITMISS`；其余 op 会显式报错。
-- `MORPH_HITMISS` 当前限定 `CV_8UC1` 输入，kernel 支持 `CV_8UC1/CV_8SC1`。
-  - `CV_8SC1` 语义：`1`=前景命中、`-1`=背景命中、`0`=忽略。
-- benchmark baseline 是“固定机器 / 固定 runner class”相关资产，跨硬件直接复用不保证通过。
+The kernel migration checklist is
+[`doc/opencv-ui-kernel-migration-checklist.md`](../../../doc/opencv-ui-kernel-migration-checklist.md).
 
-## 开发前提
+## Validation
 
-- 依赖 `core` 的 `Mat` 语义先稳定（type/channel/stride/ROI）。
-- 先保证 correctness，再做 SIMD/OpenMP 优化。
+- `test/imgproc/`: public operator contracts and internal dispatch tests.
+- `test/smoke/imgproc_headers/`: independent compilation of every top-level
+  Imgproc public header.
+- `cvh_imgproc_header_odr_smoke`: multi-translation-unit inline/telemetry
+  safety.
+- `cvh_benchmark_imgproc_header`: canonical internal performance suite.
 
-## 阶段计划
-
-### P1：基础颜色与像素级操作
-
-- `cvtColor`：`BGR <-> RGB`、`BGR <-> GRAY`。
-- 基础像素级变换：阈值、归一化、简单 LUT（已落地）。
-- 优先支持 `CV_8U`、`CV_32F`。
-
-### P2：几何变换
-
-- `resize`：nearest、bilinear。
-- `warpAffine`：先覆盖最常见场景。
-- 明确边界处理模式（`BORDER_CONSTANT`/`BORDER_REPLICATE` 起步）。
-
-### P3：滤波与邻域操作（已完成首轮）
-
-- `blur`、`GaussianBlur`、`Sobel`（M1 最小可用版本已落地）。
-- 卷积公共实现抽象成可复用内部接口。
-- 在 correctness 稳定后引入 SIMD 路径。
-
-### P4：进阶算子（进行中）
-
-- `Canny`、形态学扩展（`erode/dilate` kernel/border 扩展）等。
-- 进入该阶段前，必须先完成 P1-P3 的测试闭环。
-
-## 风险控制
-
-- 不在 `imgproc` 里绕过 `Mat` 语义做“临时特判”。
-- 每新增一个算子都要定义输入约束与边界行为，避免“接口有了但行为不稳定”。
-
-## 完成定义（DoD）
-
-- 每个公开 API 至少有 1 个固定数据集回归测试。
-- `test/imgproc` 覆盖正常路径和边界路径。
-- 示例目录有对应最小演示代码。
+New operators require accepted parameter documentation, public correctness
+coverage, fallback coverage, and benchmark evidence before a performance claim.

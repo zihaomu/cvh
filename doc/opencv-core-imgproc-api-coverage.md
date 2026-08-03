@@ -1,6 +1,8 @@
 # OpenCV Core / Imgproc API Coverage
 
-Last updated: 2026-07-24
+Last updated: 2026-08-03
+
+cvh baseline: `d96bfde`
 
 ## 1. Purpose
 
@@ -13,18 +15,18 @@ It answers three separate questions:
 3. Where does the current `cvh` implementation cover only a subset of the
    upstream types, overloads, or parameter space?
 
-`cvh::headers` and `cvh::headers_fast` expose the same API surface.
-`cvh::headers_fast` only changes validated dispatch paths, so it must not be
-counted as additional API coverage.
+`cvh::headers` is the single public compute target. Optimization policy and
+runtime dispatch never create a second API surface and therefore do not count
+as additional coverage.
 
 The three-phase operator support scope is tracked in
 [opencv-core-imgproc-three-phase-support-plan.md](opencv-core-imgproc-three-phase-support-plan.md).
 
 ## 2. Upstream Snapshot And Counting Rules
 
-The inventory is based on the local OpenCV checkout:
+The inventory is based on this pinned OpenCV upstream snapshot:
 
-- Repository: `/Users/zmu/work/my_project/ocvh/opencv`
+- Repository: `https://github.com/opencv/opencv.git`
 - Commit: `d48bf69f65`
 - Version header: `4.14.0-pre`
 - Core source:
@@ -32,8 +34,9 @@ The inventory is based on the local OpenCV checkout:
 - Imgproc source:
   `modules/imgproc/include/opencv2/imgproc.hpp`
 
-The upstream checkout is dirty outside these two primary headers. Neither
-inventory source header has a local modification at the time of this audit.
+Local checkout location is not part of the coverage contract. Audits must use
+the pinned revision or explicitly update the revision and this inventory in the
+same change.
 
 The primary count uses these rules:
 
@@ -415,29 +418,19 @@ class-level gaps include:
 The present implementation covers a useful preprocessing subset, not the
 general OpenCV `core` and `imgproc` surface:
 
-- Current strength: matrix ownership/layout, basic element-wise arithmetic,
-  GEMM, resize, color conversion, thresholding, common filtering, Canny, and
-  morphology.
-- Largest core gaps: reductions/statistics, bitwise operations, channel/layout
-  transforms, dense linear algebra, spectral transforms, random utilities,
-  and persistence/infrastructure.
-- Largest imgproc gaps: histogram/equalization, geometric remap and
-  perspective transforms, pyramids, advanced smoothing, contours/shapes,
-  feature/corner detection, drawing, segmentation, and Hough transforms.
+- Current strengths include matrix ownership/layout, element-wise arithmetic,
+  reductions, GEMM, channel/layout transforms, resize, color conversion,
+  thresholding, common filtering, geometry sampling, Canny, and morphology.
+- Remaining Core families are concentrated in dense linear algebra,
+  decomposition, spectral transforms, random-number utilities, sorting, and
+  advanced coordinate transforms.
+- Remaining Imgproc families are concentrated in histograms, connected
+  components, contours and shape analysis, corners/features, drawing, Hough
+  transforms, segmentation, and class-based algorithms.
 
-A practical next API tranche should favor broadly reusable primitives before
-large algorithm families:
-
-1. Core reductions and predicates: `sum`, `mean`, `countNonZero`,
-   `minMaxLoc`, and an implemented `norm`.
-2. Core element-wise utilities: `absdiff`, bitwise operations, `inRange`,
-   `min`, and `max`.
-3. Core layout utilities: `flip`, `rotate`, `hconcat`, `vconcat`,
-   `extractChannel`, and `insertChannel`.
-4. Imgproc high-frequency primitives: `adaptiveThreshold`, `equalizeHist`,
-   `medianBlur`, `pyrDown`, `pyrUp`, `remap`, and `warpPerspective`.
-5. Only then expand into contours, drawing, Hough, segmentation, and
-   class-based algorithms.
+The next implementation order is owned by
+[opencv-core-imgproc-three-phase-support-plan.md](opencv-core-imgproc-three-phase-support-plan.md).
+This coverage document records facts and must not duplicate an execution plan.
 
 ## 8. Maintenance Rules
 

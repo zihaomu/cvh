@@ -1,36 +1,39 @@
-# `include/cvh` 目录规划
+# `include/cvh` Public Header Surface
 
-## 目录职责
+## Purpose
 
-这是 `cvh`（cv-header-only）的对外入口层，定义用户可见 API 的组织方式。
-用户应当只通过该目录下的头文件使用库功能。
+This directory is the installed `cvh` C++17 header surface.
 
-## 目录结构规划
+## Modules
 
-- `cvh.h`：统一入口头。
-- `core/`：核心数据结构与基础算子。
-- `imgproc/`：图像处理模块。
-- `imgcodecs/`：图像读写模块。
-- `3rdparty/`：只存放必要且可审计的第三方头文件依赖。
+- `cvh.h`: aggregate entry for Core, Imgproc, and Imgcodecs.
+- `core/`: Mat, basic types, arithmetic, reductions, layout, parallel runtime,
+  and GEMM.
+- `imgproc/`: color, filtering, geometry, intensity, morphology, and feature
+  primitives.
+- `imgcodecs/`: image file decode and encode.
+- `highgui/`: optional window and event API; intentionally excluded from the
+  aggregate header.
+- `detail/`: cross-module internal configuration.
+- `3rdparty/`: audited vendored header dependencies.
 
-## 阶段计划
+Use the aggregate compute entry with:
 
-### P0：入口稳定
+```cpp
+#include <cvh/cvh.h>
+```
 
-- 保证 `#include <cvh/cvh.h>` 在最小工程可直接编译。
-- 清理对测试路径或 `src/` 的隐式依赖。
+Use HighGUI explicitly with:
 
-### P1：模块接口收敛
+```cpp
+#include <cvh/highgui/highgui.h>
+```
 
-- 公开头仅暴露稳定 API。
-- 内部实现细节下沉到 `detail` 或 `*.inl.h`，避免污染主头。
+## Public Boundary
 
-### P2：发布准备
+Top-level module `.h` files are the supported include surface. `detail/**`,
+`simd/**`, implementation `.hpp`, and `.inl.h` files are installed because the
+project is header-only, but they are not source-compatibility promises.
 
-- 补齐模块文档链接与版本兼容说明。
-- 提供安装与导出友好的 include 布局。
-
-## 完成定义（DoD）
-
-- 用户只加 include 路径即可使用核心能力。
-- 所有公开头路径和命名在版本内保持稳定。
+Every new public header must be registered in the per-header compile smoke.
+Public code must not depend on repository source or test paths.
