@@ -1397,3 +1397,194 @@ TEST(OpenCVContractSmoke_TEST, imgproc_geometry_sampling_matches_upstream)
         CV_32F);
     validate(ImgprocGeometrySamplingOpId::RectSubPixU8F32, actual);
 }
+
+TEST(OpenCVContractSmoke_TEST, phase2_core_random_and_point_transforms_match_upstream)
+{
+    Mat random_values({3, 5}, CV_8UC4);
+    randn(random_values,
+          Scalar(-10.0, 12.6, 300.0, 42.0),
+          Scalar::all(0.0));
+    EXPECT_TRUE(cvh_test_opencv_contract::validate_phase2_random_zero_stddev(
+        random_values.data, random_values.total() * random_values.elemSize()));
+
+    Mat source({3, 4}, CV_32FC2);
+    for (int row = 0; row < source.size[0]; ++row)
+    {
+        for (int column = 0; column < source.size[1]; ++column)
+        {
+            source.at<float>(row, column, 0) = static_cast<float>(column + row * 0.25);
+            source.at<float>(row, column, 1) = static_cast<float>(2 * column - row * 0.5);
+        }
+    }
+    Mat matrix({3, 3}, CV_64FC1);
+    const double matrix_values[] = {
+        2.0, -1.0, 3.0, 0.5, 4.0, -2.0, -1.0, 0.25, 7.0};
+    for (int index = 0; index < 9; ++index)
+        matrix.at<double>(index / 3, index % 3) = matrix_values[index];
+    Mat transformed;
+    transform(source, transformed, matrix);
+    EXPECT_TRUE(cvh_test_opencv_contract::validate_phase2_transform(
+        transformed.data, transformed.total() * transformed.elemSize()));
+
+    Mat points({1, 4}, CV_64FC2);
+    points.at<double>(0, 0, 0) = 1.0;
+    points.at<double>(0, 0, 1) = 2.0;
+    points.at<double>(0, 1, 0) = 3.0;
+    points.at<double>(0, 1, 1) = 4.0;
+    points.at<double>(0, 2, 0) = -2.0;
+    points.at<double>(0, 2, 1) = 5.0;
+    points.at<double>(0, 3, 0) = std::numeric_limits<double>::quiet_NaN();
+    points.at<double>(0, 3, 1) = 1.0;
+    const double perspective_values[] = {
+        2.0, 0.5, 3.0, -1.0, 3.0, -2.0, 1.0, 0.25, -1.0};
+    for (int index = 0; index < 9; ++index)
+        matrix.at<double>(index / 3, index % 3) = perspective_values[index];
+    perspectiveTransform(points, transformed, matrix);
+    EXPECT_TRUE(cvh_test_opencv_contract::validate_phase2_perspective_transform(
+        transformed.data, transformed.total() * transformed.elemSize()));
+}
+
+TEST(OpenCVContractSmoke_TEST, phase2_connected_components_match_upstream)
+{
+    Mat image({7, 9}, CV_8UC1);
+    image = 0;
+    for (int row = 0; row < image.size[0]; ++row)
+        for (int column = 0; column < image.size[1]; ++column)
+            if (((row * column + column + 2 * row) % 7) < 2)
+                image.at<uchar>(row, column) = 255;
+
+    for (int connectivity : {4, 8})
+    {
+        Mat labels;
+        Mat stats;
+        Mat centroids;
+        const int count = connectedComponentsWithStats(
+            image, labels, stats, centroids, connectivity);
+        EXPECT_TRUE(cvh_test_opencv_contract::validate_phase2_connected_components(
+            connectivity,
+            labels.data, labels.total() * labels.elemSize(),
+            stats.data, stats.total() * stats.elemSize(),
+            centroids.data, centroids.total() * centroids.elemSize(),
+            count)) << "connectivity=" << connectivity;
+    }
+}
+
+TEST(OpenCVContractSmoke_TEST, phase2_contours_match_upstream_order_and_ties)
+{
+    Mat image({9, 11}, CV_8UC1);
+    image = 0;
+    for (int row = 1; row < 7; ++row)
+        for (int column = 1; column < 8; ++column)
+            image.at<uchar>(row, column) = 255;
+    for (int row = 2; row < 5; ++row)
+        for (int column = 3; column < 6; ++column)
+            image.at<uchar>(row, column) = 0;
+    image.at<uchar>(7, 9) = 255;
+    image.at<uchar>(8, 10) = 255;
+
+    for (int mode : {RETR_EXTERNAL, RETR_LIST})
+    {
+        for (int method : {CHAIN_APPROX_NONE, CHAIN_APPROX_SIMPLE})
+        {
+            std::vector<std::vector<Point>> contours;
+            findContours(image, contours, mode, method, Point(2, -3));
+            std::vector<int> xy;
+            std::vector<std::size_t> sizes;
+            for (const auto& contour : contours)
+            {
+                sizes.push_back(contour.size());
+                for (const Point& point : contour)
+                {
+                    xy.push_back(point.x);
+                    xy.push_back(point.y);
+                }
+            }
+            EXPECT_TRUE(cvh_test_opencv_contract::validate_phase2_contours(
+                mode, method, 2, -3, xy.data(), sizes.data(), contours.size()))
+                << "mode=" << mode << " method=" << method;
+        }
+    }
+}
+
+TEST(OpenCVContractSmoke_TEST, phase2_shapes_match_upstream)
+{
+    const std::vector<Point> points = {
+        Point(1, 1), Point(6, 1), Point(7, 3), Point(5, 6),
+        Point(3, 5), Point(1, 6), Point(2, 3)};
+    const Rect rect = boundingRect(points);
+    const int rect_values[] = {rect.x, rect.y, rect.width, rect.height};
+    const double scalar_values[] = {
+        contourArea(points, false), contourArea(points, true),
+        arcLength(points, false), arcLength(points, true)};
+    std::vector<Point> approximate;
+    approxPolyDP(points, approximate, 0.75, true);
+    std::vector<Point> hull;
+    convexHull(points, hull, false);
+    std::vector<int> approximate_xy;
+    std::vector<int> hull_xy;
+    for (const Point& point : approximate)
+    {
+        approximate_xy.push_back(point.x);
+        approximate_xy.push_back(point.y);
+    }
+    for (const Point& point : hull)
+    {
+        hull_xy.push_back(point.x);
+        hull_xy.push_back(point.y);
+    }
+    const Moments value = moments(points);
+    const double moment_values[] = {
+        value.m00, value.m10, value.m01, value.m20, value.m11, value.m02,
+        value.m30, value.m21, value.m12, value.m03,
+        value.mu20, value.mu11, value.mu02, value.mu30, value.mu21,
+        value.mu12, value.mu03, value.nu20, value.nu11, value.nu02,
+        value.nu30, value.nu21, value.nu12, value.nu03};
+    EXPECT_TRUE(cvh_test_opencv_contract::validate_phase2_shapes(
+        rect_values, scalar_values,
+        approximate_xy.data(), approximate.size(),
+        hull_xy.data(), hull.size(),
+        isContourConvex(points), moment_values));
+}
+
+TEST(OpenCVContractSmoke_TEST, phase2_histogram_and_template_matching_match_upstream)
+{
+    Mat image({5, 7}, CV_32FC3);
+    Mat mask({5, 7}, CV_8UC1);
+    for (int row = 0; row < image.size[0]; ++row)
+    {
+        for (int column = 0; column < image.size[1]; ++column)
+        {
+            image.at<float>(row, column, 0) = static_cast<float>(column - row);
+            image.at<float>(row, column, 1) = static_cast<float>(column * 0.75 + row * 1.25);
+            image.at<float>(row, column, 2) = static_cast<float>(100 + column);
+            mask.at<uchar>(row, column) = (row + 2 * column) % 3 != 0 ? 255 : 0;
+        }
+    }
+    Mat histogram;
+    calcHist(image, 1, mask, histogram, 8, 0.0f, 12.0f);
+    Mat other({8, 1}, CV_32FC1);
+    for (int index = 0; index < 8; ++index)
+        other.at<float>(index, 0) = static_cast<float>(index + 1);
+    const double comparisons[] = {
+        compareHist(histogram, other, HISTCMP_CORREL),
+        compareHist(histogram, other, HISTCMP_CHISQR),
+        compareHist(histogram, other, HISTCMP_INTERSECT),
+        compareHist(histogram, other, HISTCMP_BHATTACHARYYA)};
+    EXPECT_TRUE(cvh_test_opencv_contract::validate_phase2_histogram(
+        histogram.data, histogram.total() * histogram.elemSize(), comparisons));
+
+    Mat match_image({8, 10}, CV_32FC1);
+    for (int row = 0; row < match_image.size[0]; ++row)
+        for (int column = 0; column < match_image.size[1]; ++column)
+            match_image.at<float>(row, column) =
+                static_cast<float>(std::sin(row * 0.3) + std::cos(column * 0.2) + row * column * 0.01);
+    Mat templ = match_image(Range(2, 5), Range(3, 7));
+    for (int method : {TM_SQDIFF, TM_SQDIFF_NORMED, TM_CCORR, TM_CCORR_NORMED})
+    {
+        Mat actual;
+        matchTemplate(match_image, templ, actual, method);
+        EXPECT_TRUE(cvh_test_opencv_contract::validate_phase2_template_match(
+            method, actual.data, actual.total() * actual.elemSize()))
+            << "method=" << method;
+    }
+}

@@ -1427,4 +1427,276 @@ bool validate_imgproc_geometry_sampling(
     return false;
 }
 
+bool validate_phase2_random_zero_stddev(const void* actual_data,
+                                        std::size_t actual_bytes)
+{
+    cv::Mat expected(3, 5, CV_8UC4);
+    cv::randn(expected,
+              cv::Scalar(-10.0, 12.6, 300.0, 42.0),
+              cv::Scalar::all(0.0));
+    return matches_bytes(expected, actual_data, actual_bytes, 0);
+}
+
+bool validate_phase2_transform(const void* actual_data,
+                               std::size_t actual_bytes)
+{
+    cv::Mat source(3, 4, CV_32FC2);
+    for (int row = 0; row < source.rows; ++row)
+    {
+        for (int column = 0; column < source.cols; ++column)
+        {
+            source.at<cv::Vec2f>(row, column) = cv::Vec2f(
+                static_cast<float>(column + row * 0.25),
+                static_cast<float>(2 * column - row * 0.5));
+        }
+    }
+    cv::Mat matrix = (cv::Mat_<double>(3, 3) <<
+        2.0, -1.0, 3.0,
+        0.5, 4.0, -2.0,
+        -1.0, 0.25, 7.0);
+    cv::Mat expected;
+    cv::transform(source, expected, matrix);
+    return matches_float_values(expected, actual_data, actual_bytes, 1e-6);
+}
+
+bool validate_phase2_perspective_transform(const void* actual_data,
+                                           std::size_t actual_bytes)
+{
+    cv::Mat source(1, 4, CV_64FC2);
+    source.at<cv::Vec2d>(0, 0) = cv::Vec2d(1.0, 2.0);
+    source.at<cv::Vec2d>(0, 1) = cv::Vec2d(3.0, 4.0);
+    source.at<cv::Vec2d>(0, 2) = cv::Vec2d(-2.0, 5.0);
+    source.at<cv::Vec2d>(0, 3) = cv::Vec2d(
+        std::numeric_limits<double>::quiet_NaN(), 1.0);
+    cv::Mat matrix = (cv::Mat_<double>(3, 3) <<
+        2.0, 0.5, 3.0,
+        -1.0, 3.0, -2.0,
+        1.0, 0.25, -1.0);
+    cv::Mat expected;
+    cv::perspectiveTransform(source, expected, matrix);
+    return matches_float_values(expected, actual_data, actual_bytes, 1e-12);
+}
+
+bool validate_phase2_connected_components(int connectivity,
+                                          const void* actual_labels,
+                                          std::size_t labels_bytes,
+                                          const void* actual_stats,
+                                          std::size_t stats_bytes,
+                                          const void* actual_centroids,
+                                          std::size_t centroids_bytes,
+                                          int actual_count)
+{
+    cv::Mat image(7, 9, CV_8UC1, cv::Scalar(0));
+    for (int row = 0; row < image.rows; ++row)
+    {
+        for (int column = 0; column < image.cols; ++column)
+        {
+            if (((row * column + column + 2 * row) % 7) < 2)
+                image.at<unsigned char>(row, column) = 255;
+        }
+    }
+    cv::Mat labels;
+    cv::Mat stats;
+    cv::Mat centroids;
+    const int count = cv::connectedComponentsWithStats(
+        image, labels, stats, centroids, connectivity, CV_32S, cv::CCL_WU);
+    return actual_count == count &&
+           matches_bytes(labels, actual_labels, labels_bytes, 0) &&
+           matches_bytes(stats, actual_stats, stats_bytes, 0) &&
+           matches_f64_values(centroids, actual_centroids, centroids_bytes, 1e-12);
+}
+
+bool validate_phase2_contours(int mode,
+                              int method,
+                              int offset_x,
+                              int offset_y,
+                              const int* actual_xy,
+                              const std::size_t* actual_sizes,
+                              std::size_t actual_contour_count)
+{
+    cv::Mat image(9, 11, CV_8UC1, cv::Scalar(0));
+    cv::rectangle(image, cv::Rect(1, 1, 7, 6), cv::Scalar(255), cv::FILLED);
+    cv::rectangle(image, cv::Rect(3, 2, 3, 3), cv::Scalar(0), cv::FILLED);
+    image.at<unsigned char>(7, 9) = 255;
+    image.at<unsigned char>(8, 10) = 255;
+    std::vector<std::vector<cv::Point>> expected;
+    cv::findContours(image, expected, mode, method, cv::Point(offset_x, offset_y));
+    if (expected.size() != actual_contour_count ||
+        (actual_contour_count != 0 && (actual_xy == nullptr || actual_sizes == nullptr)))
+    {
+        std::cerr << "contour count expected=" << expected.size()
+                  << " actual=" << actual_contour_count << "\n";
+        return false;
+    }
+    std::size_t scalar_offset = 0;
+    for (std::size_t contour = 0; contour < expected.size(); ++contour)
+    {
+        if (expected[contour].size() != actual_sizes[contour])
+        {
+            std::cerr << "contour " << contour << " size expected="
+                      << expected[contour].size() << " actual="
+                      << actual_sizes[contour] << "\n";
+            return false;
+        }
+        for (const cv::Point& point : expected[contour])
+        {
+            const int actual_x = actual_xy[scalar_offset++];
+            const int actual_y = actual_xy[scalar_offset++];
+            if (actual_x != point.x || actual_y != point.y)
+            {
+                std::cerr << "contour " << contour << " point mismatch expected=("
+                          << point.x << "," << point.y << ") actual=("
+                          << actual_x << "," << actual_y << ")\n";
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool validate_phase2_shapes(const int* actual_rect,
+                            const double* actual_scalars,
+                            const int* actual_approx_xy,
+                            std::size_t actual_approx_count,
+                            const int* actual_hull_xy,
+                            std::size_t actual_hull_count,
+                            bool actual_convex,
+                            const double* actual_moments)
+{
+    const std::vector<cv::Point> points = {
+        cv::Point(1, 1), cv::Point(6, 1), cv::Point(7, 3),
+        cv::Point(5, 6), cv::Point(3, 5), cv::Point(1, 6), cv::Point(2, 3)};
+    const cv::Rect rect = cv::boundingRect(points);
+    const double scalars[] = {
+        cv::contourArea(points, false), cv::contourArea(points, true),
+        cv::arcLength(points, false), cv::arcLength(points, true)};
+    std::vector<cv::Point> approximate;
+    cv::approxPolyDP(points, approximate, 0.75, true);
+    std::vector<cv::Point> hull;
+    cv::convexHull(points, hull, false, true);
+    const bool convex = cv::isContourConvex(points);
+    const cv::Moments moments = cv::moments(points);
+    const double moment_values[] = {
+        moments.m00, moments.m10, moments.m01, moments.m20, moments.m11, moments.m02,
+        moments.m30, moments.m21, moments.m12, moments.m03,
+        moments.mu20, moments.mu11, moments.mu02, moments.mu30, moments.mu21,
+        moments.mu12, moments.mu03, moments.nu20, moments.nu11, moments.nu02,
+        moments.nu30, moments.nu21, moments.nu12, moments.nu03};
+    const int rect_values[] = {rect.x, rect.y, rect.width, rect.height};
+    if (actual_rect == nullptr || actual_scalars == nullptr ||
+        actual_moments == nullptr || actual_approx_count != approximate.size() ||
+        actual_hull_count != hull.size() || actual_convex != convex)
+    {
+        std::cerr << "shape metadata mismatch approx=" << approximate.size()
+                  << "/" << actual_approx_count << " hull=" << hull.size()
+                  << "/" << actual_hull_count << " convex=" << convex
+                  << "/" << actual_convex << "\n";
+        return false;
+    }
+    for (int index = 0; index < 4; ++index)
+    {
+        if (actual_rect[index] != rect_values[index] ||
+            !nearly_equal(scalars[index], actual_scalars[index], 1e-7))
+        {
+            std::cerr << "shape rect/scalar mismatch index=" << index
+                      << " expected rect=" << rect_values[index]
+                      << " actual=" << actual_rect[index]
+                      << " expected scalar=" << scalars[index]
+                      << " actual=" << actual_scalars[index] << "\n";
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < approximate.size(); ++index)
+    {
+        if (actual_approx_xy[index * 2] != approximate[index].x ||
+            actual_approx_xy[index * 2 + 1] != approximate[index].y)
+        {
+            std::cerr << "approx point mismatch index=" << index << " expected=("
+                      << approximate[index].x << "," << approximate[index].y
+                      << ") actual=(" << actual_approx_xy[index * 2] << ","
+                      << actual_approx_xy[index * 2 + 1] << ")\n";
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < hull.size(); ++index)
+    {
+        if (actual_hull_xy[index * 2] != hull[index].x ||
+            actual_hull_xy[index * 2 + 1] != hull[index].y)
+        {
+            std::cerr << "hull point mismatch index=" << index << " expected=("
+                      << hull[index].x << "," << hull[index].y << ") actual=("
+                      << actual_hull_xy[index * 2] << ","
+                      << actual_hull_xy[index * 2 + 1] << ")\n";
+            return false;
+        }
+    }
+    for (int index = 0; index < 24; ++index)
+    {
+        if (!nearly_equal(moment_values[index], actual_moments[index], 1e-12))
+        {
+            std::cerr << "moment mismatch index=" << index << " expected="
+                      << moment_values[index] << " actual="
+                      << actual_moments[index] << "\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+bool validate_phase2_histogram(const void* actual_histogram,
+                               std::size_t histogram_bytes,
+                               const double* actual_comparisons)
+{
+    cv::Mat image(5, 7, CV_32FC3);
+    cv::Mat mask(5, 7, CV_8UC1);
+    for (int row = 0; row < image.rows; ++row)
+    {
+        for (int column = 0; column < image.cols; ++column)
+        {
+            image.at<cv::Vec3f>(row, column) = cv::Vec3f(
+                static_cast<float>(column - row),
+                static_cast<float>(column * 0.75 + row * 1.25),
+                static_cast<float>(100 + column));
+            mask.at<unsigned char>(row, column) =
+                (row + 2 * column) % 3 != 0 ? 255 : 0;
+        }
+    }
+    const int channel = 1;
+    const int bins = 8;
+    const float range_data[] = {0.0f, 12.0f};
+    const float* ranges[] = {range_data};
+    cv::Mat expected;
+    cv::calcHist(&image, 1, &channel, mask, expected, 1, &bins, ranges, true, false);
+    cv::Mat other(8, 1, CV_32FC1);
+    for (int index = 0; index < 8; ++index)
+        other.at<float>(index, 0) = static_cast<float>(index + 1);
+    const double comparisons[] = {
+        cv::compareHist(expected, other, cv::HISTCMP_CORREL),
+        cv::compareHist(expected, other, cv::HISTCMP_CHISQR),
+        cv::compareHist(expected, other, cv::HISTCMP_INTERSECT),
+        cv::compareHist(expected, other, cv::HISTCMP_BHATTACHARYYA)};
+    if (!matches_float_values(expected, actual_histogram, histogram_bytes, 0.0) ||
+        actual_comparisons == nullptr)
+        return false;
+    for (int index = 0; index < 4; ++index)
+        if (!nearly_equal(comparisons[index], actual_comparisons[index], 1e-12))
+            return false;
+    return true;
+}
+
+bool validate_phase2_template_match(int method,
+                                    const void* actual_data,
+                                    std::size_t actual_bytes)
+{
+    cv::Mat image(8, 10, CV_32FC1);
+    for (int row = 0; row < image.rows; ++row)
+        for (int column = 0; column < image.cols; ++column)
+            image.at<float>(row, column) =
+                static_cast<float>(std::sin(row * 0.3) + std::cos(column * 0.2) + row * column * 0.01);
+    cv::Mat templ = image(cv::Rect(3, 2, 4, 3));
+    cv::Mat expected;
+    cv::matchTemplate(image, templ, expected, method);
+    return matches_float_values(expected, actual_data, actual_bytes, 2e-5);
+}
+
 }  // namespace cvh_test_opencv_contract

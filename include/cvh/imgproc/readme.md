@@ -9,6 +9,7 @@ Imgproc provides the accepted OpenCV-style image-processing subset, including:
 - threshold, LUT, histogram equalization, and colormaps;
 - box, Gaussian, separable, median, bilateral, stack, and derivative filters;
 - pyramids, Canny, morphology, accumulation, and image blending.
+- connected regions, contours, basic shape geometry, histograms, and template matching.
 
 The precise callable-family inventory and parameter subsets are owned by
 [`doc/opencv-core-imgproc-api-coverage.md`](../../../doc/opencv-core-imgproc-api-coverage.md).
@@ -48,3 +49,16 @@ The kernel migration checklist is
 
 New operators require accepted parameter documentation, public correctness
 coverage, fallback coverage, and benchmark evidence before a performance claim.
+
+## Phase 2 P0 Support Matrix
+
+| Area | Accepted subset |
+|---|---|
+| Connected components | U8C1 binary input, 4/8 connectivity, S32 labels; stats are S32 and centroids F64. |
+| Contours | Non-mutating U8C1 input; `RETR_EXTERNAL`/`RETR_LIST`, `CHAIN_APPROX_NONE`/`CHAIN_APPROX_SIMPLE`, optional offset; no hierarchy output. |
+| Shapes | Integer/float point vectors for `boundingRect`, `contourArea`, `arcLength`, `approxPolyDP`, point-returning `convexHull`, `isContourConvex`, and contour `moments`; non-finite coordinates and unrepresentable rectangle extents are rejected; raster `moments` accepts U8C1. |
+| Histogram | One U8/F32 2D C1/C3/C4 image and selected channel; 1D uniform dense F32 bins, optional U8C1 mask and accumulation; four base comparison methods. |
+| Template matching | U8/F32 C1 image/template; SQDIFF/SQDIFF_NORMED/CCORR/CCORR_NORMED; direct spatial F32 output. |
+
+All entries above are scalar header implementations; no SIMD fast-path claim is
+made without separate benchmark evidence.

@@ -13,7 +13,6 @@ from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 DOC_INDEX = ROOT / "doc" / "README.md"
-EXECUTION_RECORD = ROOT / "doc" / "documentation-current-state-cleanup-plan.md"
 RESULTS_DIR = ROOT / "benchmark" / "opencv_compare" / "results"
 
 STALE_IDENTIFIERS = (
@@ -99,8 +98,6 @@ def check_doc_index() -> list[str]:
 def check_current_vocabulary(files: list[Path]) -> list[str]:
     errors = []
     for path in files:
-        if path == EXECUTION_RECORD:
-            continue
         text = path.read_text(encoding="utf-8")
         for identifier in STALE_IDENTIFIERS:
             if identifier in text:

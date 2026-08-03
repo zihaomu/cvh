@@ -8,24 +8,27 @@
 [opencv-core-imgproc-api-coverage.md](opencv-core-imgproc-api-coverage.md)
 中的 220 个 upstream CPU C++ 操作族进行分期。
 
-第一阶段已完成后，当前共有 107 个可调用操作族，没有仅声明未实现的
-第一阶段 API，另有 113 个操作族未支持。本清单只回答：
+P2-P0 的 17 个操作族已完成并通过最终阶段 gate；当前共有 124 个可调用
+操作族，没有仅声明未实现的 API，另有 96 个操作族未支持。其余第二阶段
+操作族只保留为需求驱动的候选。本清单只回答：
 
 - 每个阶段支持哪些 `core` 算子；
 - 每个阶段支持哪些 `imgproc` 算子；
 - 为什么把这些算子放在该阶段。
 
-本清单不描述实现方法、测试步骤、SIMD 策略或交付流程。第三阶段完成后的
-`220 / 220` 表示操作族名称级覆盖，不表示完整覆盖 OpenCV 的全部重载、类型、
-类成员或后端。
+本清单不描述实现方法、测试步骤、SIMD 策略或交付流程。P2-P0 的详细支持
+矩阵和验收顺序由
+[第二阶段 P0 落地计划](opencv-core-imgproc-phase2-p0-implementation-plan.md)
+负责。`220 / 220` 只作为 upstream 操作族盘点上限，不再作为发布承诺。
 
 ## 2. 三阶段总览
 
-| 阶段 | 定位 | Core | Imgproc | 本阶段新增 | 累计覆盖 |
-|---|---|---:|---:|---:|---:|
-| 第一阶段 | 高频基础算子与通用图像流水线 | 43 | 36 | 79 | 107 / 220，48.6% |
-| 第二阶段 | 数值分析、特征与形状分析 | 35 | 47 | 82 | 189 / 220，85.9% |
-| 第三阶段 | 高复杂度算法与长尾接口 | 5 | 26 | 31 | 220 / 220，100% |
+| 阶段 | 定位 | Core | Imgproc | 操作族 | 累计覆盖/状态 |
+|---|---|---:|---:|---:|---|
+| 第一阶段 | 高频基础算子与通用图像流水线 | 43 | 36 | 79 | 已完成；107 / 220，48.6% |
+| 第二阶段 P0 | 随机数据、坐标、区域、轮廓、形状、直方图和模板匹配 | 4 | 13 | 17 | 已完成；124 / 220，56.4% |
+| 第二阶段 backlog | 低频或高依赖数值/特征/形状候选 | 31 | 34 | 65 | 不计入承诺覆盖 |
+| 第三阶段 backlog | 高复杂度算法与长尾接口 | 5 | 26 | 31 | 不计入承诺覆盖 |
 
 ## 3. 第一阶段：高频基础算子与通用图像流水线
 
@@ -34,6 +37,8 @@
 
 第一阶段已经完成；当前可调用范围及限制以
 [API coverage](opencv-core-imgproc-api-coverage.md) 为准。
+第一阶段当时的拆分、支持矩阵与逐项验收记录见恢复后的
+[第一阶段落地计划](opencv-core-imgproc-phase1-implementation-plan.md)。
 
 ### 3.1 Core 支持列表
 
@@ -58,31 +63,65 @@
 | **合计** |  | **36** |  |
 <!-- P1_IMGPROC_API_LIST_END -->
 
-## 4. 第二阶段：数值分析、特征与形状分析
+## 4. 第二阶段 P0：精选高价值操作族
 
-第二阶段建立在第一阶段的归约、滤波、布局和几何能力之上，重点覆盖计算机
-视觉分析流程中常用但依赖关系更复杂的算子。
+P2-P0 建立在第一阶段的 Mat、归约、滤波、布局和几何能力之上，只选择能够
+形成完整实际流水线且依赖边界可控的操作族。17 个操作族已从 public umbrella
+header 可调用并计入 available coverage，并已通过落地计划的 S7 gate。
 
-### 4.1 Core 支持列表
+### 4.1 P2-P0 Core：4 个
 
-<!-- P2_CORE_API_LIST_START -->
-| 类别 | 算子 | 数量 | 放在第二阶段的原因 |
+<!-- P2_P0_CORE_API_LIST_START -->
+| 类别 | 算子 | 数量 | 选择原因 |
 |---|---|---:|---|
-| 线性代数与统计分析 | `setIdentity`<br>`trace`<br>`determinant`<br>`completeSymm`<br>`invert`<br>`solve`<br>`mulTransposed`<br>`SVDecomp`<br>`SVBackSubst`<br>`calcCovarMatrix`<br>`PCACompute`<br>`PCAProject`<br>`PCABackProject`<br>`Mahalanobis`<br>`PSNR`<br>`batchDistance` | 16 | PCA、拟合、距离和质量评估依赖矩阵分解、求解、GEMM 与第一阶段归约能力。 |
-| 坐标、频域、随机与排序 | `cartToPolar`<br>`polarToCart`<br>`phase`<br>`magnitude`<br>`transform`<br>`perspectiveTransform`<br>`dft`<br>`idft`<br>`dct`<br>`idct`<br>`mulSpectrums`<br>`getOptimalDFTSize`<br>`randu`<br>`randn`<br>`randShuffle`<br>`setRNGSeed`<br>`theRNG`<br>`sort`<br>`sortIdx` | 19 | 频域算子支撑模板匹配和相位相关；随机与排序支撑聚类、特征选择和测试数据。 |
-| **合计** |  | **35** |  |
-<!-- P2_CORE_API_LIST_END -->
+| 随机 Mat | `randu`<br>`randn` | 2 | 服务数据初始化、噪声模拟、测试和 benchmark 输入。 |
+| 点坐标变换 | `transform`<br>`perspectiveTransform` | 2 | 与现有仿射、透视和点坐标处理直接衔接。 |
+| **合计** |  | **4** |  |
+<!-- P2_P0_CORE_API_LIST_END -->
 
-### 4.2 Imgproc 支持列表
+### 4.2 P2-P0 Imgproc：13 个
 
-<!-- P2_IMGPROC_API_LIST_START -->
-| 类别 | 算子 | 数量 | 放在第二阶段的原因 |
+<!-- P2_P0_IMGPROC_API_LIST_START -->
+| 类别 | 算子 | 数量 | 选择原因 |
 |---|---|---:|---|
-| 直方图、频域、区域与极坐标 | `calcHist`<br>`calcBackProject`<br>`compareHist`<br>`createCLAHE`<br>`matchTemplate`<br>`phaseCorrelate`<br>`phaseCorrelateIterative`<br>`divSpectrums`<br>`connectedComponents`<br>`connectedComponentsWithStats`<br>`distanceTransform`<br>`floodFill`<br>`linearPolar`<br>`logPolar`<br>`warpPolar` | 15 | 依赖第一阶段 remap/归约和本阶段 DFT，同时为分割、匹配和区域分析提供基础。 |
-| 角点与特征选择 | `cornerEigenValsAndVecs`<br>`cornerHarris`<br>`cornerMinEigenVal`<br>`cornerSubPix`<br>`preCornerDetect`<br>`goodFeaturesToTrack` | 6 | 共用梯度、局部协方差、排序和亚像素计算，适合作为一个关联算子组。 |
-| 轮廓与形状分析 | `HuMoments`<br>`approxPolyDP`<br>`approxPolyN`<br>`arcLength`<br>`boundingRect`<br>`boxPoints`<br>`contourArea`<br>`convexHull`<br>`convexityDefects`<br>`findContours`<br>`findContoursLinkRuns`<br>`fitEllipse`<br>`fitEllipseAMS`<br>`fitEllipseDirect`<br>`fitLine`<br>`getClosestEllipsePoints`<br>`intersectConvexConvex`<br>`isContourConvex`<br>`matchShapes`<br>`minAreaRect`<br>`minEnclosingCircle`<br>`minEnclosingConvexPolygon`<br>`minEnclosingTriangle`<br>`moments`<br>`pointPolygonTest`<br>`rotatedRectangleIntersection` | 26 | 轮廓提取是多边形、凸包、矩、拟合和包围几何的共同入口，内部依赖关系紧密。 |
-| **合计** |  | **47** |  |
-<!-- P2_IMGPROC_API_LIST_END -->
+| 区域分析 | `connectedComponents`<br>`connectedComponentsWithStats` | 2 | 分割 mask、OCR、缺陷检测和目标区域过滤；共享标记内核。 |
+| 轮廓入口 | `findContours` | 1 | 解锁后续基础轮廓和形状处理。 |
+| 基础形状 | `boundingRect`<br>`contourArea`<br>`arcLength`<br>`approxPolyDP`<br>`convexHull`<br>`isContourConvex`<br>`moments` | 7 | 共用点集、轮廓遍历和几何基础设施。 |
+| 直方图 | `calcHist`<br>`compareHist` | 2 | 用于质量分析、颜色统计和简单检索。 |
+| 模板匹配 | `matchTemplate` | 1 | 用于工业视觉、固定 UI/图标检测和小目标定位。 |
+| **合计** |  | **13** |  |
+<!-- P2_P0_IMGPROC_API_LIST_END -->
+
+### 4.3 第二阶段候选 backlog：65 个
+
+以下操作族不属于 P2-P0。只有真实流水线需求、共享基础设施和维护成本得到确认
+后，才从 backlog 中建立新的 P2 批次。
+
+Core 候选 31 个：
+
+- 线性代数与统计：`setIdentity`、`trace`、`determinant`、`completeSymm`、
+  `invert`、`solve`、`mulTransposed`、`SVDecomp`、`SVBackSubst`、
+  `calcCovarMatrix`、`PCACompute`、`PCAProject`、`PCABackProject`、
+  `Mahalanobis`、`PSNR`、`batchDistance`；
+- 坐标、频域、随机状态与排序：`cartToPolar`、`polarToCart`、`phase`、
+  `magnitude`、`dft`、`idft`、`dct`、`idct`、`mulSpectrums`、
+  `getOptimalDFTSize`、`randShuffle`、`setRNGSeed`、`theRNG`、`sort`、
+  `sortIdx`。
+
+Imgproc 候选 34 个：
+
+- 直方图、频域、区域与极坐标：`calcBackProject`、`createCLAHE`、
+  `phaseCorrelate`、`phaseCorrelateIterative`、`divSpectrums`、
+  `distanceTransform`、`floodFill`、`linearPolar`、`logPolar`、`warpPolar`；
+- 角点与特征：`cornerEigenValsAndVecs`、`cornerHarris`、
+  `cornerMinEigenVal`、`cornerSubPix`、`preCornerDetect`、
+  `goodFeaturesToTrack`；
+- 高阶形状：`HuMoments`、`approxPolyN`、`boxPoints`、`convexityDefects`、
+  `findContoursLinkRuns`、`fitEllipse`、`fitEllipseAMS`、`fitEllipseDirect`、
+  `fitLine`、`getClosestEllipsePoints`、`intersectConvexConvex`、
+  `matchShapes`、`minAreaRect`、`minEnclosingCircle`、
+  `minEnclosingConvexPolygon`、`minEnclosingTriangle`、`pointPolygonTest`、
+  `rotatedRectangleIntersection`。
 
 ## 5. 第三阶段：高复杂度算法与长尾接口
 
@@ -114,8 +153,9 @@
 | 原则 | 对应阶段 |
 |---|---|
 | 高频、通用、可被大量其他算子复用 | 第一阶段 |
-| 依赖基础算子，面向分析、特征、匹配和形状计算 | 第二阶段 |
-| 高复杂度、长依赖链、对象型接口或低频长尾能力 | 第三阶段 |
+| 高频、能形成完整用户流水线、依赖边界可控 | 第二阶段 P0 |
+| 需要真实需求证明价值的数值、频域、特征和高阶形状 API | 第二阶段 backlog |
+| 高复杂度、长依赖链、对象型接口或低频长尾能力 | 第三阶段 backlog |
 
 类成员 API、C API、`UMat`、CUDA、OpenCL、OpenGL、DirectX 等不在这份
 三阶段算子清单中，其范围以

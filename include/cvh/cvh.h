@@ -15,6 +15,8 @@
 #include "core/reduce.h"
 #include "core/utils.h"
 #include "core/gemm.h"
+#include "core/random.h"
+#include "core/transform.h"
 
 #include "imgproc/imgproc.h"
 #include "imgcodecs/imgcodecs.h"

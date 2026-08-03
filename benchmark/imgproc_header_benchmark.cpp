@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -1892,6 +1893,433 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
     }
 }
 
+std::uint64_t hash_v01_points(const std::vector<cvh::Point>& points)
+{
+    std::uint64_t hash = common::fnv1a64_basis();
+    for (const auto& point : points)
+    {
+        hash = common::fnv1a64_mix_u64(
+            hash, static_cast<std::uint64_t>(point.x));
+        hash = common::fnv1a64_mix_u64(
+            hash, static_cast<std::uint64_t>(point.y));
+    }
+    return hash;
+}
+
+std::vector<cvh::Point> make_v01_shape_points(int count)
+{
+    std::vector<cvh::Point> points;
+    points.reserve(static_cast<std::size_t>(count));
+    for (int index = 0; index < count; ++index)
+    {
+        points.emplace_back(
+            index,
+            (index * 37 + (index % 11) * 19) % 1009);
+    }
+    return points;
+}
+
+ResultRow make_v01_operator_row(const Args& args,
+                                const std::string& op,
+                                const std::string& variant,
+                                const std::string& depth,
+                                int channels,
+                                const std::string& layout,
+                                const std::string& shape,
+                                std::size_t elements,
+                                std::size_t pixels,
+                                std::size_t bytes_touched,
+                                const Result& result)
+{
+    ResultRow row;
+    row.op = op;
+    row.variant = variant;
+    row.depth = depth;
+    row.channels = channels;
+    row.layout = layout;
+    row.shape = shape;
+    row.elements = elements;
+    row.pixels = pixels;
+    row.dispatch_path = "public_header_scalar";
+    row.warmup = args.warmup;
+    row.iters = args.iters;
+    row.repeats = args.repeats;
+    row.min_ms = result.min_ms;
+    row.median_ms = result.median_ms;
+    row.mpix_per_sec = common::mpix_per_sec(pixels, result.median_ms);
+    row.melems_per_sec = result.median_ms > 0.0
+        ? static_cast<double>(elements) / result.median_ms / 1000.0
+        : 0.0;
+    row.gb_per_sec = result.median_ms > 0.0
+        ? static_cast<double>(bytes_touched) / result.median_ms / 1.0e6
+        : 0.0;
+    row.checksum = result.checksum;
+    row.note = "scalar baseline; no fast-path claim";
+    return row;
+}
+
+template<typename RunFn, typename ChecksumFn>
+void append_v01_operator_row(const Args& args,
+                             const std::string& op,
+                             const std::string& variant,
+                             const std::string& depth,
+                             int channels,
+                             const std::string& layout,
+                             const std::string& shape,
+                             std::size_t elements,
+                             std::size_t pixels,
+                             std::size_t bytes_touched,
+                             RunFn&& run_once,
+                             ChecksumFn&& checksum,
+                             std::vector<ResultRow>& rows)
+{
+    const Result result = measure_component(
+        std::forward<RunFn>(run_once),
+        std::forward<ChecksumFn>(checksum),
+        args);
+    rows.push_back(make_v01_operator_row(
+        args,
+        op,
+        variant,
+        depth,
+        channels,
+        layout,
+        shape,
+        elements,
+        pixels,
+        bytes_touched,
+        result));
+}
+
+void append_v01_region_rows(const Args& args,
+                            int matrix_rows,
+                            int matrix_cols,
+                            std::vector<ResultRow>& rows)
+{
+    const std::string shape =
+        std::to_string(matrix_cols) + "x" + std::to_string(matrix_rows);
+    cvh::Mat mask({matrix_rows, matrix_cols}, CV_8UC1);
+    for (int row = 0; row < matrix_rows; ++row)
+    {
+        for (int column = 0; column < matrix_cols; ++column)
+        {
+            mask.at<uchar>(row, column) =
+                ((row * 17 + column * 29) % 23) < 3 ? 255 : 0;
+        }
+    }
+    cvh::Mat labels;
+    cvh::Mat stats;
+    cvh::Mat centroids;
+    int component_count = 0;
+    append_v01_operator_row(
+        args,
+        "CONNECTED_COMPONENTS",
+        "SPARSE_8",
+        "CV_8U",
+        1,
+        "continuous",
+        shape,
+        mask.total(),
+        mask.total(),
+        logical_bytes(mask),
+        [&]() {
+            component_count = cvh::connectedComponents(mask, labels, 8);
+        },
+        [&]() {
+            return common::checksum_mat_bytes(labels) ^
+                static_cast<std::uint64_t>(component_count);
+        },
+        rows);
+    append_v01_operator_row(
+        args,
+        "CONNECTED_COMPONENTS_WITH_STATS",
+        "SPARSE_8",
+        "CV_8U",
+        1,
+        "continuous",
+        shape,
+        mask.total(),
+        mask.total(),
+        logical_bytes(mask),
+        [&]() {
+            component_count = cvh::connectedComponentsWithStats(
+                mask, labels, stats, centroids, 8);
+        },
+        [&]() {
+            return common::checksum_mat_bytes(stats) ^
+                common::checksum_mat_bytes(centroids) ^
+                static_cast<std::uint64_t>(component_count);
+        },
+        rows);
+
+    cvh::Mat contour_mask({matrix_rows, matrix_cols}, CV_8UC1);
+    contour_mask = 0;
+    for (int y = 4; y + 12 < matrix_rows; y += 20)
+    {
+        for (int x = 4; x + 12 < matrix_cols; x += 20)
+        {
+            for (int yy = y; yy < y + 12; ++yy)
+            {
+                for (int xx = x; xx < x + 12; ++xx)
+                {
+                    contour_mask.at<uchar>(yy, xx) = 255;
+                }
+            }
+        }
+    }
+    std::vector<std::vector<cvh::Point>> contours;
+    append_v01_operator_row(
+        args,
+        "FIND_CONTOURS",
+        "RETR_LIST_SIMPLE",
+        "CV_8U",
+        1,
+        "continuous",
+        shape,
+        contour_mask.total(),
+        contour_mask.total(),
+        logical_bytes(contour_mask),
+        [&]() {
+            cvh::findContours(
+                contour_mask,
+                contours,
+                cvh::RETR_LIST,
+                cvh::CHAIN_APPROX_SIMPLE);
+        },
+        [&]() {
+            std::uint64_t hash = 0;
+            for (const auto& contour : contours)
+            {
+                hash ^= hash_v01_points(contour);
+            }
+            return hash ^ static_cast<std::uint64_t>(contours.size());
+        },
+        rows);
+}
+
+void append_v01_shape_rows(const Args& args,
+                           int point_count,
+                           std::vector<ResultRow>& rows)
+{
+    const auto points = make_v01_shape_points(point_count);
+    const std::string shape = std::to_string(point_count) + " points";
+    const std::size_t elements = static_cast<std::size_t>(point_count);
+    const std::size_t bytes = elements * sizeof(cvh::Point);
+    cvh::Rect rectangle;
+    double scalar = 0.0;
+    bool boolean = false;
+    cvh::Moments moment_values;
+    std::vector<cvh::Point> point_output;
+
+    append_v01_operator_row(
+        args,
+        "BOUNDING_RECT",
+        "S32_POINTS",
+        "CV_32S",
+        2,
+        "vector",
+        shape,
+        elements,
+        elements,
+        bytes,
+        [&]() { rectangle = cvh::boundingRect(points); },
+        [&]() {
+            return static_cast<std::uint64_t>(rectangle.x) ^
+                (static_cast<std::uint64_t>(rectangle.y) << 16) ^
+                (static_cast<std::uint64_t>(rectangle.width) << 32);
+        },
+        rows);
+
+    const auto append_scalar = [&](const char* op, auto run_once) {
+        append_v01_operator_row(
+            args,
+            op,
+            "S32_POINTS",
+            "CV_32S",
+            2,
+            "vector",
+            shape,
+            elements,
+            elements,
+            bytes,
+            run_once,
+            [&]() {
+                std::uint64_t bits = 0;
+                std::memcpy(&bits, &scalar, sizeof(bits));
+                return bits;
+            },
+            rows);
+    };
+    append_scalar(
+        "CONTOUR_AREA", [&]() { scalar = cvh::contourArea(points); });
+    append_scalar(
+        "ARC_LENGTH", [&]() { scalar = cvh::arcLength(points, true); });
+
+    append_v01_operator_row(
+        args,
+        "APPROX_POLY_DP",
+        "EPS_1_CLOSED",
+        "CV_32S",
+        2,
+        "vector",
+        shape,
+        elements,
+        elements,
+        bytes,
+        [&]() { cvh::approxPolyDP(points, point_output, 1.0, true); },
+        [&]() { return hash_v01_points(point_output); },
+        rows);
+    append_v01_operator_row(
+        args,
+        "CONVEX_HULL",
+        "CCW_POINTS",
+        "CV_32S",
+        2,
+        "vector",
+        shape,
+        elements,
+        elements,
+        bytes,
+        [&]() { cvh::convexHull(points, point_output, false); },
+        [&]() { return hash_v01_points(point_output); },
+        rows);
+    append_v01_operator_row(
+        args,
+        "IS_CONTOUR_CONVEX",
+        "S32_POINTS",
+        "CV_32S",
+        2,
+        "vector",
+        shape,
+        elements,
+        elements,
+        bytes,
+        [&]() { boolean = cvh::isContourConvex(points); },
+        [&]() { return boolean ? 1u : 0u; },
+        rows);
+    append_v01_operator_row(
+        args,
+        "MOMENTS",
+        "S32_POINTS",
+        "CV_32S",
+        2,
+        "vector",
+        shape,
+        elements,
+        elements,
+        bytes,
+        [&]() { moment_values = cvh::moments(points); },
+        [&]() {
+            std::uint64_t bits = 0;
+            std::memcpy(&bits, &moment_values.m00, sizeof(bits));
+            return bits;
+        },
+        rows);
+}
+
+void append_v01_histogram_template_rows(const Args& args,
+                                         int matrix_rows,
+                                         int matrix_cols,
+                                         std::vector<ResultRow>& rows)
+{
+    const std::string image_shape =
+        std::to_string(matrix_cols) + "x" + std::to_string(matrix_rows);
+    cvh::Mat image({matrix_rows, matrix_cols}, CV_8UC1);
+    common::fill_mat_u8_lcg(image, 0x4201u);
+    cvh::Mat histogram;
+    append_v01_operator_row(
+        args,
+        "CALC_HIST",
+        "U8C1_256",
+        "CV_8U",
+        1,
+        "continuous",
+        image_shape,
+        image.total(),
+        image.total(),
+        logical_bytes(image),
+        [&]() {
+            cvh::calcHist(
+                image, 0, cvh::Mat(), histogram, 256, 0.0f, 256.0f);
+        },
+        [&]() { return common::checksum_mat_bytes(histogram); },
+        rows);
+
+    cvh::Mat other({256, 1}, CV_32FC1);
+    other = 1.0f;
+    double comparison = 0.0;
+    for (int method : {
+             cvh::HISTCMP_CORREL,
+             cvh::HISTCMP_CHISQR,
+             cvh::HISTCMP_INTERSECT,
+             cvh::HISTCMP_BHATTACHARYYA})
+    {
+        append_v01_operator_row(
+            args,
+            "COMPARE_HIST",
+            "METHOD_" + std::to_string(method),
+            "CV_32F",
+            1,
+            "continuous",
+            "256 bins",
+            256,
+            256,
+            logical_bytes(histogram) + logical_bytes(other),
+            [&]() {
+                comparison = cvh::compareHist(histogram, other, method);
+            },
+            [&]() {
+                std::uint64_t bits = 0;
+                std::memcpy(&bits, &comparison, sizeof(bits));
+                return bits;
+            },
+            rows);
+    }
+
+    constexpr int template_rows = 16;
+    constexpr int template_cols = 16;
+    cvh::Mat templ = image(
+        cvh::Range(5, 5 + template_rows),
+        cvh::Range(7, 7 + template_cols));
+    cvh::Mat result;
+    const std::size_t result_elements =
+        static_cast<std::size_t>(matrix_rows - template_rows + 1) *
+        static_cast<std::size_t>(matrix_cols - template_cols + 1);
+    const std::string match_shape = image_shape + "/16x16";
+    for (int method : {
+             cvh::TM_SQDIFF,
+             cvh::TM_SQDIFF_NORMED,
+             cvh::TM_CCORR,
+             cvh::TM_CCORR_NORMED})
+    {
+        append_v01_operator_row(
+            args,
+            "MATCH_TEMPLATE",
+            "METHOD_" + std::to_string(method),
+            "CV_8U",
+            1,
+            "continuous",
+            match_shape,
+            result_elements,
+            result_elements,
+            logical_bytes(image) + logical_bytes(templ),
+            [&]() { cvh::matchTemplate(image, templ, result, method); },
+            [&]() { return common::checksum_mat_bytes(result); },
+            rows);
+    }
+}
+
+void append_v01_operator_rows(const Args& args, std::vector<ResultRow>& rows)
+{
+    const int matrix_rows = args.profile == "quick" ? 120 : 240;
+    const int matrix_cols = args.profile == "quick" ? 160 : 320;
+    const int point_count = args.profile == "full" ? 16384 : 4096;
+    append_v01_region_rows(args, matrix_rows, matrix_cols, rows);
+    append_v01_shape_rows(args, point_count, rows);
+    append_v01_histogram_template_rows(
+        args, matrix_rows, matrix_cols, rows);
+}
+
 }  // namespace cvh_bench
 
 int main(int argc, char** argv)
@@ -1906,6 +2334,7 @@ int main(int argc, char** argv)
     {
         cvh_bench::append_shape_rows(args, shape, rows);
     }
+    cvh_bench::append_v01_operator_rows(args, rows);
 
     cvh_bench::print_csv(rows, std::cout);
     if (!args.output_csv.empty())

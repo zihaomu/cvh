@@ -44,8 +44,8 @@ benchmark/results/internal/<suite>/<profile>/meta.json
 
 | Target | Scope | 状态 |
 |---|---|---|
-| `cvh_benchmark_core_mat_header` | `Mat` 生命周期、布局、复制、转换和基础计算。 | Mode A `core_mat` 聚合 target。 |
-| `cvh_benchmark_imgproc_header` | 已接入聚合矩阵的 imgproc 公共 API。 | Mode A `imgproc` 聚合 target。 |
+| `cvh_benchmark_core_mat_header` | `Mat` 生命周期、布局、复制、转换、基础计算、random 和点变换。 | Mode A `core_mat` 聚合 target。 |
+| `cvh_benchmark_imgproc_header` | 已接入聚合矩阵的 imgproc 公共 API，含区域/轮廓、形状、直方图和模板匹配。 | Mode A `imgproc` 聚合 target。 |
 
 当前专项诊断 benchmark：
 
@@ -53,8 +53,6 @@ benchmark/results/internal/<suite>/<profile>/meta.json
 |---|---|---|
 | `cvh_benchmark_cvtcolor_bgr2gray_header` | `CV_8UC3` `BGR2GRAY` / `RGB2GRAY`，含 scalar/public/direct UI/micro rows。 | 可用于 imgproc 内部诊断。 |
 | `cvh_benchmark_resize_bilinear_header` | `CV_8UC1` `INTER_LINEAR` exact 2x downsample，含 scalar/public/direct UI/micro rows。 | 可用于 imgproc 内部诊断。 |
-| `cvh_benchmark_imgproc_coverage` | exhaustive 类型、通道和 color/YUV compatibility sweep。 | 覆盖诊断，不是产品性能 gate。 |
-| `cvh_benchmark_imgproc_filter` | filter forced fallback/fast-path 对比。 | 内核诊断，不进入 Mode A 产品 gate。 |
 
 最小运行示例：
 
@@ -65,6 +63,8 @@ cmake -S . -B build-bench \
   -DCVH_BUILD_BENCHMARKS=ON
 
 cmake --build build-bench -j --target \
+  cvh_benchmark_core_mat_header \
+  cvh_benchmark_imgproc_header \
   cvh_benchmark_cvtcolor_bgr2gray_header \
   cvh_benchmark_resize_bilinear_header
 
@@ -83,6 +83,10 @@ mkdir -p benchmark/results/internal/imgproc/quick
   --iters 10 \
   --repeats 7 \
   --output benchmark/results/internal/imgproc/quick/resize_current.csv
+
+./build-bench/cvh_benchmark_imgproc_header \
+  --profile quick --warmup 1 --iters 3 --repeats 3 \
+  --output benchmark/results/internal/imgproc/quick/imgproc_header_current.csv
 ```
 
 Core 逐元素算子还支持在同一二进制内强制 scalar，用于排除编译器和机器差异：

@@ -28,6 +28,7 @@ set(CVH_CORE_TEST_SOURCES
     test/core/operations/gemm_fixture_test.cpp
     test/core/operations/gemm_test.cpp
     test/core/operations/math_test.cpp
+    test/core/operations/random_transform_test.cpp
     test/core/operations/reduction_test.cpp
     test/core/operations/transpose_fixture_test.cpp
     test/core/operations/transpose_test.cpp

@@ -37,5 +37,10 @@
 #include "remap.h"
 #include "warp_perspective.h"
 #include "rect_sub_pix.h"
+#include "connected_components.h"
+#include "contours.h"
+#include "shape.h"
+#include "histogram.h"
+#include "template_match.h"
 
 #endif  // CVH_IMGPROC_H

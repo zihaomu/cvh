@@ -77,9 +77,9 @@ Current summary:
 
 | Module | Upstream families | Available (subset) | Declared only | Missing | Callable family coverage |
 |---|---:|---:|---:|---:|---:|
-| `core` | 97 | 57 | 0 | 40 | 58.8% |
-| `imgproc` | 123 | 50 | 0 | 73 | 40.7% |
-| **Total** | **220** | **107** | **0** | **113** | **48.6%** |
+| `core` | 97 | 61 | 0 | 36 | 62.9% |
+| `imgproc` | 123 | 63 | 0 | 60 | 51.2% |
+| **Total** | **220** | **124** | **0** | **96** | **56.4%** |
 
 The percentages measure name-level callable coverage only. They do not measure
 type coverage, numerical compatibility, performance, or overload parity.
@@ -135,7 +135,10 @@ counted as `core` because OpenCV declares them in `opencv2/core.hpp`.
 | `norm` | Available (subset) | One/two-input `NORM_INF/L1/L2`, optional mask, current cvh depths and channels. |
 | `normalize` | Available (subset) | `NORM_INF/L1/L2/MINMAX`, optional mask, dtype conversion and supported in-place paths. |
 | `patchNaNs` | Available (subset) | In-place `CV_32F` replacement, matching the pinned OpenCV CPU implementation; F64 is explicitly rejected. |
+| `perspectiveTransform` | Available (subset) | F32/F64 C2/C3 point vectors with 3x3/4x4 F32/F64 matrices, alias safety, and pinned zero-`w`/non-finite behavior. |
 | `pow` | Available (subset) | Per-element `CV_32F`/`CV_64F` power; pinned CPU behavior returns NaN for negative bases with non-integer powers. |
+| `randn` | Available (subset) | Allocated U8/S8/U16/S16/S32/F32/F64 C1-C4 Mat, including 2D ROI and continuous N-D layout; process-first-call deterministic thread-local engine. |
+| `randu` | Available (subset) | Same destination matrix as `randn`; per-channel half-open integer bounds and floating ranges. |
 | `reduce` | Available (subset) | 2D axis 0/1 with SUM/AVG/MAX/MIN/SUM2 and explicit output depth. |
 | `reduceArgMax` | Available (subset) | Single-channel 2D axis 0/1 with first- or last-index tie handling. |
 | `reduceArgMin` | Available (subset) | Single-channel 2D axis 0/1 with first- or last-index tie handling. |
@@ -149,6 +152,7 @@ counted as `core` because OpenCV declares them in `opencv2/core.hpp`.
 | `swap` | Available (subset) | Swaps Mat headers and ownership without copying pixel storage. |
 | `transpose` | Available (subset) | Return-by-value blocked transpose; the public signature differs from OpenCV's output-argument API. |
 | `transposeND` | Available (subset) | Return-by-value N-D axis permutation; the public signature differs from OpenCV's output-argument API. |
+| `transform` | Available (subset) | 2D F32/F64 C1-C4 source with F32/F64 channel transform matrix, optional affine bias column, ROI and alias-safe output. |
 | `vconcat` | Available (subset) | Pointer/count, pair and vector overloads for compatible 2D Mat inputs. |
 | `broadcast` | Available (subset) | Trailing-dimension N-D broadcast from vector or `CV_32SC1` shape input; cvh also preserves multi-channel elements. |
 
@@ -159,6 +163,8 @@ Public implementation sources:
 - [`core/gemm.h`](../include/cvh/core/gemm.h)
 - [`core/math.h`](../include/cvh/core/math.h)
 - [`core/reduce.h`](../include/cvh/core/reduce.h)
+- [`core/random.h`](../include/cvh/core/random.h)
+- [`core/transform.h`](../include/cvh/core/transform.h)
 - [`core/system.h`](../include/cvh/core/system.h)
 - [`imgproc/lut.h`](../include/cvh/imgproc/lut.h)
 - [`imgproc/copy_make_border.h`](../include/cvh/imgproc/copy_make_border.h)
@@ -193,12 +199,9 @@ None.
 - [ ] `magnitude`
 - [ ] `mulSpectrums`
 - [ ] `mulTransposed`
-- [ ] `perspectiveTransform`
 - [ ] `phase`
 - [ ] `polarToCart`
 - [ ] `randShuffle`
-- [ ] `randn`
-- [ ] `randu`
 - [ ] `setIdentity`
 - [ ] `setRNGSeed`
 - [ ] `solve`
@@ -208,7 +211,6 @@ None.
 - [ ] `sortIdx`
 - [ ] `theRNG`
 - [ ] `trace`
-- [ ] `transform`
 
 ## 5. Core Class And Infrastructure Coverage
 
@@ -219,7 +221,7 @@ they matter for source compatibility.
 |---|---|---|
 | `Mat` | Available (subset) | Header-only ownership, external-data views, N-D shape/step handling, ROI, clone/copy, conversion, reshape, and typed access are present. Many OpenCV constructors, iterators, masks, and expression conveniences are absent. |
 | `MatExpr` and arithmetic operators | Available (subset) | Basic arithmetic and comparison expressions exist. Bitwise, min/max, abs, and the broader OpenCV expression system are incomplete. |
-| `Scalar`, `Range`, `Point`, `Size` | Available (subset) | Simplified types for the current operator surface; not full template/type-family parity. |
+| `Scalar`, `Range`, `Point`, `Size`, `Rect`, `Moments` | Available (subset) | Simplified types for the current operator surface; not full template/type-family parity. |
 | Type/channel macros and `saturate_cast` | Available (subset) | cvh defines its accepted depths and channel encoding. Exact OpenCV ABI compatibility is not a goal. |
 | `parallel_for_`, thread controls | Available (subset) | Header-only serial, standard-thread, and optional OpenMP runtime; backend semantics differ from OpenCV. |
 | `Exception` and assertions | Available (subset) | Core throw/assert behavior needed by cvh is present. |
@@ -229,7 +231,7 @@ they matter for source compatibility.
 | `SparseMat` | Missing | No sparse matrix data model. |
 | `FileStorage`, `FileNode`, persistence | Missing | No YAML/XML/JSON persistence layer. |
 | `Algorithm`, `AsyncArray` | Missing | No OpenCV algorithm object model or async result abstraction. |
-| `RNG`, `RNG_MT19937` | Missing | Random free functions and random engine classes are absent. |
+| `RNG`, `RNG_MT19937` | Missing | `randu`/`randn` free functions are available; public random engine classes and state-control APIs are absent. |
 | `PCA`, `SVD`, `LDA` and solver classes | Missing | Dense linear algebra beyond the current GEMM subset is absent. |
 | `Affine`, `Quaternion`, `DualQuaternion` | Missing | Geometry helper classes are absent. |
 
@@ -259,10 +261,19 @@ parameter matrix.
 | `accumulateWeighted` | Available (subset) | U8/F32 C1/C3/C4 running average into F32 destination, with optional mask. |
 | `adaptiveThreshold` | Available (subset) | `CV_8UC1`, mean/Gaussian methods, binary/binary-inverse, odd block sizes. |
 | `applyColorMap` | Available (subset) | `CV_8UC1` input; AUTUMN/JET/WINTER/COOL/HOT and 256-entry U8 C1/C3 user LUT. |
+| `approxPolyDP` | Available (subset) | Integer/float point vectors, open/closed Douglas-Peucker paths, pinned cleanup and tie behavior. |
+| `arcLength` | Available (subset) | Integer/float point vectors with open/closed traversal. |
 | `bilateralFilter` | Available (subset) | `CV_8U`/`CV_32F`, C1/C3, circular neighborhood and selected borders; no in-place operation. |
 | `blendLinear` | Available (subset) | Matching U8/F32 C1/C3/C4 images and F32C1 weight maps using upstream epsilon normalization. |
 | `blur` | Available (subset) | `CV_8U`/`CV_32F`, C1/C3/C4; implemented as the normalized `boxFilter` wrapper. |
 | `boxFilter` | Available (subset) | `CV_8U`/`CV_32F`, C1/C3/C4, common border modes; selected 3x3 and separable fast paths. |
+| `boundingRect` | Available (subset) | Integer/float point vectors, including empty and repeated-point inputs; rejects non-finite coordinates and extents outside `Rect` integer range. |
+| `calcHist` | Available (subset) | One U8/F32 2D C1/C3/C4 image, one selected channel, 1D uniform dense F32 histogram, optional U8 mask and accumulate mode. |
+| `compareHist` | Available (subset) | Equal-size dense F32 C1 histograms with correlation, chi-square, intersection and Bhattacharyya methods. |
+| `connectedComponents` | Available (subset) | U8C1 binary input, 4/8 connectivity and S32 row-major labels using a shared two-pass union-find kernel. |
+| `connectedComponentsWithStats` | Available (subset) | Same labels plus S32 left/top/width/height/area and F64 centroids. |
+| `contourArea` | Available (subset) | Integer/float point vectors with oriented or absolute algebraic area. |
+| `convexHull` | Available (subset) | Integer/float point vectors returning hull points in clockwise or counter-clockwise order; index output is absent. |
 | `cvtColor` | Available (subset) | Common gray/BGR/RGB/BGRA/RGBA conversions for `CV_8U`/`CV_32F`, plus the documented `CV_8U` YUV420/YUV422/YUV444 families. |
 | `createHanningWindow` | Available (subset) | F32/F64 two-dimensional Hanning window with pinned upstream square-root product semantics. |
 | `convertMaps` | Available (subset) | F32 pair/F32C2/fixed S16C2+U16 maps, including 5-bit linear fractions and nearest maps without map2. |
@@ -272,6 +283,7 @@ parameter matrix.
 | `erode` | Available (subset) | `CV_8U`, C1/C3/C4, custom kernel, iterations, and basic border handling. |
 | `equalizeHist` | Available (subset) | `CV_8UC1` 256-bin histogram equalization with constant-image and in-place handling. |
 | `filter2D` | Available (subset) | `CV_8U`/`CV_32F` source, `CV_32FC1` kernel, selected destination depths and borders. |
+| `findContours` | Available (subset) | Non-mutating U8C1 binary input, RETR_EXTERNAL/LIST, CHAIN_APPROX_NONE/SIMPLE, vector-of-vector Point output and offset; hierarchy is absent. |
 | `getDerivKernels` | Available (subset) | F32/F64 Sobel sizes through 31 and first-order Scharr kernel generation. |
 | `getGaborKernel` | Available (subset) | F32/F64 Gabor kernels with explicit or automatically derived dimensions. |
 | `getGaussianKernel` | Available (subset) | Positive odd F32/F64 normalized kernels with OpenCV fixed coefficients for common automatic-sigma sizes. |
@@ -283,8 +295,11 @@ parameter matrix.
 | `getRotationMatrix2D_` | Available (subset) | Point2f/Point2d center to the header-only `AffineMatrix2x3d` value type. |
 | `integral` | Available (subset) | U8 C1/C3/C4 input to S32/F64 sum image with zero top/left border; sqsum/tilted overloads are absent. |
 | `invertAffineTransform` | Available (subset) | 2x3 F32/F64 input with same-depth output, alias safety, and zero output for singular matrices. |
+| `isContourConvex` | Available (subset) | Integer/float point vectors with pinned collinear, duplicate and degenerate behavior. |
+| `matchTemplate` | Available (subset) | U8/F32 C1 image/template with SQDIFF, SQDIFF_NORMED, CCORR and CCORR_NORMED direct spatial matching. |
 | `medianBlur` | Available (subset) | `CV_8U`/`CV_32F`, C1/C3/C4; F32 is limited to kernel sizes 3/5. |
 | `morphologyEx` | Available (subset) | Erode, dilate, open, close, gradient, top-hat, black-hat, and hit-or-miss; hit-or-miss is limited to `CV_8UC1`. |
+| `moments` | Available (subset) | Integer/float contours and U8C1 raster images, including binary-image mode and complete central/normalized moments. |
 | `buildPyramid` | Available (subset) | U8/F32 C1/C3/C4 Gaussian pyramid built from the same pyrDown contract. |
 | `pyrDown` | Available (subset) | U8/F32 C1/C3/C4 fixed 5x5 Gaussian downsampling with default/custom compatible sizes. |
 | `pyrUp` | Available (subset) | U8/F32 C1/C3/C4 zero-insertion Gaussian upsampling with BORDER_DEFAULT. |
@@ -322,6 +337,11 @@ Public implementation source:
 - [`imgproc/remap.h`](../include/cvh/imgproc/remap.h)
 - [`imgproc/warp_perspective.h`](../include/cvh/imgproc/warp_perspective.h)
 - [`imgproc/rect_sub_pix.h`](../include/cvh/imgproc/rect_sub_pix.h)
+- [`imgproc/connected_components.h`](../include/cvh/imgproc/connected_components.h)
+- [`imgproc/contours.h`](../include/cvh/imgproc/contours.h)
+- [`imgproc/shape.h`](../include/cvh/imgproc/shape.h)
+- [`imgproc/histogram.h`](../include/cvh/imgproc/histogram.h)
+- [`imgproc/template_match.h`](../include/cvh/imgproc/template_match.h)
 - [`imgproc/readme.md`](../include/cvh/imgproc/readme.md)
 
 ### 6.2 Missing Imgproc Families
@@ -332,21 +352,12 @@ Public implementation source:
 - [ ] `HoughLinesP`
 - [ ] `HoughLinesPointSet`
 - [ ] `HuMoments`
-- [ ] `approxPolyDP`
 - [ ] `approxPolyN`
-- [ ] `arcLength`
 - [ ] `arrowedLine`
-- [ ] `boundingRect`
 - [ ] `boxPoints`
 - [ ] `calcBackProject`
-- [ ] `calcHist`
 - [ ] `circle`
 - [ ] `clipLine`
-- [ ] `compareHist`
-- [ ] `connectedComponents`
-- [ ] `connectedComponentsWithStats`
-- [ ] `contourArea`
-- [ ] `convexHull`
 - [ ] `convexityDefects`
 - [ ] `cornerEigenValsAndVecs`
 - [ ] `cornerHarris`
@@ -364,7 +375,6 @@ Public implementation source:
 - [ ] `ellipse2Poly`
 - [ ] `fillConvexPoly`
 - [ ] `fillPoly`
-- [ ] `findContours`
 - [ ] `findContoursLinkRuns`
 - [ ] `fitEllipse`
 - [ ] `fitEllipseAMS`
@@ -377,17 +387,14 @@ Public implementation source:
 - [ ] `goodFeaturesToTrack`
 - [ ] `grabCut`
 - [ ] `intersectConvexConvex`
-- [ ] `isContourConvex`
 - [ ] `line`
 - [ ] `linearPolar`
 - [ ] `logPolar`
 - [ ] `matchShapes`
-- [ ] `matchTemplate`
 - [ ] `minAreaRect`
 - [ ] `minEnclosingCircle`
 - [ ] `minEnclosingConvexPolygon`
 - [ ] `minEnclosingTriangle`
-- [ ] `moments`
 - [ ] `phaseCorrelate`
 - [ ] `phaseCorrelateIterative`
 - [ ] `pointPolygonTest`
@@ -420,13 +427,13 @@ general OpenCV `core` and `imgproc` surface:
 
 - Current strengths include matrix ownership/layout, element-wise arithmetic,
   reductions, GEMM, channel/layout transforms, resize, color conversion,
-  thresholding, common filtering, geometry sampling, Canny, and morphology.
+  thresholding, common filtering, geometry sampling, Canny, morphology,
+  connected regions, contours, shape geometry, histograms, and template matching.
 - Remaining Core families are concentrated in dense linear algebra,
-  decomposition, spectral transforms, random-number utilities, sorting, and
-  advanced coordinate transforms.
-- Remaining Imgproc families are concentrated in histograms, connected
-  components, contours and shape analysis, corners/features, drawing, Hough
-  transforms, segmentation, and class-based algorithms.
+  decomposition, spectral transforms, random-state utilities, and sorting.
+- Remaining Imgproc families are concentrated in advanced shape analysis,
+  corners/features, drawing, Hough transforms, segmentation, and class-based
+  algorithms.
 
 The next implementation order is owned by
 [opencv-core-imgproc-three-phase-support-plan.md](opencv-core-imgproc-three-phase-support-plan.md).

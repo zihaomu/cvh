@@ -21,7 +21,6 @@ option(CVH_BUILD_TESTS "Build developer test targets (smoke + core)" OFF)
 option(CVH_BUILD_BENCHMARKS "Build developer benchmark targets" OFF)
 option(CVH_ENABLE_OPTIMIZATION "Enable validated CPU optimization paths in cvh headers" ON)
 option(CVH_ENABLE_OPENCV_COMPARE "Build cvh vs OpenCV compare benchmark target" OFF)
-set(CVH_OPENCV_BENCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/benchmark/opencv_compare/opencv-bench-slim" CACHE PATH "Path to opencv-bench-slim source repository")
 
 if(CVH_ENABLE_OPENCV_COMPARE)
     find_package(OpenCV REQUIRED COMPONENTS core imgproc)
@@ -97,26 +96,6 @@ else()
 endif()
 
 if(CVH_BUILD_BENCHMARKS)
-    add_executable(cvh_benchmark_imgproc_coverage
-        benchmark/imgproc_coverage_benchmark.cpp
-    )
-    target_link_libraries(cvh_benchmark_imgproc_coverage PRIVATE cvh::headers)
-    target_compile_features(cvh_benchmark_imgproc_coverage PRIVATE cxx_std_17)
-    target_include_directories(cvh_benchmark_imgproc_coverage PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-
-    add_executable(cvh_benchmark_imgproc_filter
-        benchmark/imgproc_filter_benchmark.cpp
-    )
-    target_link_libraries(cvh_benchmark_imgproc_filter PRIVATE cvh::headers)
-    target_compile_features(cvh_benchmark_imgproc_filter PRIVATE cxx_std_17)
-    target_include_directories(cvh_benchmark_imgproc_filter PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-
     add_executable(cvh_benchmark_core_mat_header
         benchmark/core_mat_header_benchmark.cpp
     )

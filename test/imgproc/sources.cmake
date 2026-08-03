@@ -38,6 +38,7 @@ set(CVH_IMGPROC_TEST_SOURCES
     test/imgproc/internal/pyramid_dispatch_test.cpp
     test/imgproc/morphology/morphology_test.cpp
     test/imgproc/statistics/integral_test.cpp
+    test/imgproc/statistics/phase2_analysis_test.cpp
     test/imgproc/upstream/canny_upstream_test.cpp
     test/imgproc/upstream/copy_make_border_upstream_test.cpp
     test/imgproc/upstream/filter_upstream_test.cpp

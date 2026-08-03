@@ -5,8 +5,9 @@
 Core owns:
 
 - `Mat`, shape, stride, ROI, storage, conversion, and expression behavior;
-- `Scalar`, `Range`, `Point`, `Size`, type encoding, errors, and casts;
+- `Scalar`, `Range`, `Point`, `Size`, `Rect`, `Moments`, type encoding, errors, and casts;
 - array arithmetic, math, reductions, copy/channel/layout operations;
+- random Mat filling and point-channel transforms;
 - transpose, GEMM, and the header-only parallel runtime;
 - internal CPU capability and dispatch infrastructure.
 
@@ -43,3 +44,13 @@ are reserved for tests and benchmarks.
 
 New Core APIs require a public contract test, boundary cases, and a registered
 header compile source when a new public header is added.
+
+## Phase 2 P0 Support Matrix
+
+| API | Accepted subset |
+|---|---|
+| `randu`, `randn` | Preallocated U8/S8/U16/S16/S32/F32/F64 C1-C4 Mat; continuous 2D/N-D and non-contiguous 2D ROI; per-channel `Scalar` parameters. |
+| `transform` | 2D F32/F64 C1-C4 source; F32/F64 C1 matrix with `src.channels()` or `src.channels()+1` columns and one to four output rows; ROI and alias-safe output. |
+| `perspectiveTransform` | `N x 1`/`1 x N` F32/F64 C2/C3 point Mat with a 3x3/4x4 F32/F64 matrix; pinned zero-`w`, NaN and Inf behavior. |
+
+Random engine classes and public seed/state control remain outside this subset.

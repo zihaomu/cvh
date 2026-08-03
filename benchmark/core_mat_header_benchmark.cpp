@@ -1819,6 +1819,187 @@ void append_shape_rows(const Args& args, const ShapeCase& shape, std::vector<Res
     append_layout_rows(args, shape, src, bytes, rows);
 }
 
+ResultRow make_v01_operator_row(const Args& args,
+                                const std::string& op,
+                                const std::string& variant,
+                                const std::string& depth,
+                                int channels,
+                                const std::string& layout,
+                                const std::string& shape,
+                                std::size_t elements,
+                                std::size_t pixels,
+                                std::size_t bytes_touched,
+                                const Result& result)
+{
+    ResultRow row;
+    row.op = op;
+    row.variant = variant;
+    row.depth = depth;
+    row.channels = channels;
+    row.layout = layout;
+    row.shape = shape;
+    row.elements = elements;
+    row.pixels = pixels;
+    row.dispatch_path = "public_header_scalar";
+    row.allocation_mode = "reuse";
+    row.warmup = args.warmup;
+    row.iters = args.iters;
+    row.repeats = args.repeats;
+    row.threads = args.threads;
+    row.min_ms = result.min_ms;
+    row.median_ms = result.median_ms;
+    row.mpix_per_sec = common::mpix_per_sec(pixels, result.median_ms);
+    row.melems_per_sec = result.median_ms > 0.0
+        ? static_cast<double>(elements) / result.median_ms / 1000.0
+        : 0.0;
+    row.gb_per_sec = result.median_ms > 0.0
+        ? static_cast<double>(bytes_touched) / result.median_ms / 1.0e6
+        : 0.0;
+    row.checksum = result.checksum;
+    row.note = "scalar baseline; no fast-path claim";
+    return row;
+}
+
+template<typename RunFn, typename ChecksumFn>
+void append_v01_operator_row(const Args& args,
+                             ResultRow row,
+                             std::size_t bytes_touched,
+                             RunFn&& run_once,
+                             ChecksumFn&& checksum,
+                             std::vector<ResultRow>& rows)
+{
+    run_once();
+    const Result result = measure(
+        std::forward<RunFn>(run_once),
+        std::forward<ChecksumFn>(checksum),
+        args);
+    row.warmup = args.warmup;
+    row.iters = args.iters;
+    row.repeats = args.repeats;
+    row.threads = args.threads;
+    row.min_ms = result.min_ms;
+    row.median_ms = result.median_ms;
+    row.mpix_per_sec = common::mpix_per_sec(row.pixels, result.median_ms);
+    row.melems_per_sec = result.median_ms > 0.0
+        ? static_cast<double>(row.elements) / result.median_ms / 1000.0
+        : 0.0;
+    row.gb_per_sec = result.median_ms > 0.0
+        ? static_cast<double>(bytes_touched) / result.median_ms / 1.0e6
+        : 0.0;
+    row.checksum = result.checksum;
+    rows.push_back(std::move(row));
+}
+
+void append_v01_operator_rows(const Args& args, std::vector<ResultRow>& rows)
+{
+    const int matrix_rows = args.profile == "quick" ? 120 : 240;
+    const int matrix_cols = args.profile == "quick" ? 160 : 320;
+    const int point_count = args.profile == "full" ? 16384 : 4096;
+    const std::string matrix_shape =
+        std::to_string(matrix_cols) + "x" + std::to_string(matrix_rows);
+
+    for (int type : {CV_8UC3, CV_32FC3})
+    {
+        cvh::Mat matrix({matrix_rows, matrix_cols}, type);
+        const std::string depth = matrix.depth() == CV_8U ? "CV_8U" : "CV_32F";
+        const std::size_t elements = matrix.total() * 3;
+        const std::size_t bytes = matrix.total() * matrix.elemSize();
+        ResultRow randu_row = make_v01_operator_row(
+            args, "RANDU", "C3", depth, 3, "continuous", matrix_shape,
+            elements, matrix.total(), bytes, Result {});
+        append_v01_operator_row(
+            args,
+            std::move(randu_row),
+            bytes,
+            [&]() {
+                cvh::randu(
+                    matrix,
+                    cvh::Scalar::all(0.0),
+                    cvh::Scalar::all(127.0));
+            },
+            [&]() { return common::checksum_mat_bytes(matrix); },
+            rows);
+
+        ResultRow randn_row = make_v01_operator_row(
+            args, "RANDN", "C3", depth, 3, "continuous", matrix_shape,
+            elements, matrix.total(), bytes, Result {});
+        append_v01_operator_row(
+            args,
+            std::move(randn_row),
+            bytes,
+            [&]() {
+                cvh::randn(
+                    matrix,
+                    cvh::Scalar::all(64.0),
+                    cvh::Scalar::all(12.0));
+            },
+            [&]() { return common::checksum_mat_bytes(matrix); },
+            rows);
+    }
+
+    cvh::Mat storage({matrix_rows + 2, matrix_cols + 3}, CV_8UC1);
+    cvh::Mat roi = storage(
+        cvh::Range(1, matrix_rows + 1),
+        cvh::Range(2, matrix_cols + 2));
+    ResultRow roi_row = make_v01_operator_row(
+        args, "RANDU", "C1", "CV_8U", 1, "roi", matrix_shape,
+        roi.total(), roi.total(), roi.total() * roi.elemSize(), Result {});
+    append_v01_operator_row(
+        args,
+        std::move(roi_row),
+        roi.total() * roi.elemSize(),
+        [&]() {
+            cvh::randu(roi, cvh::Scalar(0.0), cvh::Scalar(256.0));
+        },
+        [&]() { return common::checksum_mat_bytes(roi); },
+        rows);
+
+    cvh::Mat source({point_count, 1}, CV_32FC3);
+    common::fill_mat_f32_lcg(source, 0x8102u);
+    cvh::Mat affine({4, 4}, CV_64FC1);
+    affine = 0.0f;
+    for (int index = 0; index < 4; ++index)
+    {
+        affine.at<double>(index, index) = 1.0;
+    }
+    cvh::Mat destination;
+    const std::string point_shape = std::to_string(point_count) + "x1";
+    ResultRow transform_row = make_v01_operator_row(
+        args, "TRANSFORM", "F32_C3_TO_C4", "CV_32F", 3, "continuous",
+        point_shape, static_cast<std::size_t>(point_count) * 4,
+        static_cast<std::size_t>(point_count),
+        source.total() * source.elemSize(), Result {});
+    append_v01_operator_row(
+        args,
+        std::move(transform_row),
+        source.total() * source.elemSize(),
+        [&]() { cvh::transform(source, destination, affine); },
+        [&]() { return common::checksum_mat_bytes(destination); },
+        rows);
+
+    cvh::Mat perspective({4, 4}, CV_64FC1);
+    perspective = 0.0f;
+    for (int index = 0; index < 4; ++index)
+    {
+        perspective.at<double>(index, index) = 1.0;
+    }
+    ResultRow perspective_row = make_v01_operator_row(
+        args, "PERSPECTIVE_TRANSFORM", "F32_C3", "CV_32F", 3,
+        "continuous", point_shape,
+        static_cast<std::size_t>(point_count) * 3,
+        static_cast<std::size_t>(point_count),
+        source.total() * source.elemSize(), Result {});
+    append_v01_operator_row(
+        args,
+        std::move(perspective_row),
+        source.total() * source.elemSize(),
+        [&]() {
+            cvh::perspectiveTransform(source, destination, perspective);
+        },
+        [&]() { return common::checksum_mat_bytes(destination); },
+        rows);
+}
+
 }  // namespace cvh_bench
 
 int main(int argc, char** argv)
@@ -1839,6 +2020,7 @@ int main(int argc, char** argv)
         {
             cvh_bench::append_shape_rows(args, shape, rows);
         }
+        cvh_bench::append_v01_operator_rows(args, rows);
     }
     cvh_bench::append_gemm_rows(args, rows);
 

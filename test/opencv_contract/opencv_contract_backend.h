@@ -328,6 +328,49 @@ bool validate_imgproc_resize_linear_u8(int src_rows,
                                        const void* actual_data,
                                        std::size_t actual_bytes);
 
+bool validate_phase2_random_zero_stddev(const void* actual_data,
+                                        std::size_t actual_bytes);
+
+bool validate_phase2_transform(const void* actual_data,
+                               std::size_t actual_bytes);
+
+bool validate_phase2_perspective_transform(const void* actual_data,
+                                           std::size_t actual_bytes);
+
+bool validate_phase2_connected_components(int connectivity,
+                                          const void* actual_labels,
+                                          std::size_t labels_bytes,
+                                          const void* actual_stats,
+                                          std::size_t stats_bytes,
+                                          const void* actual_centroids,
+                                          std::size_t centroids_bytes,
+                                          int actual_count);
+
+bool validate_phase2_contours(int mode,
+                              int method,
+                              int offset_x,
+                              int offset_y,
+                              const int* actual_xy,
+                              const std::size_t* actual_sizes,
+                              std::size_t actual_contour_count);
+
+bool validate_phase2_shapes(const int* actual_rect,
+                            const double* actual_scalars,
+                            const int* actual_approx_xy,
+                            std::size_t actual_approx_count,
+                            const int* actual_hull_xy,
+                            std::size_t actual_hull_count,
+                            bool actual_convex,
+                            const double* actual_moments);
+
+bool validate_phase2_histogram(const void* actual_histogram,
+                               std::size_t histogram_bytes,
+                               const double* actual_comparisons);
+
+bool validate_phase2_template_match(int method,
+                                    const void* actual_data,
+                                    std::size_t actual_bytes);
+
 }  // namespace cvh_test_opencv_contract
 
 #endif  // CVH_TEST_OPENCV_CONTRACT_BACKEND_H

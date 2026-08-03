@@ -8,8 +8,10 @@ set(CVH_CORE_PUBLIC_HEADERS
     include/cvh/core/math.h
     include/cvh/core/parallel.h
     include/cvh/core/reduce.h
+    include/cvh/core/random.h
     include/cvh/core/saturate.h
     include/cvh/core/system.h
+    include/cvh/core/transform.h
     include/cvh/core/types.h
     include/cvh/core/utils.h
 )
@@ -25,8 +27,10 @@ set(CVH_CORE_HEADER_COMPILE_SMOKE_SOURCES
     test/smoke/core_headers/math_compile.cpp
     test/smoke/core_headers/parallel_compile.cpp
     test/smoke/core_headers/reduce_compile.cpp
+    test/smoke/core_headers/random_compile.cpp
     test/smoke/core_headers/saturate_compile.cpp
     test/smoke/core_headers/system_compile.cpp
+    test/smoke/core_headers/transform_compile.cpp
     test/smoke/core_headers/types_compile.cpp
     test/smoke/core_headers/utils_compile.cpp
 )

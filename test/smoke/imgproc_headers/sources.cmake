@@ -7,6 +7,8 @@ set(CVH_IMGPROC_PUBLIC_HEADERS
     include/cvh/imgproc/box_filter.h
     include/cvh/imgproc/canny.h
     include/cvh/imgproc/colormap.h
+    include/cvh/imgproc/connected_components.h
+    include/cvh/imgproc/contours.h
     include/cvh/imgproc/convert_maps.h
     include/cvh/imgproc/copy_make_border.h
     include/cvh/imgproc/cvtcolor.h
@@ -17,6 +19,7 @@ set(CVH_IMGPROC_PUBLIC_HEADERS
     include/cvh/imgproc/filter2d.h
     include/cvh/imgproc/gaussian_blur.h
     include/cvh/imgproc/geometry_transform.h
+    include/cvh/imgproc/histogram.h
     include/cvh/imgproc/imgproc.h
     include/cvh/imgproc/integral.h
     include/cvh/imgproc/kernels.h
@@ -28,10 +31,12 @@ set(CVH_IMGPROC_PUBLIC_HEADERS
     include/cvh/imgproc/remap.h
     include/cvh/imgproc/resize.h
     include/cvh/imgproc/sep_filter2d.h
+    include/cvh/imgproc/shape.h
     include/cvh/imgproc/sobel.h
     include/cvh/imgproc/sqr_box_filter.h
     include/cvh/imgproc/stack_blur.h
     include/cvh/imgproc/threshold.h
+    include/cvh/imgproc/template_match.h
     include/cvh/imgproc/warp_affine.h
     include/cvh/imgproc/warp_perspective.h
 )
@@ -46,6 +51,8 @@ set(CVH_IMGPROC_HEADER_COMPILE_SMOKE_SOURCES
     test/smoke/imgproc_headers/box_filter_compile.cpp
     test/smoke/imgproc_headers/canny_compile.cpp
     test/smoke/imgproc_headers/colormap_compile.cpp
+    test/smoke/imgproc_headers/connected_components_compile.cpp
+    test/smoke/imgproc_headers/contours_compile.cpp
     test/smoke/imgproc_headers/convert_maps_compile.cpp
     test/smoke/imgproc_headers/copy_make_border_compile.cpp
     test/smoke/imgproc_headers/cvtcolor_compile.cpp
@@ -56,6 +63,7 @@ set(CVH_IMGPROC_HEADER_COMPILE_SMOKE_SOURCES
     test/smoke/imgproc_headers/filter2d_compile.cpp
     test/smoke/imgproc_headers/gaussian_blur_compile.cpp
     test/smoke/imgproc_headers/geometry_transform_compile.cpp
+    test/smoke/imgproc_headers/histogram_compile.cpp
     test/smoke/imgproc_headers/imgproc_compile.cpp
     test/smoke/imgproc_headers/integral_compile.cpp
     test/smoke/imgproc_headers/kernels_compile.cpp
@@ -67,10 +75,12 @@ set(CVH_IMGPROC_HEADER_COMPILE_SMOKE_SOURCES
     test/smoke/imgproc_headers/remap_compile.cpp
     test/smoke/imgproc_headers/resize_compile.cpp
     test/smoke/imgproc_headers/sep_filter2d_compile.cpp
+    test/smoke/imgproc_headers/shape_compile.cpp
     test/smoke/imgproc_headers/sobel_compile.cpp
     test/smoke/imgproc_headers/sqr_box_filter_compile.cpp
     test/smoke/imgproc_headers/stack_blur_compile.cpp
     test/smoke/imgproc_headers/threshold_compile.cpp
+    test/smoke/imgproc_headers/template_match_compile.cpp
     test/smoke/imgproc_headers/warp_affine_compile.cpp
     test/smoke/imgproc_headers/warp_perspective_compile.cpp
 )

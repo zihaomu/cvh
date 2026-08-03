@@ -27,12 +27,12 @@
         ],
         "gtest": {
           "core": {
-            "executed": 209,
+            "executed": 213,
             "failed": 0,
             "skipped": 0
           },
           "imgproc": {
-            "executed": 187,
+            "executed": 192,
             "failed": 0,
             "skipped": 0
           }
@@ -64,12 +64,12 @@
         ],
         "gtest": {
           "core": {
-            "executed": 209,
+            "executed": 213,
             "failed": 0,
             "skipped": 0
           },
           "imgproc": {
-            "executed": 187,
+            "executed": 192,
             "failed": 0,
             "skipped": 0
           }
