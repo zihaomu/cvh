@@ -1,8 +1,8 @@
 # 测试状态台账
 
-- 更新时间：2026-07-29
+- 更新时间：2026-08-03
 - 当前状态：默认 UI-enabled header-only 配置下，
-  `cvh_test_core` 的 209 个测试和 `cvh_test_imgproc` 的 187 个测试均无失败、
+  `cvh_test_core` 的 213 个测试和 `cvh_test_imgproc` 的 192 个测试均无失败、
   无 skip。native GEMM ISA 测试由 `cvh_test_gemm_isa` 使用
   `cvh::headers` 独立执行，不重复注册到默认 Core 基线。
 - scalar-only 配置仅保留为本地诊断能力，不属于托管 CI 门禁。

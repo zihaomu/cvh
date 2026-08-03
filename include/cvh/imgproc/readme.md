@@ -50,7 +50,7 @@ The kernel migration checklist is
 New operators require accepted parameter documentation, public correctness
 coverage, fallback coverage, and benchmark evidence before a performance claim.
 
-## Phase 2 P0 Support Matrix
+## v0.1 Support Matrix
 
 | Area | Accepted subset |
 |---|---|

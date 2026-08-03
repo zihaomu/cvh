@@ -2,7 +2,7 @@
 
 更新时间：2026-08-03
 
-状态：执行中；CL1–CL3 已完成，CL4 v0.1 术语与当前事实收口中
+状态：执行中；CL1–CL4 已完成，CL5 完整回归进行中
 
 ## 1. 目标
 
@@ -158,7 +158,7 @@ policy 使用，不属于本轮直接删除范围。
 
 ### 7.1 模块 README
 
-将以下标题：
+已将以下标题：
 
 - `include/cvh/core/readme.md` 中的 `Phase 2 P0 Support Matrix`；
 - `include/cvh/imgproc/readme.md` 中的 `Phase 2 P0 Support Matrix`；
@@ -180,6 +180,18 @@ layout、flag 和 unsupported 边界，不缩减技术细节。
 三阶段支持清单可以继续保留 post-v0.1 backlog，但不得再依赖已删除实施计划解释
 当前支持范围。
 
+执行结果（2026-08-03）：
+
+- Core/Imgproc 模块 README 标题已统一为 `v0.1 Support Matrix`；
+- `test/failing-tests.md` 已同步为 Core 213、Imgproc 192，与 arm64/x86_64
+  gate expectation 一致；
+- API coverage 按条目重新计数为 Core 61 available / 36 missing、Imgproc 63
+  available / 60 missing、总 available 124，declared-only 0；
+- coverage 的 cvh baseline 已更新为包含算子与验收记录的 `33045f1`；
+- `doc/README.md`、三阶段支持清单和 `benchmark/readme.md` 已只保留
+  当前事实 owner 和 canonical benchmark 入口；
+- `check_docs.sh` 和 `git diff --check` 通过。
+
 ## 8. 执行步骤和实时状态
 
 | Step | 内容 | 状态 | 完成条件 |
@@ -188,8 +200,8 @@ layout、flag 和 unsupported 边界，不缩减技术细节。
 | CL1 | 删除 deprecated shim、旧诊断 benchmark、无引用脚本和无效 CMake 变量 | 已完成 | 目标文件、target、脚本、CMake 变量及残余引用已删除；文档检查、default/test/benchmark 配置和 `git diff --check` 通过。 |
 | CL2 | 把 26 条 Phase 2 benchmark case 合入 canonical Core/Imgproc suite | 已完成 | Core 7 条、Imgproc 19 条已合并；quick 26/26 checksum 及关键字段一致，full smoke 26/26 `OK`，专项 target/source 已删除。 |
 | CL3 | 归档并删除已完成的阶段性文档 | 已完成 | 两份验收记录已进入 `33045f1` 的 Git 历史后删除；coverage/README/三阶段清单接管当前事实，文档检查通过。 |
-| CL4 | 修改 v0.1 support matrix 名称并同步测试、coverage、索引和 benchmark 文档 | 进行中 | 正在收口 Core/Imgproc 标题，并核对 213/192 测试及 61/63/124 coverage 事实。 |
-| CL5 | 完整代码与文档回归 | 待开始 | 第 9 节全部门禁通过，工作树只剩预期修改。 |
+| CL4 | 修改 v0.1 support matrix 名称并同步测试、coverage、索引和 benchmark 文档 | 已完成 | README 标题已收口；测试台账/gate expectation 为 213/192，coverage 按条目复核为 61/63/124 且 declared-only 为 0，文档检查通过。 |
+| CL5 | 完整代码与文档回归 | 进行中 | 开始执行第 9 节的静态、header contract、完整 CI、OpenCV 差分和 benchmark 门禁。 |
 
 每完成一个 Step，必须更新本表状态和实际验证结果。不得在 benchmark 尚未合并时
 提前删除专项 case，也不得在实施记录尚未进入 Git 历史时删除未跟踪文档。
@@ -255,9 +267,9 @@ git diff --check
 - [x] Phase 2 benchmark case 已进入 canonical Core/Imgproc suite。
 - [x] Phase 2 专项 benchmark target/source 已删除。
 - [x] Phase 1/Phase 2 实施记录已进入 Git 历史并从当前文档树移除。
-- [ ] Core/Imgproc README 使用 `v0.1 Support Matrix`。
-- [ ] 测试台账更新为 Core 213、Imgproc 192。
-- [ ] coverage 保持 61/63/124，declared-only 保持 0。
+- [x] Core/Imgproc README 使用 `v0.1 Support Matrix`。
+- [x] 测试台账更新为 Core 213、Imgproc 192。
+- [x] coverage 保持 61/63/124，declared-only 保持 0。
 - [ ] 文档、header contract、完整 CI、upstream 差分和 benchmark quick 通过。
 - [ ] `git diff --check` 通过，删除清单之外没有意外改动。
 

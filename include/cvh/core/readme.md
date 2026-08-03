@@ -45,7 +45,7 @@ are reserved for tests and benchmarks.
 New Core APIs require a public contract test, boundary cases, and a registered
 header compile source when a new public header is added.
 
-## Phase 2 P0 Support Matrix
+## v0.1 Support Matrix
 
 | API | Accepted subset |
 |---|---|
