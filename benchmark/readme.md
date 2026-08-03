@@ -20,7 +20,7 @@
 - baseline 和 candidate 必须使用同一组 case、同一套输入生成规则、同一套编译参数和同一台机器。
 - baseline 可以来自旧 commit、上一版发布产物、或同一二进制内强制 scalar fallback 的诊断行。
 - baseline 和 candidate 都使用各自 commit 的 canonical
-  `cvh::headers_fast` benchmark target。
+  `cvh::headers` benchmark target。
 - 结果用于本项目优化决策，可以作为 CI gate。
 
 推荐输出位置：
@@ -36,7 +36,7 @@ benchmark/results/internal/<suite>/<profile>/meta.json
 
 | Implementation | 含义 |
 |---|---|
-| `cvh_headers_fast` | 各自 commit 的 canonical 最快 header-only target；报告通过 baseline/current 输入区分版本。 |
+| `cvh_headers` | 各自 commit 的唯一公开计算 target；报告通过 baseline/current 输入区分版本。 |
 | `scalar_fallback` | 同一二进制内强制 fallback 的诊断路径，只用于拆内核成本。 |
 | `opencv_ui_fastpath` | 同一二进制内直接 OpenCV UI fast path 的诊断路径。 |
 
@@ -61,7 +61,6 @@ benchmark/results/internal/<suite>/<profile>/meta.json
 ```bash
 cmake -S . -B build-bench \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCVH_BUILD_NATIVE_BACKEND=OFF \
   -DCVH_BUILD_TESTS=OFF \
   -DCVH_BUILD_BENCHMARKS=ON
 
@@ -139,11 +138,11 @@ OpenCV 对比模式回答的问题是：当前 `cvh` header-only 实现和官方
 
 约束：
 
-- 对比对象只包括当前 `cvh::headers_fast` 和官方 OpenCV `core` / `imgproc`。
-- `cvh::headers_fast` 在 Mode B 中代表 header-only 项目的最快实现，避免报告变成内部 profile 对比。
+- 对比对象只包括 `cvh::headers` 的 UI-forced 运行结果和官方 OpenCV `core` / `imgproc`。
+- CVH 侧固定 `OpenCVUIOnly`，实现名为 `cvh_ui`；发现 NEON/AVX2 tag 或 UI-required case 未命中 `opencv_ui` 时直接失败。
 - 这个模式默认是 report/log-only，不作为每个 PR 的硬 gate。
 - 每份结果必须记录 `cvh` commit、OpenCV commit、编译器、平台、CPU、线程数、profile 和 CMake 选项。
-- 不使用 `cvh::headers`、`native` / `lite` 作为 OpenCV upstream compare 的 implementation。
+- 不生成 scalar、NEON-only、AVX2-only、`native` 或 `lite` 产品实现行。
 
 本机 OpenCV 源码位置：
 
@@ -169,14 +168,13 @@ benchmark/results/opencv/<suite>/<profile>/meta.json
 
 | Implementation | 含义 |
 |---|---|
-| `cvh_headers_fast` | 当前 `cvh::headers_fast`，代表 header-only 最快实现。 |
+| `cvh_ui` | `cvh::headers` + forced `OpenCVUIOnly`。 |
 | `opencv` | 同机同编译模式下的官方 OpenCV。 |
 
 现状：
 
 - `benchmark/opencv_compare/` 已经可以生成 `cvh vs OpenCV` 报告。
-- 该目录已经裁剪为纯 header-only compare：只用 `cvh::headers_fast` 对比 OpenCV。
-- `cvh::headers` 留在编译/正确性契约验证中，不进入性能产品报告。
+- 该目录已经裁剪为纯 header-only compare：只用 `cvh_ui` 对比 OpenCV。
 
 ## Suites
 
@@ -253,7 +251,7 @@ cvh_benchmark_imgproc_header
 | `layout` | `continuous` / `roi` / YUV layout 等。 |
 | `shape` | 人类可读尺寸。 |
 | `pixels` | 输出像素数；core 非图像 case 可为元素数。 |
-| `implementation` | Mode A 产品行使用 `cvh_headers_fast`，专项诊断可使用 `scalar_fallback` / `opencv_ui_fastpath`；Mode B 只使用 `cvh_headers_fast`, `opencv`。 |
+| `implementation` | Mode A 产品行使用 `cvh_headers`，专项诊断可使用 `scalar_fallback` / `opencv_ui_fastpath`；Mode B 只使用 `cvh_ui`, `opencv`。 |
 | `dispatch_path` | 实际命中的内部路径。 |
 | `allocation_mode` | `reuse` / `recreate` / `none`。 |
 | `tail_ratio` | 当前 SIMD lane 下每行标量尾部比例。 |
@@ -319,7 +317,7 @@ Detailed execution steps live in
 4. **P-Bench-3：`core_mat` header-only target** - complete
    - 已删除旧 `cvh_benchmark_core_ops`，`cvh_benchmark_core_mat_header`
      只链接 header-only targets。
-   - canonical 产品 benchmark 固定链接 `cvh::headers_fast`。
+   - canonical 产品 benchmark 固定链接 `cvh::headers`。
    - 覆盖 `Mat` create/copy/convert/layout 成本。
 
 5. **P-Bench-4：`imgproc` header-only target** - complete
@@ -334,7 +332,7 @@ Detailed execution steps live in
 
 7. **P-Bench-6：OpenCV 主仓库 compare** - complete
    - 支持本地 `../opencv` 源码和用户指定 OpenCV build dir。
-   - 只用 `cvh::headers_fast` 对比 OpenCV，代表 header-only 最快实现。
+   - 只用 `cvh::headers` 的 forced-UI 结果对比 OpenCV。
    - 移除 compare 报告里的产品层 `native` / `lite` 叙事。
 
 8. **P-Bench-7：CI integration** - complete

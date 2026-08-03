@@ -10,7 +10,7 @@ namespace cvh {
 namespace detail {
 namespace layout_ui {
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
 
 template<typename Vector>
@@ -113,9 +113,9 @@ inline bool flip_horizontal_rows(const uchar* src,
                                  size_t elem_size,
                                  bool flip_vertical)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    if (cpu::dispatch_mode() == cpu::DispatchMode::ScalarOnly)
+    if (!cpu::opencv_ui_allowed())
     {
         return false;
     }

@@ -404,9 +404,9 @@ struct GemmPackedB
     std::vector<float> packed_fp32;
     std::vector<hfloat> packed_fp16;
     // Optional NEON-ready cache; canonical data above remains the fallback.
-    size_t native_packed_step = 0;
-    size_t native_alignment_offset = 0;
-    std::vector<float> native_packed_fp32;
+    size_t isa_packed_step = 0;
+    size_t isa_alignment_offset = 0;
+    std::vector<float> isa_packed_fp32;
 
     bool empty() const;
 };

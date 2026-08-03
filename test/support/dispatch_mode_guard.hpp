@@ -34,7 +34,7 @@ private:
 
 inline constexpr bool fixed_width_opencv_ui_available()
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     return true;
 #else
@@ -52,7 +52,7 @@ inline cpu::DispatchTag expected_fixed_width_dispatch_tag()
 template<typename T>
 inline int fixed_width_opencv_ui_lanes()
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     using Vector = decltype(cv::vx_load(static_cast<const T*>(nullptr)));
     return cv::VTraits<Vector>::vlanes();

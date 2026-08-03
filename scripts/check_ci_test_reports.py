@@ -116,11 +116,11 @@ def main() -> int:
     failures: list[str] = []
     expected_option = "ON"
     actual_option = read_cache_value(
-        args.build_dir, "CVH_ENABLE_OPENCV_INTRIN"
+        args.build_dir, "CVH_ENABLE_OPTIMIZATION"
     )
     if actual_option != expected_option:
         failures.append(
-            "CVH_ENABLE_OPENCV_INTRIN: "
+            "CVH_ENABLE_OPTIMIZATION: "
             f"expected {expected_option}, got {actual_option}"
         )
 
@@ -182,7 +182,7 @@ def main() -> int:
     print("ci_test_report_begin")
     print(f"profile: {args.profile}")
     print(f"architecture: {architecture}")
-    print(f"opencv_intrin: {actual_option}")
+    print(f"optimization: {actual_option}")
     print(f"runtime_avx2: {avx2_decision}")
     print(f"ctest_registered: {len(actual_ctest_names)}")
     print(

@@ -51,7 +51,7 @@ opencv2/core/utility.hpp
 
 ## Current Scope
 
-`cvh::headers` enables these OpenCV UI headers by default for benchmark-gated header-only fast paths. `cvh::headers_fast` inherits them and only adds extra platform fast-profile toggles. Current accepted paths are:
+`cvh::headers` enables these OpenCV UI headers and all accepted architecture-specific kernels by default. Current accepted paths are:
 
 - `CV_8UC3` `BGR2GRAY` / `RGB2GRAY`
 - `CV_8UC1` exact 2x `INTER_LINEAR` resize

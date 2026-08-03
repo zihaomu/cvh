@@ -1,62 +1,19 @@
 #ifndef CVH_DETAIL_CONFIG_H
 #define CVH_DETAIL_CONFIG_H
 
-// Public package contract:
-// - cvh::headers: pure header-only default with the OpenCV UI SIMD facade enabled
-// - cvh::headers_fast: pure header-only default plus platform fast-profile toggles
-//
-// CVH_LITE remains the default compatibility macro for plain header users.
-// CVH_NATIVE/CVH_FULL are legacy internal switches for development-only .cpp
-// experiments and are not part of the installed package surface.
-//
-// If no legacy mode macro is provided, default to CVH_LITE so plain header users
-// get a runnable baseline by default.
-#if defined(CVH_FULL) && !defined(CVH_NATIVE)
-#define CVH_NATIVE 1
+// Public policy switch for all validated CPU optimization paths. Keep this
+// value consistent across every translation unit in a program.
+#ifndef CVH_ENABLE_OPTIMIZATION
+#define CVH_ENABLE_OPTIMIZATION 1
 #endif
 
-#if defined(CVH_LITE) && defined(CVH_NATIVE)
-#error "CVH_LITE and CVH_NATIVE cannot be enabled at the same time"
+#if CVH_ENABLE_OPTIMIZATION != 0 && CVH_ENABLE_OPTIMIZATION != 1
+#error "CVH_ENABLE_OPTIMIZATION must be 0 or 1"
 #endif
 
-#if !defined(CVH_LITE) && !defined(CVH_NATIVE)
-#define CVH_LITE 1
-#endif
-
-#ifndef CVH_ENABLE_THREADS
-#define CVH_ENABLE_THREADS 0
-#endif
-
-#ifndef CVH_ENABLE_FAST_MATH
-#define CVH_ENABLE_FAST_MATH 0
-#endif
-
-#ifndef CVH_ENABLE_OPENCV_INTRIN
-#define CVH_ENABLE_OPENCV_INTRIN 1
-#endif
-
-#ifndef CVH_ENABLE_PLATFORM_INTRINSICS
-#define CVH_ENABLE_PLATFORM_INTRINSICS 0
-#endif
-
-#ifndef CVH_ENABLE_NATIVE_INTRINSICS
-#define CVH_ENABLE_NATIVE_INTRINSICS 0
-#endif
-
-#ifndef CVH_ENABLE_NATIVE_NEON
-#define CVH_ENABLE_NATIVE_NEON CVH_ENABLE_NATIVE_INTRINSICS
-#endif
-
-#ifndef CVH_ENABLE_NATIVE_AVX2
-#define CVH_ENABLE_NATIVE_AVX2 CVH_ENABLE_NATIVE_INTRINSICS
-#endif
-
-#ifndef CVH_ENABLE_NATIVE_NEON_AUTO
-#define CVH_ENABLE_NATIVE_NEON_AUTO CVH_ENABLE_NATIVE_NEON
-#endif
-
-#ifndef CVH_ENABLE_NATIVE_AVX2_AUTO
-#define CVH_ENABLE_NATIVE_AVX2_AUTO CVH_ENABLE_NATIVE_AVX2
-#endif
+// Internal compile-time capability: the vendored OpenCV Universal Intrinsics
+// facade is available to cvh implementations. This is a detected result, not
+// a consumer-facing configuration switch.
+#define CVH_DETAIL_HAVE_OPENCV_UI CVH_ENABLE_OPTIMIZATION
 
 #endif  // CVH_DETAIL_CONFIG_H

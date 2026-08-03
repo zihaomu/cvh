@@ -196,8 +196,8 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("## Current Project Status")
     lines.append("")
     lines.append("- `cvh` (cv-header-only) is an independent pure header-only library and does not depend on an in-project `.cpp` extension layer.")
-    lines.append("- Mode B compares the current `cvh::headers_fast` against upstream OpenCV built on the same machine; `cvh::headers_fast` represents the fastest header-only build configuration.")
-    lines.append("- `cvh::headers_fast` fully inherits `cvh::headers`. When an operator has no dedicated fast path, it continues to use the inherited header implementation and remains in the benchmark instead of being skipped for lack of a SIMD specialization.")
+    lines.append("- Mode B compares `cvh::headers` with `OpenCVUIOnly` forced against upstream OpenCV built on the same machine; the CVH implementation label is `cvh_ui`.")
+    lines.append("- Specialized NEON/AVX2 dispatch is rejected. Operators without a UI kernel remain in the report through their public header fallback rather than becoming a second product implementation.")
     lines.append("- After Phase 1 for Core and Imgproc, callable API-name coverage is `107/220`: Core `57/97` and Imgproc `50/123`.")
     lines.append("- Core `add/subtract/multiply/divide/transpose/GEMM` have moved into ODR-safe headers; this report measures through the public API without linking legacy core objects.")
     lines.append("- OpenCV Universal Intrinsics are the default SIMD dialect, and kernels use OpenCV UI directly; the xsimd performance path has been removed.")
@@ -242,7 +242,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("")
     lines.append("| Layer | Current Implementation | Meaning in This Report |")
     lines.append("| --- | --- | --- |")
-    lines.append("| Public API | OpenCV-compatible header API | All cases call the public `cvh::headers_fast` entry points |")
+    lines.append("| Public API | OpenCV-compatible header API | All cases call `cvh::headers` with `OpenCVUIOnly` forced |")
     lines.append("| SIMD dialect | OpenCV Universal Intrinsics | Maps to NEON on Apple ARM |")
     lines.append("| Specialized kernel | `cvtColor`, selected `resize`, Core element-wise operations, statistics/nonzero reductions, F32 math, pyramid, and derivative UI kernels | Recorded as `dispatch_path=opencv_ui` |")
     lines.append("| Header fast-path | Row-parallel filters, LUT, border, Sobel, Canny, morphology, sliding sums, and specialized nonlinear kernels | Records the actual `header_fastpath` / `sliding_*` / `precomputed_lut` path |")
@@ -469,7 +469,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("- Ratios use `OpenCV time / CVH time`: values above `1` mean CVH is faster, and values below `1` mean OpenCV is faster.")
     lines.append("- Table timings use the minimum per-iteration time across repeats to reduce system-noise effects; this report is not a cross-machine ranking.")
     lines.append("- Mat cases compare matching allocation/reuse semantics; imgproc cases align input dimensions, types, kernels, borders, and primary parameters.")
-    lines.append("- `headers_baseline` does not mean optimization was skipped; it indicates that `cvh::headers_fast` currently inherits the generic `cvh::headers` implementation.")
+    lines.append("- `headers_baseline` describes a public header fallback for an operator without a UI kernel; it is not a separate target or implementation profile.")
     lines.append("- Raw CSV and metadata files are reproducible run artifacts; date-named Markdown files are milestone snapshots.")
 
     return "\n".join(lines) + "\n"

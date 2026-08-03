@@ -6,8 +6,9 @@
 
 - `core/`：Mat、基础算子、类型、运行时、内部派发和 upstream 兼容子集。
 - `imgproc/`：颜色、滤波、几何、强度、形态学等图像处理合同。
-- `imgcodecs/`、`highgui/`：各自模块的功能和异常路径。
-- `smoke/`：头文件独立编译、ODR、模式和最小 pipeline 检查。
+- `imgcodecs/`：图像读写功能和异常路径。
+- `highgui/`：可选 header-only 窗口 API、输入约束和生命周期。
+- `smoke/`：头文件独立编译、ODR、target 配置和最小 pipeline 检查。
 - `opencv_contract/`：可选的 OpenCV 隔离差分测试。
 - `upstream/`：OpenCV 原始 case 快照和状态 manifest，不直接参与编译。
 - `support/`：core/imgproc 共用的测试状态 guard。
@@ -27,10 +28,11 @@ cmake --build build-tests --target cvh_test_core cvh_test_imgproc -j
 ctest --test-dir build-tests --output-on-failure
 ```
 
-规范模块级 GTest target 只有 `cvh_test_core` 和 `cvh_test_imgproc`，不再注册同一
-二进制的重复别名。`test/core/sources.cmake` 与
-`test/imgproc/sources.cmake` 显式列出 source；配置阶段会审计遗漏、重复和
-不存在的 `*_test.cpp`。
+规范模块级 GTest target 为 `cvh_test_core`、`cvh_test_imgproc`、
+`cvh_test_imgcodecs` 和 `cvh_test_highgui`。`cvh_test_gemm_isa` 使用 `cvh::headers`
+独立验证 GEMM 专用 ISA，避免把架构条件 skip 混入默认 Core 基线。
+`test/core/sources.cmake` 与 `test/imgproc/sources.cmake` 显式列出 source；
+配置阶段会审计遗漏、重复和不存在的 `*_test.cpp`。
 
 完整发布门禁只运行启用 OpenCV Universal Intrinsics 的 header-only 配置：
 
@@ -38,15 +40,13 @@ ctest --test-dir build-tests --output-on-failure
 ./scripts/ci_headers_all.sh
 ```
 
-该命令固定 `CVH_ENABLE_OPENCV_INTRIN=ON` 和
-`CVH_BUILD_NATIVE_BACKEND=OFF`，其中后者仅用于排除遗留 HighGUI `.cpp`
-实验。Core/Imgproc 的 UI fast path 和 scalar fallback 均为 header-only。
+该命令固定 `CVH_ENABLE_OPTIMIZATION=ON`。Core/Imgproc 的 scalar、
+OpenCV UI、NEON 和 AVX2 路径均为 header-only。
 门禁构建默认 `all` 目标并运行完整 CTest；Core/Imgproc 的 XML、CTest
 inventory 和 executed/failed/skipped 数量由
 `test/ci/header_gate_expectations.json` 校验。
 
-scalar-only 配置仅保留为本地诊断能力，不属于托管 CI 门禁；Core/Imgproc
-不存在另一套 native 实现。
+scalar-only 配置仅保留为本地诊断能力，不属于托管 CI 门禁。
 
 ## 维护约束
 

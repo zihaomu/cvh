@@ -22,7 +22,7 @@ TEST(GemmDispatchInternalTest, fp32_ui_matches_scalar_for_nn_nt_and_vector_tail)
     expect_mat_close(ui_nn, scalar_nn, 1e-3f, 1e-4f);
     const Mat ui_nt = gemm(a, b_nt, false, true);
     expect_mat_close(ui_nt, scalar_nt, 1e-3f, 1e-4f);
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
 #endif

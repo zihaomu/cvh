@@ -8,7 +8,7 @@ namespace detail
 
 inline void cvtColor_fast_impl(const Mat& src, Mat& dst, int code)
 {
-#if CVH_ENABLE_OPENCV_INTRIN
+#if CVH_DETAIL_HAVE_OPENCV_UI
     if (src.depth() == CV_8U && (code == COLOR_BGR2GRAY || code == COLOR_RGB2GRAY))
     {
         cvtColor_fallback(src, dst, code);

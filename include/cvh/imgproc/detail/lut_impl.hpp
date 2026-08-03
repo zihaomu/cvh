@@ -95,10 +95,10 @@ inline bool try_lut_fastpath_u8(const Mat& src, const Mat& lut, Mat& dst)
     if (lut_cn == 1)
     {
         const int row_elems = cols * src_cn;
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_AVX_512VBMI)
         const bool use_ui =
-            cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly &&
+            cpu::opencv_ui_allowed() &&
             row_elems >= cv::VTraits<cv::v_uint8>::vlanes();
 #else
         const bool use_ui = false;
@@ -108,7 +108,7 @@ inline bool try_lut_fastpath_u8(const Mat& src, const Mat& lut, Mat& dst)
             uchar* dst_row = dst.data + static_cast<std::size_t>(y) * dst_step;
 
             int i = 0;
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_AVX_512VBMI)
             if (use_ui)
             {

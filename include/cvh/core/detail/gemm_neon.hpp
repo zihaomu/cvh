@@ -1,7 +1,7 @@
 #ifndef CVH_CORE_DETAIL_GEMM_NEON_HPP
 #define CVH_CORE_DETAIL_GEMM_NEON_HPP
 
-#include "cvh/core/detail/native_intrinsics.hpp"
+#include "cvh/core/detail/isa_intrinsics.hpp"
 
 #include <cstddef>
 
@@ -25,7 +25,7 @@ struct F32DirectA6x16Traits
     static constexpr int k_unroll = 4;
 };
 
-#if CVH_NATIVE_NEON_COMPILED
+#if CVH_DETAIL_HAVE_NEON_KERNEL
 
 template <int Rows, int VectorCols, int Lane>
 inline void fma_packed_b_lane_f32(

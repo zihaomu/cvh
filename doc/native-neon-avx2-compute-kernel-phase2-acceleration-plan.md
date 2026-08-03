@@ -33,12 +33,13 @@ Auto
   │   ├── NT 且 M>=8,N>=16,K>=192 → native multi-dot
   │   ├── FP16/INT8-dequant 且超过 break-even → FP32 native panel
   │   └── tiny、small-K、M=1、未达标 norm → OpenCV UI → scalar
-  ├── x86 AVX2+FMA → 仅在 CVH_ENABLE_NATIVE_AVX2_AUTO 白名单开启后选择
+  ├── x86 AVX2+FMA → 仅在 CVH_ENABLE_DIRECT_AVX2 开启后选择
   └── 其他平台/shape/type → OpenCV UI → scalar
 ```
 
-当前 `CVH_ENABLE_NATIVE_AVX2_AUTO=0`。AVX2 只能通过 `Avx2Only` 或 `NativeOnly`
-强制验证；真实 x86 correctness/performance 达标后才能开启。`SmallKWide`
+`cvh::headers` 默认 `CVH_ENABLE_DIRECT_AVX2=0`；`cvh::headers_fast` 会启用它，
+再由运行时能力和 shape 白名单决定是否自动选择 AVX2。`Avx2Only` 和
+`NativeOnly` 只用于强制验证。`SmallKWide`
 `256×32×256` 的 forced NEON 稳定回退约 `5%–8%`，继续留在 UI。
 
 ### 0.1 N2-2 FP32 packing/blocking（Apple ARM，Release，单线程）
@@ -287,12 +288,12 @@ struct KernelPlan
 
 ### 5.1 编译开关
 
-在现有 `CVH_ENABLE_PLATFORM_INTRINSICS` 之下增加内部细分：
+直接架构内核由一个 fast-profile 默认值和两个 ISA 细分开关控制：
 
 ```text
-CVH_ENABLE_NATIVE_INTRINSICS
-CVH_ENABLE_NATIVE_NEON
-CVH_ENABLE_NATIVE_AVX2
+CVH_ENABLE_DIRECT_INTRINSICS
+CVH_ENABLE_DIRECT_NEON
+CVH_ENABLE_DIRECT_AVX2
 ```
 
 建议产品行为：
@@ -303,8 +304,8 @@ CVH_ENABLE_NATIVE_AVX2
 | `cvh::headers_fast` | 启用可用的原生 kernel 和运行时分发 |
 | 可选 `cvh::headers_avx2` | 面向明确要求 AVX2/FMA 的固定部署环境 |
 
-`CVH_ENABLE_OPENCV_INTRIN=0` 必须继续完全禁用 UI；原生 backend 是否独立可用需要明确。
-首版建议让原生 backend 仍依赖 `CVH_ENABLE_PLATFORM_INTRINSICS=1`，但不依赖 UI 类型。
+`CVH_ENABLE_OPENCV_INTRIN=0` 完全禁用 UI。直接 NEON/AVX2 内核由上述独立开关
+控制，不依赖 UI 类型，也不产生编译型 backend。
 
 ### 5.2 AArch64 NEON
 

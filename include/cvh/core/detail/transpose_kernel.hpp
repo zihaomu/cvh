@@ -16,7 +16,7 @@ namespace cpu {
 
 namespace {
 
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
 
 inline void transpose_u8_ui(const uchar* src,
@@ -336,9 +336,9 @@ inline void transpose2d_kernel_blocked(const unsigned char* src,
     const size_t elem_size = elem_size1 * static_cast<size_t>(channels);
     set_last_dispatch_tag(DispatchTag::Scalar);
 
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    if (dispatch_mode() != DispatchMode::ScalarOnly)
+    if (opencv_ui_allowed())
     {
         if (elem_size == 1 && rows >= 16 && cols >= 16)
         {

@@ -8,6 +8,9 @@ This directory keeps only current project documents.
 
 - [design.md](design.md): product direction, public targets, module boundaries,
   and SIMD strategy.
+- [cvh-v0.1-release-readiness-and-next-stage-plan.md](cvh-v0.1-release-readiness-and-next-stage-plan.md):
+  `cvh 0.1` release-readiness work, product-boundary cleanup, cross-platform
+  CI, performance-baseline rebuild, and the prioritized post-release roadmap.
 - [mat-contract-v1.md](mat-contract-v1.md): current `cvh::Mat` behavior
   contract.
 - [opencv-core-imgproc-api-coverage.md](opencv-core-imgproc-api-coverage.md):
@@ -24,6 +27,9 @@ This directory keeps only current project documents.
 - [ci-ui-only-workflow-redesign.md](ci-ui-only-workflow-redesign.md):
   implemented design for a single required Universal Intrinsics header-only CI
   gate and an optional UI-only OpenCV comparison.
+- [cpu-optimization-configuration-redesign.md](cpu-optimization-configuration-redesign.md):
+  proposed simplification of public optimization configuration, internal CPU
+  capability detection, runtime dispatch, public targets, and UI-only CI.
 - [core-cpp-cleanup-plan.md](core-cpp-cleanup-plan.md): cleanup and
   header-only migration plan for core arithmetic, transpose, GEMM, and
   overlapping legacy `.cpp` implementations.

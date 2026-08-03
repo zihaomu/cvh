@@ -2,8 +2,8 @@
 #include "cvh/core/simd/opencv_ui.h"
 #include "common/benchmark_common.h"
 
-#if !CVH_ENABLE_OPENCV_INTRIN
-#error "cvh_benchmark_resize_bilinear_header must be compiled with CVH_ENABLE_OPENCV_INTRIN=1"
+#if !CVH_DETAIL_HAVE_OPENCV_UI
+#error "cvh_benchmark_resize_bilinear_header must be compiled with CVH_DETAIL_HAVE_OPENCV_UI=1"
 #endif
 
 #include <algorithm>
@@ -582,7 +582,7 @@ int main(int argc, char** argv)
                 args,
                 "RESIZE_LINEAR_U8_C1",
                 cvh_bench::public_resize_backend_name(shape),
-                "public_headers_fast_resize",
+                "public_headers_resize",
                 cvh_bench::allocation_mode_name(allocation_mode),
                 shape,
                 public_entry,

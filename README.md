@@ -3,7 +3,7 @@
 **An independent, header-only C++ computer vision library with familiar OpenCV-style APIs.**
 
 `cvh` stands for **cv-header-only**. It provides a focused set of `core`,
-`imgproc`, and `imgcodecs` APIs for applications that want familiar
+`imgproc`, `imgcodecs`, and optional `highgui` APIs for applications that want familiar
 OpenCV-style types and call patterns without linking the OpenCV libraries.
 Include the headers directly or link an interface CMake target—there is no
 required library build step.
@@ -23,9 +23,13 @@ Repository: [github.com/zihaomu/cvh](https://github.com/zihaomu/cvh)
 - **Project direction:** pure header-only
 - **Brand:** `cvh` (cv-header-only)
 - **Default target:** `cvh::headers`
-- **Fast target:** `cvh::headers_fast`
+- **Display target:** `cvh::highgui`
 - **API scope:** an intentionally aligned subset of OpenCV `core`, `imgproc`,
   and `imgcodecs`, not a drop-in replacement for every OpenCV module
+- **Product boundary:** no compiled `.cpp` backend; HighGUI is an explicit
+  header-only module with platform GUI link dependencies
+- **Default configure:** tests and benchmarks are opt-in, so the default build
+  contains only interface targets
 - **Performance goal:** benchmark-gated speedups on practical preprocessing/postprocessing hot paths
 
 ## Why this project exists
@@ -45,10 +49,10 @@ The `cvh` CMake package exposes two public header-only targets:
 
 | Target | Role | Behavior |
 |---|---|---|
-| `cvh::headers` | Default header-only target | Enables the vendored OpenCV Universal Intrinsics headers by default as the internal SIMD dialect and keeps platform-specific project fast toggles off. It does not compile `.cpp` files and does not enable xsimd. |
-| `cvh::headers_fast` | Fast-profile target | Inherits `cvh::headers` and enables validated platform fast-profile toggles. It does not compile `.cpp` files and does not enable xsimd. |
+| `cvh::headers` | Compute target | Enables all validated OpenCV Universal Intrinsics and architecture-specific kernels by default, with runtime dispatch and scalar fallback. It does not compile `.cpp` files or enable xsimd. |
+| `cvh::highgui` | Optional display target | Inherits `cvh::headers` and provides header-only windows/event handling through AppKit, Win32, or X11. It links the corresponding system GUI libraries but does not build a cvh binary. |
 
-New public features should land in `cvh::headers` first. `cvh::headers_fast` should only add platform fast-profile toggles that have correctness tests and a benchmark reason to exist.
+New optimized paths enter `cvh::headers` only after correctness and benchmark acceptance; users do not select individual ISA implementations.
 
 ## Usage
 
@@ -58,26 +62,39 @@ For CMake users, `cvh::headers` propagates all required include roots. For non-C
 #include <cvh/cvh.h>
 ```
 
-CMake baseline integration:
+CMake integration:
 
 ```cmake
 find_package(cvh CONFIG REQUIRED)
 target_link_libraries(app PRIVATE cvh::headers)
 ```
 
-CMake fast-profile integration:
+Validated CPU optimizations are enabled by default. Project builds can select
+a fully scalar header configuration with `-DCVH_ENABLE_OPTIMIZATION=OFF`; the
+exported `cvh::headers` target then propagates
+`CVH_ENABLE_OPTIMIZATION=0`. ISA availability is detected internally.
 
-```cmake
-find_package(cvh CONFIG REQUIRED)
-target_link_libraries(app PRIVATE cvh::headers_fast)
+Header-only HighGUI is opt-in and is intentionally not pulled into
+`cvh/cvh.h`:
+
+```cpp
+#include <cvh/highgui/highgui.h>
+
+cvh::namedWindow("preview");
+cvh::imshow("preview", image);
+cvh::waitKey(0);
+cvh::destroyAllWindows();
 ```
 
-OpenCV Universal Intrinsics are enabled by default. Project builds can select a
-fully scalar header configuration with
-`-DCVH_ENABLE_OPENCV_INTRIN=OFF`; the exported `cvh::headers` target then
-propagates `CVH_ENABLE_OPENCV_INTRIN=0`. The default `ON` configuration does not
-define the macro redundantly, so direct consumer overrides remain available.
-Use `cvh::headers_fast` only when the platform fast-profile toggles are desired.
+```cmake
+target_link_libraries(app PRIVATE cvh::highgui)
+```
+
+The first HighGUI contract supports `namedWindow`, `imshow`, `waitKey`,
+`destroyWindow`, and `destroyAllWindows`. `imshow` currently accepts 2D
+`CV_8U` images with 1, 3, or 4 channels. Window calls should stay on the
+application UI thread. Direct-include users must link AppKit/CoreGraphics on
+macOS, `user32`/`gdi32` on Windows, or X11 on Linux.
 
 xsimd is not part of the accepted runtime path. P5.3 removed the legacy `.cpp` xsimd kernels, public adapter surface, tests, dispatch mode, and vendored xsimd tree.
 
@@ -86,11 +103,11 @@ xsimd is not part of the accepted runtime path. P5.3 removed the legacy `.cpp` x
 Legend:
 
 - **Supported:** implemented inline in headers and covered by the header-only test path.
-- **Supported + fast path:** supported by the default target, with validated OpenCV Universal Intrinsics paths enabled by default and extra platform fast-profile toggles available through `cvh::headers_fast`.
+- **Supported + fast path:** supported by `cvh::headers`, with validated OpenCV Universal Intrinsics or architecture-specific paths and scalar fallback.
 - **WIP:** target API or historical implementation exists, but it is not yet accepted as part of the pure header-only contract.
 - **Out of scope:** intentionally not promised by the pure header-only product.
 
-| Module | API / operator | Status | Current header-only scope | `cvh::headers_fast` |
+| Module | API / operator | Status | Current header-only scope | Optimization path |
 |---|---|---|---|---|
 | `core` | `Mat`, `Scalar`, `Range`, `Point`, `Size`, type/channel macros | Supported | Core data model and OpenCV-style type helpers. | Same behavior as baseline. |
 | `core` | `Mat::create`, `release`, `clone`, `copyTo`, `setTo`, `convertTo`, `reshape`, 2D ROI helpers | Supported | Covers common ownership, layout, continuous/non-contiguous, and conversion paths used by imgproc. | Same behavior as baseline. |
@@ -101,7 +118,7 @@ Legend:
 | `core` | `norm`, `sum`, `mean`, `meanStdDev`, non-zero predicates, extrema, `reduce`, `reduceArgMin/Max`, `normalize` | Supported | C1/C3/C4 statistics, masks, ROI, N-D extrema, axis 0/1 reductions and norm/min-max normalization for the documented type subset. | Deterministic scalar header baseline; benchmark records single-thread and project-default configurations. |
 | `core` | `copyTo(mask)`, channel routing, `flip/flipND`, `rotate`, `repeat`, concat, `broadcast`, `swap`, `borderInterpolate` | Supported | Byte-preserving 2D/N-D layout operations with explicit alias handling and documented trailing-dimension broadcast rules. | Scalar header baseline; copy/layout benchmark rows are established. |
 | `core` | `transpose`, `transposeND` | Supported | Header-only blocked transpose with continuous, ROI, C1/C3/C4 and non-square coverage. | Inherits the scalar header baseline. |
-| `core` | `gemm`, `gemm_pack_b` | Supported | FP32 activation with FP32/FP16 weights, 2D/broadcast NN and packed-B; INT8 scales remain limited to the existing NT path. | Inherits the scalar header baseline. |
+| `core` | `gemm`, `gemm_pack_b` | Supported + fast path | FP32 activation with FP32/FP16 weights, 2D/broadcast NN and packed-B; INT8 scales remain limited to the existing NT path. | `Auto` selects accepted NEON/AVX2 kernels, then OpenCV UI, then scalar. |
 | `core` | `softmax`, `silu`, `rmsnorm`, `rope` | Out of scope | Legacy declaration-only inference APIs were removed from the installed surface. | Not applicable. |
 | `imgproc` | `resize` | Supported + fast path | `CV_8U` / `CV_32F`, `C1` / `C3` / `C4`, `INTER_NEAREST`, `INTER_NEAREST_EXACT`, `INTER_LINEAR`. | `CV_8UC1` exact 2x downsample with `INTER_LINEAR`. |
 | `imgproc` | `cvtColor` | Supported + fast path | `CV_8U` / `CV_32F` common BGR/RGB/GRAY/BGRA/RGBA conversions; `CV_8U` YUV encode/decode families. | `CV_8UC3` `BGR2GRAY` and `RGB2GRAY`. |
@@ -122,7 +139,7 @@ Legend:
 | `imgproc` | `erode`, `dilate`, `morphologyEx` | Supported + fast path | `CV_8U`; `MORPH_ERODE`, `DILATE`, `OPEN`, `CLOSE`, `GRADIENT`, `TOPHAT`, `BLACKHAT`, `HITMISS`; `HITMISS` limited to `CV_8UC1`. | Shared 3x3 rectangular min/max header path; generic kernels fall back. |
 | `imgcodecs` | `imread` | Supported | stb-backed `CV_8U` image load with `IMREAD_UNCHANGED`, `IMREAD_GRAYSCALE`, `IMREAD_COLOR`; OpenCV-style BGR/BGRA output for color reads. | Same behavior as baseline. |
 | `imgcodecs` | `imwrite` | Supported | `CV_8U` 2D `C1` / `C3` / `C4`; writes `png`, `jpg/jpeg`, `bmp`. | Same behavior as baseline. |
-| `highgui` | `imshow`, `waitKey` | Out of scope | Display/event-loop APIs are not part of the pure header-only product. Use `imwrite` or application-owned UI code. | Out of scope. |
+| `highgui` | `namedWindow`, `imshow`, `waitKey`, `destroyWindow`, `destroyAllWindows` | Supported | Optional header-only AppKit/Win32/X11 window and event-loop subset; `imshow` accepts 2D U8 C1/C3/C4. | Uses the separate `cvh::highgui` target. |
 
 ## Header-only Contract Tests
 
@@ -130,16 +147,17 @@ The support table above is tied to the header-only test path:
 
 | Contract area | Test / gate |
 |---|---|
-| Public headers and forbidden `src/` includes | `scripts/check_public_headers.sh` |
+| Public header/module boundary and forbidden source dependencies | `scripts/check_public_headers.sh` |
 | Installed public targets and external package consumers | `scripts/check_header_only_contract.sh` |
 | `cvh::headers` macro/default behavior | `cvh_header_compile_smoke`, `cvh_include_only_smoke` |
-| `cvh::headers_fast` macro/default behavior | `cvh_headers_fast_smoke` |
 | Imgproc multi-TU ODR | `cvh_imgproc_header_odr_smoke` |
+| Core/Imgproc/Imgcodecs per-header compilation | `cvh_*_headers_compile_smoke` |
+| Aggregate and forwarding headers | `cvh_aggregate_headers_compile_smoke` |
+| Optional HighGUI header, ODR, lifecycle, and installed consumer | `cvh_highgui_*_smoke`, `cvh_test_highgui` |
 | `core` supported baseline | `cvh_test_core` |
 | Multi-translation-unit core ODR/link | `cvh_core_header_odr_smoke` |
 | `imgproc` supported operators | `cvh_test_imgproc` |
 | `imgcodecs` supported read/write subset | `cvh_test_imgcodecs` |
-| `highgui` header-only out-of-scope behavior | `cvh_test_highgui` |
 
 ## WIP / Roadmap
 
@@ -154,7 +172,9 @@ These are target areas, but they are not yet supported promises in the pure head
 
 ## Performance
 
-Performance work is benchmark-driven. `cvh::headers` enables OpenCV Universal Intrinsics as the internal SIMD dialect by default while retaining scalar fallback code paths. `cvh::headers_fast` is reserved for additional platform fast-profile toggles.
+Performance work is benchmark-driven. `cvh::headers` enables all accepted CPU
+optimization paths while retaining scalar fallback code. The only public CPU
+policy switch is `CVH_ENABLE_OPTIMIZATION`.
 
 Current SIMD platform work is limited to ARM NEON and the x86 AVX family. RVV support is a future TODO; SSE headers/macros exist only as x86 OpenCV UI/AVX prerequisites, not as a separate current optimization track.
 
@@ -170,7 +190,7 @@ Current accepted fast paths:
 Compare workspace:
 
 - [Benchmark Framework](benchmark/readme.md) - internal header-only regression and OpenCV upstream compare design
-- [OpenCV Compare README](benchmark/opencv_compare/README.md) - `cvh::headers_fast` versus upstream OpenCV
+- [OpenCV Compare README](benchmark/opencv_compare/README.md) - UI-forced `cvh::headers` versus upstream OpenCV
 - [OpenCV UI Kernel Migration Checklist](doc/opencv-ui-kernel-migration-checklist.md)
 
 Scripts:
@@ -194,12 +214,14 @@ Header-only validation:
 ```
 
 The command runs the required UI-enabled header-only gate with
-`CVH_ENABLE_OPENCV_INTRIN=ON`. Core and Imgproc have no native backend: their
-UI fast paths and scalar fallbacks are both header-only. The gate explicitly
-sets `CVH_BUILD_NATIVE_BACKEND=OFF` only to exclude legacy HighGUI `.cpp`
-experiments. Scalar-only configuration remains available for local diagnostics
-but is not a hosted CI gate. `scripts/ci_lite_all.sh` remains as a deprecated
-compatibility wrapper for now.
+`CVH_ENABLE_OPTIMIZATION=ON`. Core, Imgproc and Imgcodecs are always
+header-only; scalar, OpenCV UI, direct NEON and direct AVX2 paths are inline
+header implementations. Scalar-only configuration remains available for local
+diagnostics but is not a hosted CI gate.
+
+Developer tests and benchmarks are disabled in the default product configure.
+Enable them explicitly with `CVH_BUILD_TESTS=ON` or
+`CVH_BUILD_BENCHMARKS=ON`.
 
 Benchmark targets:
 
@@ -221,10 +243,8 @@ Header-only benchmark quick smoke:
 ## Repository Layout
 
 - `include/` - public headers and accepted header-only implementation path
-- `src/` - legacy experiments and historical implementation code; not part of the public header-only contract
 - `test/` - correctness and regression tests
 - `benchmark/` - performance benchmarks, including `benchmark/opencv_compare/`
-- `example/` - usage examples
 - `doc/` - design notes and execution plans
 
 ## License

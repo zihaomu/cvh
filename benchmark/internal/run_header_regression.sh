@@ -114,7 +114,7 @@ if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain)" ]]; then
   CURRENT_LABEL="${CURRENT_COMMIT}-dirty"
 fi
 BASELINE_COMMIT="$(git -C "${ROOT_DIR}" rev-parse --short "${BASELINE_REF}")"
-RUN_ID="${BASELINE_COMMIT}_to_${CURRENT_LABEL}_${BENCH_PROFILE}_headers_fast"
+RUN_ID="${BASELINE_COMMIT}_to_${CURRENT_LABEL}_${BENCH_PROFILE}_headers"
 RUN_DIR="${OUTPUT_DIR}/${RUN_ID}"
 BASELINE_WORKTREE="${RUN_DIR}/baseline-worktree"
 BASELINE_BUILD="${RUN_DIR}/build-baseline"
@@ -138,7 +138,6 @@ configure_build() {
   local build_dir="$2"
   cmake -S "${src_dir}" -B "${build_dir}" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-    -DCVH_BUILD_NATIVE_BACKEND=OFF \
     -DCVH_BUILD_TESTS=OFF \
     -DCVH_BUILD_BENCHMARKS=ON >/dev/null
 }
@@ -200,7 +199,7 @@ cat > "${RUN_DIR}/meta.json" <<META
   "current_dirty": ${CURRENT_DIRTY_JSON},
   "suite": "${SUITE}",
   "profile": "${BENCH_PROFILE}",
-  "target_profile": "headers_fast",
+  "target_profile": "headers",
   "benchmark_schema_version": 2,
   "build_type": "${BUILD_TYPE}",
   "max_slowdown": ${MAX_SLOWDOWN}

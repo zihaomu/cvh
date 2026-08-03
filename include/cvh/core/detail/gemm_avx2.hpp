@@ -1,7 +1,7 @@
 #ifndef CVH_CORE_DETAIL_GEMM_AVX2_HPP
 #define CVH_CORE_DETAIL_GEMM_AVX2_HPP
 
-#include "cvh/core/detail/native_intrinsics.hpp"
+#include "cvh/core/detail/isa_intrinsics.hpp"
 
 #include <cstddef>
 
@@ -9,10 +9,10 @@ namespace cvh {
 namespace detail {
 namespace gemm_avx2 {
 
-#if CVH_NATIVE_AVX2_COMPILED
+#if CVH_DETAIL_HAVE_AVX2_KERNEL
 
 template <int Rows>
-CVH_TARGET_AVX2_FMA inline void kernel_nn_block_f32(
+CVH_DETAIL_TARGET_AVX2_FMA inline void kernel_nn_block_f32(
     const float* a,
     const float* b,
     float* c,
@@ -121,7 +121,7 @@ CVH_TARGET_AVX2_FMA inline void kernel_nn_block_f32(
     }
 }
 
-CVH_TARGET_AVX2_FMA inline bool kernel_nn_f32(
+CVH_DETAIL_TARGET_AVX2_FMA inline bool kernel_nn_f32(
     const float* a,
     const float* b,
     float* c,
@@ -197,7 +197,7 @@ CVH_TARGET_AVX2_FMA inline bool kernel_nn_f32(
     return true;
 }
 
-CVH_TARGET_AVX2_FMA inline bool kernel_nt_4x2_f32(
+CVH_DETAIL_TARGET_AVX2_FMA inline bool kernel_nt_4x2_f32(
     const float* a,
     const float* b,
     float* c,

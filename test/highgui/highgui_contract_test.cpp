@@ -1,103 +1,62 @@
-#include "cvh.h"
+#include "cvh/highgui/highgui.h"
 #include "gtest/gtest.h"
 
 #include <string>
 
 using namespace cvh;
 
-namespace
+TEST(HighguiContract_TEST, named_window_lifecycle_is_idempotent)
 {
-
-int g_imshow_calls = 0;
-int g_waitkey_calls = 0;
-int g_last_rows = -1;
-int g_last_cols = -1;
-std::string g_last_name;
-
-void test_imshow_backend(const std::string& winname, const Mat& mat)
-{
-    ++g_imshow_calls;
-    g_last_name = winname;
-    g_last_rows = mat.size[0];
-    g_last_cols = mat.size[1];
+    EXPECT_NO_THROW(
+        namedWindow("lifecycle", WINDOW_AUTOSIZE));
+    EXPECT_NO_THROW(
+        namedWindow("lifecycle", WINDOW_AUTOSIZE));
+    EXPECT_NO_THROW(destroyWindow("lifecycle"));
+    EXPECT_NO_THROW(destroyWindow("lifecycle"));
+    EXPECT_NO_THROW(destroyAllWindows());
 }
 
-int test_waitkey_backend(int delay)
+TEST(HighguiContract_TEST, imshow_accepts_u8_gray_bgr_and_bgra)
 {
-    ++g_waitkey_calls;
-    return delay + 7;
+    Mat gray({2, 3}, CV_8UC1);
+    Mat bgr({2, 3}, CV_8UC3);
+    Mat bgra({2, 3}, CV_8UC4);
+    gray = 1;
+    bgr = 2;
+    bgra = 3;
+
+    EXPECT_NO_THROW(imshow("gray", gray));
+    EXPECT_NO_THROW(imshow("bgr", bgr));
+    EXPECT_NO_THROW(imshow("bgra", bgra));
+    destroyAllWindows();
 }
 
-}  // namespace
-
-TEST(Highgui_TEST, imshow_reports_header_only_unsupported_and_imwrite_hint)
+TEST(HighguiContract_TEST, imshow_rejects_invalid_images)
 {
-    Mat img({2, 2}, CV_8UC3);
-    img = 0;
+    Mat empty;
+    Mat unsupported_depth({2, 2}, CV_32FC1);
+    Mat unsupported_channels({2, 2}, CV_8UC2);
 
-    try
-    {
-        imshow("lite_mode_window", img);
-        FAIL() << "imshow should throw in pure header-only mode";
-    }
-    catch (const Exception& e)
-    {
-        const std::string msg = e.what();
-        EXPECT_NE(msg.find("header-only"), std::string::npos);
-        EXPECT_NE(msg.find("imwrite"), std::string::npos);
-    }
+    EXPECT_THROW(imshow("empty", empty), Exception);
+    EXPECT_THROW(
+        imshow("unsupported_depth", unsupported_depth),
+        Exception);
+    EXPECT_THROW(
+        imshow("unsupported_channels", unsupported_channels),
+        Exception);
 }
 
-TEST(Highgui_TEST, waitkey_reports_header_only_unsupported)
+TEST(HighguiContract_TEST, window_names_and_flags_are_validated)
 {
-    try
-    {
-        (void)waitKey(1);
-        FAIL() << "waitKey should throw in pure header-only mode";
-    }
-    catch (const Exception& e)
-    {
-        const std::string msg = e.what();
-        EXPECT_NE(msg.find("header-only"), std::string::npos);
-    }
+    EXPECT_THROW(namedWindow(""), Exception);
+    EXPECT_THROW(namedWindow("bad_flags", 17), Exception);
+
+    Mat image({1, 1}, CV_8UC1);
+    EXPECT_THROW(imshow("", image), Exception);
+    EXPECT_THROW(destroyWindow(""), Exception);
 }
 
-TEST(Highgui_TEST, dispatch_registration_overrides_api_calls)
+TEST(HighguiContract_TEST, wait_key_is_noninteractive_in_headless_mode)
 {
-    g_imshow_calls = 0;
-    g_waitkey_calls = 0;
-    g_last_rows = -1;
-    g_last_cols = -1;
-    g_last_name.clear();
-
-    const detail::ImshowFn old_imshow = detail::imshow_dispatch();
-    const detail::WaitKeyFn old_waitkey = detail::waitkey_dispatch();
-
-    detail::register_imshow_backend(&test_imshow_backend);
-    detail::register_waitkey_backend(&test_waitkey_backend);
-
-    Mat img({2, 5}, CV_8UC1);
-    img = 9;
-
-    imshow("dispatch_case", img);
-    const int key = waitKey(33);
-
-    EXPECT_EQ(g_imshow_calls, 1);
-    EXPECT_EQ(g_waitkey_calls, 1);
-    EXPECT_EQ(g_last_name, "dispatch_case");
-    EXPECT_EQ(g_last_rows, 2);
-    EXPECT_EQ(g_last_cols, 5);
-    EXPECT_EQ(key, 40);
-
-    detail::register_imshow_backend(old_imshow);
-    detail::register_waitkey_backend(old_waitkey);
-}
-
-TEST(Highgui_TEST, header_only_mode_keeps_display_callbacks_unregistered_by_default)
-{
-    EXPECT_FALSE(detail::is_imshow_backend_registered());
-    EXPECT_FALSE(detail::is_waitkey_backend_registered());
-    detail::ensure_highgui_backends_registered_once();
-    EXPECT_FALSE(detail::is_imshow_backend_registered());
-    EXPECT_FALSE(detail::is_waitkey_backend_registered());
+    EXPECT_EQ(waitKey(1), -1);
 }

@@ -20,8 +20,8 @@ enum class DispatchTag
     Unknown = 0,
     Scalar,
     OpenCVUI,
-    NativeNEON,
-    NativeAVX2,
+    NEON,
+    AVX2,
 };
 
 inline std::atomic<DispatchMode> g_dispatch_mode {DispatchMode::Auto};
@@ -35,6 +35,13 @@ inline void set_dispatch_mode(DispatchMode mode)
 inline DispatchMode dispatch_mode()
 {
     return g_dispatch_mode.load(std::memory_order_relaxed);
+}
+
+inline bool opencv_ui_allowed()
+{
+    const DispatchMode mode = dispatch_mode();
+    return mode == DispatchMode::Auto ||
+           mode == DispatchMode::OpenCVUIOnly;
 }
 
 inline void set_last_dispatch_tag(DispatchTag tag)
@@ -60,10 +67,10 @@ inline const char* dispatch_tag_name(DispatchTag tag)
             return "scalar";
         case DispatchTag::OpenCVUI:
             return "opencv_ui";
-        case DispatchTag::NativeNEON:
-            return "native_neon";
-        case DispatchTag::NativeAVX2:
-            return "native_avx2";
+        case DispatchTag::NEON:
+            return "neon";
+        case DispatchTag::AVX2:
+            return "avx2";
         case DispatchTag::Unknown:
         default:
             return "unknown";

@@ -63,7 +63,7 @@ jobs:
       - name: Run UI/OpenCV Compare (log-only)
         env:
           CVH_COMPARE_PROFILE: quick
-          CVH_COMPARE_IMPLS: headers_fast
+          CVH_COMPARE_IMPLS: ui
           CVH_COMPARE_THREADS: "1"
           CVH_COMPARE_OMP_DYNAMIC: "false"
           CVH_COMPARE_OMP_PROC_BIND: "close"

@@ -17,9 +17,9 @@ namespace reduce_ui {
 
 inline bool enabled()
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    return cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly;
+    return cpu::opencv_ui_allowed();
 #else
     return false;
 #endif
@@ -170,7 +170,7 @@ struct NormResult
     bool has_nan = false;
 };
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
 
 template<typename T>
@@ -2818,7 +2818,7 @@ inline bool try_norm(const Mat& src,
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const PixelRows rows = pixel_rows(src, mask);
     NormResult candidate;
@@ -2864,7 +2864,7 @@ inline bool try_norm_diff(const Mat& first,
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const PixelPairRows rows =
         pixel_pair_rows(first, second, mask);
@@ -2913,7 +2913,7 @@ inline bool try_apply_normalize(const Mat& src,
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX) && \
     (CV_SIMD_64F || CV_SIMD_SCALABLE_64F)
     if (!normalize_rows_have_vector_run(src, dst, mask))
@@ -2939,7 +2939,7 @@ inline bool try_count_nonzero(const Mat& src, size_t& result)
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const SourceRows rows = source_rows(src);
     switch (src.depth())
@@ -3064,7 +3064,7 @@ inline bool try_has_nonzero(const Mat& src, bool& result)
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const SourceRows rows = source_rows(src);
     switch (src.depth())
@@ -3167,7 +3167,7 @@ inline bool try_find_nonzero(const Mat& src, EmitFn emit)
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     switch (src.depth())
     {
@@ -3216,7 +3216,7 @@ inline bool try_sum_count(const Mat& src,
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const PixelRows rows = pixel_rows(src, mask);
     SumCount candidate;
@@ -3291,7 +3291,7 @@ inline bool try_stable_statistics(const Mat& src,
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const PixelRows rows = pixel_rows(src, mask);
     StableStatistics candidate;
@@ -3382,7 +3382,7 @@ inline bool try_extrema(const Mat& src,
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const PixelRows rows = pixel_rows(src, mask);
     ExtremaResult candidate;
@@ -3459,7 +3459,7 @@ inline bool try_reduce(const Mat& src,
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     switch (src.depth())
     {
@@ -3496,7 +3496,7 @@ inline bool try_reduce_arg(const Mat& src,
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     switch (src.depth())
     {

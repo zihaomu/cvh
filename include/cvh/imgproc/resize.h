@@ -2,8 +2,9 @@
 #define CVH_IMGPROC_RESIZE_H
 
 #include "../detail/config.h"
+#include "../core/detail/dispatch_control.h"
 #include "detail/common.h"
-#if CVH_ENABLE_OPENCV_INTRIN
+#if CVH_DETAIL_HAVE_OPENCV_UI
 #include "../core/simd/opencv_ui.h"
 #endif
 
@@ -26,7 +27,7 @@ inline T resize_interpolate_cast(float v)
     }
 }
 
-#if CVH_ENABLE_OPENCV_INTRIN
+#if CVH_DETAIL_HAVE_OPENCV_UI
 inline bool resize_linear_u8c1_downsample2_opencv_intrin_supported(const Mat& src,
                                                                   int dst_rows,
                                                                   int dst_cols,
@@ -224,6 +225,7 @@ inline void resize_fallback_impl_typed(const Mat& src, Mat& dst, int interpolati
 
 inline void resize_fallback(const Mat& src, Mat& dst, Size dsize, double fx, double fy, int interpolation)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     CV_Assert(!src.empty() && "resize: source image can not be empty");
     CV_Assert(src.dims == 2 && "resize: only 2D Mat is supported");
 
@@ -246,10 +248,12 @@ inline void resize_fallback(const Mat& src, Mat& dst, Size dsize, double fx, dou
         CV_Error_(Error::StsBadArg, ("resize: unsupported src depth=%d", src_depth));
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN
-    if (resize_linear_u8c1_downsample2_opencv_intrin_supported(src, dst_rows, dst_cols, interpolation))
+#if CVH_DETAIL_HAVE_OPENCV_UI
+    if (cpu::opencv_ui_allowed() &&
+        resize_linear_u8c1_downsample2_opencv_intrin_supported(src, dst_rows, dst_cols, interpolation))
     {
         resize_linear_u8c1_downsample2_opencv_intrin_impl(src, dst);
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
         return;
     }
 #endif

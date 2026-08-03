@@ -12,15 +12,15 @@ namespace copy_ui {
 
 inline bool enabled()
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    return cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly;
+    return cpu::opencv_ui_allowed();
 #else
     return false;
 #endif
 }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
 
 inline void copy_masked_u8c1_row(const uchar* src,
@@ -130,7 +130,7 @@ inline bool copy_masked_u8_rows(const uchar* src,
                                 size_t rows,
                                 int channels)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const size_t lanes = static_cast<size_t>(
         cv::VTraits<cv::v_uint8>::vlanes());

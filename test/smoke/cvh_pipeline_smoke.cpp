@@ -5,8 +5,8 @@
 
 int main()
 {
-    const std::string input_path = "cvh_lite_pipeline_input.png";
-    const std::string output_path = "cvh_lite_pipeline_output.png";
+    const std::string input_path = "cvh_pipeline_input.png";
+    const std::string output_path = "cvh_pipeline_output.png";
     std::remove(input_path.c_str());
     std::remove(output_path.c_str());
 

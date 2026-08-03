@@ -14,9 +14,9 @@ namespace filter_ui {
 
 inline bool enabled()
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    return cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly;
+    return cpu::opencv_ui_allowed();
 #else
     return false;
 #endif
@@ -49,7 +49,7 @@ inline void write_c1(Mat& dst, int y, int x, float value)
     }
 }
 
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
 
 inline cv::v_float32x4 load_c1_f32x4(const Mat& src, int y, int x)
@@ -140,7 +140,7 @@ inline bool filter2d_c1(const Mat& src,
                         double delta,
                         int border_type)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!enabled() || src.channels() != 1 ||
         (src.depth() != CV_8U && src.depth() != CV_32F) ||
@@ -365,7 +365,7 @@ inline bool separable_c1(const Mat& src,
                          double delta,
                          int border_type)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!enabled() || src.channels() != 1 ||
         (src.depth() != CV_8U && src.depth() != CV_32F) ||
@@ -583,7 +583,7 @@ inline bool spatial_gradient_u8_c1(const Mat& src,
                                    Mat& dy,
                                    int border_type)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!enabled() || src.depth() != CV_8U || src.channels() != 1 ||
         src.dims != 2 || src.size.p[0] <= 0 || src.size.p[1] <= 0)

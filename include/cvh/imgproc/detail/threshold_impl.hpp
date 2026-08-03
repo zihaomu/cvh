@@ -14,15 +14,15 @@ namespace threshold_fastpath
 {
 inline bool ui_enabled()
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    return cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly;
+    return cpu::opencv_ui_allowed();
 #else
     return false;
 #endif
 }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
 
 template<int ThresholdType, typename Vector>
@@ -206,7 +206,7 @@ inline bool try_threshold_fastpath_u8(const Mat& src,
                                       int type,
                                       double* out_ret)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!ui_enabled() || out_ret == nullptr || src.empty() ||
         src.depth() != CV_8U)
@@ -318,7 +318,7 @@ inline bool try_threshold_fastpath_f32(const Mat& src, Mat& dst, double thresh, 
 
     dst.create(src.dims, src.size.p, src.type());
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (ui_enabled())
     {

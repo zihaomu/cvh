@@ -16,13 +16,11 @@ cleanup() {
 trap cleanup EXIT
 
 BUILD_DIR="${TMP_ROOT}/build"
+DEFAULT_BUILD_DIR="${TMP_ROOT}/default-build"
 INSTALL_DIR="${TMP_ROOT}/install"
 HEADERS_CONSUMER_DIR="${TMP_ROOT}/consumer-headers"
-FAST_CONSUMER_DIR="${TMP_ROOT}/consumer-headers-fast"
-LEGACY_ON_BUILD_DIR="${TMP_ROOT}/build-legacy-on"
-LEGACY_ON_INSTALL_DIR="${TMP_ROOT}/install-legacy-on"
 
-require_no_legacy_export() {
+require_public_exports() {
   local cmake_dir="$1"
 
   if ! grep -R "cvh::headers" "${cmake_dir}" >/dev/null; then
@@ -30,8 +28,13 @@ require_no_legacy_export() {
     return 1
   fi
 
-  if ! grep -R "cvh::headers_fast" "${cmake_dir}" >/dev/null; then
-    echo "Installed package does not export cvh::headers_fast." >&2
+  if grep -R "cvh::headers_fast" "${cmake_dir}" >/dev/null; then
+    echo "Installed package still exports removed cvh::headers_fast." >&2
+    return 1
+  fi
+
+  if ! grep -R "cvh::highgui" "${cmake_dir}" >/dev/null; then
+    echo "Installed package does not export cvh::highgui." >&2
     return 1
   fi
 
@@ -48,17 +51,53 @@ require_no_legacy_export() {
   fi
 }
 
+require_public_header_surface() {
+  local install_dir="$1"
+  local include_dir="${install_dir}/include/cvh"
+
+  for required_header in \
+    "${include_dir}/cvh.h" \
+    "${include_dir}/core/mat.h" \
+    "${include_dir}/imgproc/imgproc.h" \
+    "${include_dir}/imgcodecs/imgcodecs.h" \
+    "${include_dir}/highgui/highgui.h" \
+    "${include_dir}/highgui/highgui.hpp"; do
+    if [[ ! -f "${required_header}" ]]; then
+      echo "Installed package is missing public header: ${required_header}" >&2
+      return 1
+    fi
+  done
+
+  if find "${install_dir}" -type f \
+      \( -name '*.cpp' -o -name '*.cc' -o -name '*.cxx' -o -name '*.mm' \) \
+      -print -quit | grep -q .; then
+    echo "Installed header-only package contains compiled-language source files." >&2
+    return 1
+  fi
+}
+
 "${ROOT_DIR}/scripts/check_public_headers.sh"
 
-if grep -R -n "src/imgproc" \
-    "${ROOT_DIR}/CMakeLists.txt" \
-    "${ROOT_DIR}/benchmark"; then
-  echo "CMake or benchmark code still references legacy src/imgproc files." >&2
+if [[ -d "${ROOT_DIR}/src" ]] &&
+    find "${ROOT_DIR}/src" -type f -print -quit | grep -q .; then
+  echo "Pure header-only repository must not retain a src/ implementation tree." >&2
   exit 1
 fi
 
+cmake -S "${ROOT_DIR}" -B "${DEFAULT_BUILD_DIR}" >/dev/null
+if ! grep -q '^CVH_BUILD_TESTS:BOOL=OFF$' \
+    "${DEFAULT_BUILD_DIR}/CMakeCache.txt"; then
+  echo "Default product configuration unexpectedly enables test executables." >&2
+  exit 1
+fi
+if ! grep -q '^CVH_BUILD_BENCHMARKS:BOOL=OFF$' \
+    "${DEFAULT_BUILD_DIR}/CMakeCache.txt"; then
+  echo "Default product configuration unexpectedly enables benchmark executables." >&2
+  exit 1
+fi
+cmake --build "${DEFAULT_BUILD_DIR}" --parallel "${PARALLELISM}" >/dev/null
+
 cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
-  -DCVH_BUILD_NATIVE_BACKEND=OFF \
   -DCVH_BUILD_TESTS=ON \
   -DCVH_BUILD_BENCHMARKS=OFF \
   >/dev/null
@@ -69,15 +108,21 @@ cmake --build "${BUILD_DIR}" --parallel "${PARALLELISM}" --target \
   cvh_core_headers_compile_smoke \
   cvh_imgproc_header_odr_smoke \
   cvh_imgproc_headers_compile_smoke \
+  cvh_imgcodecs_headers_compile_smoke \
+  cvh_highgui_headers_compile_smoke \
+  cvh_highgui_header_odr_smoke \
+  cvh_aggregate_headers_compile_smoke \
   cvh_include_only_smoke \
-  cvh_headers_fast_smoke \
+  cvh_pipeline_smoke \
+  cvh_resize_dispatch_smoke \
   >/dev/null
 
 ctest --test-dir "${BUILD_DIR}" --output-on-failure \
-  -R 'cvh_header_compile_smoke|cvh_core_header_odr_smoke|cvh_core_headers_compile_smoke|cvh_imgproc_header_odr_smoke|cvh_imgproc_headers_compile_smoke|cvh_include_only_smoke|cvh_headers_fast_smoke'
+  -R 'cvh_header_compile_smoke|cvh_core_header_odr_smoke|cvh_core_headers_compile_smoke|cvh_imgproc_header_odr_smoke|cvh_imgproc_headers_compile_smoke|cvh_imgcodecs_headers_compile_smoke|cvh_highgui_headers_compile_smoke|cvh_highgui_header_odr_smoke|cvh_aggregate_headers_compile_smoke|cvh_include_only_smoke|cvh_pipeline_smoke|cvh_resize_dispatch_smoke'
 
 cmake --install "${BUILD_DIR}" --prefix "${INSTALL_DIR}" >/dev/null
-require_no_legacy_export "${INSTALL_DIR}/lib/cmake/cvh"
+require_public_exports "${INSTALL_DIR}/lib/cmake/cvh"
+require_public_header_surface "${INSTALL_DIR}"
 
 mkdir -p "${HEADERS_CONSUMER_DIR}"
 cat > "${HEADERS_CONSUMER_DIR}/CMakeLists.txt" <<'EOF'
@@ -89,8 +134,11 @@ find_package(cvh CONFIG REQUIRED)
 if(NOT TARGET cvh::headers)
     message(FATAL_ERROR "Missing cvh::headers target")
 endif()
-if(NOT TARGET cvh::headers_fast)
-    message(FATAL_ERROR "Missing cvh::headers_fast target")
+if(TARGET cvh::headers_fast)
+    message(FATAL_ERROR "Removed cvh::headers_fast target is still exported")
+endif()
+if(NOT TARGET cvh::highgui)
+    message(FATAL_ERROR "Missing cvh::highgui target")
 endif()
 if(TARGET cvh::native OR TARGET cvh::full OR TARGET cvh::full_backend)
     message(FATAL_ERROR "Installed package must not expose legacy .cpp targets")
@@ -99,6 +147,26 @@ endif()
 add_executable(headers_consumer main.cpp)
 target_link_libraries(headers_consumer PRIVATE cvh::headers)
 target_compile_features(headers_consumer PRIVATE cxx_std_17)
+
+add_executable(highgui_consumer highgui.cpp)
+target_link_libraries(highgui_consumer PRIVATE cvh::highgui)
+target_compile_features(highgui_consumer PRIVATE cxx_std_17)
+EOF
+
+cat > "${HEADERS_CONSUMER_DIR}/highgui.cpp" <<'EOF'
+#include <cvh/highgui/highgui.h>
+
+int main()
+{
+    cvh::namedWindow("installed_highgui");
+    cvh::Mat image({2, 2}, CV_8UC3);
+    image = 7;
+    cvh::imshow("installed_highgui", image);
+    const int key = cvh::waitKey(1);
+    cvh::destroyWindow("installed_highgui");
+    cvh::destroyAllWindows();
+    return key == -1 ? 0 : 1;
+}
 EOF
 
 cat > "${HEADERS_CONSUMER_DIR}/main.cpp" <<'EOF'
@@ -107,20 +175,12 @@ cat > "${HEADERS_CONSUMER_DIR}/main.cpp" <<'EOF'
 
 #include <cstring>
 
-#ifndef CVH_LITE
-#error "cvh::headers must keep the header-only compatibility macro"
+#if !CVH_ENABLE_OPTIMIZATION
+#error "cvh::headers must enable validated CPU optimizations by default"
 #endif
 
-#ifdef CVH_NATIVE
-#error "cvh::headers must not enable legacy .cpp mode"
-#endif
-
-#if !CVH_ENABLE_OPENCV_INTRIN
-#error "cvh::headers must enable OpenCV Universal Intrinsics by default"
-#endif
-
-#if CVH_ENABLE_PLATFORM_INTRINSICS
-#error "cvh::headers must not enable platform intrinsics by default"
+#if !CVH_DETAIL_HAVE_OPENCV_UI
+#error "cvh::headers must provide the OpenCV UI capability by default"
 #endif
 
 int main()
@@ -162,84 +222,7 @@ cmake -S "${HEADERS_CONSUMER_DIR}" -B "${HEADERS_CONSUMER_DIR}/build" \
 cmake --build "${HEADERS_CONSUMER_DIR}/build" \
   --parallel "${PARALLELISM}" >/dev/null
 "${HEADERS_CONSUMER_DIR}/build/headers_consumer"
-
-mkdir -p "${FAST_CONSUMER_DIR}"
-cat > "${FAST_CONSUMER_DIR}/CMakeLists.txt" <<'EOF'
-cmake_minimum_required(VERSION 3.16)
-project(cvh_headers_fast_consumer LANGUAGES CXX)
-
-find_package(cvh CONFIG REQUIRED)
-
-if(NOT TARGET cvh::headers)
-    message(FATAL_ERROR "Missing cvh::headers target")
-endif()
-if(NOT TARGET cvh::headers_fast)
-    message(FATAL_ERROR "Missing cvh::headers_fast target")
-endif()
-if(TARGET cvh::native OR TARGET cvh::full OR TARGET cvh::full_backend)
-    message(FATAL_ERROR "Installed package must not expose legacy .cpp targets")
-endif()
-
-add_executable(headers_fast_consumer main.cpp)
-target_link_libraries(headers_fast_consumer PRIVATE cvh::headers_fast)
-target_compile_features(headers_fast_consumer PRIVATE cxx_std_17)
-EOF
-
-cat > "${FAST_CONSUMER_DIR}/main.cpp" <<'EOF'
-#include <cvh/cvh.h>
-#include <cvh/core/simd/opencv_ui.h>
-
-#include <cstring>
-
-#ifndef CVH_LITE
-#error "cvh::headers_fast must keep the header-only compatibility macro"
-#endif
-
-#ifdef CVH_NATIVE
-#error "cvh::headers_fast must not enable legacy .cpp mode"
-#endif
-
-#if !CVH_ENABLE_OPENCV_INTRIN
-#error "cvh::headers_fast must enable OpenCV Universal Intrinsics"
-#endif
-
-#if !CVH_ENABLE_PLATFORM_INTRINSICS
-#error "cvh::headers_fast must enable platform intrinsics"
-#endif
-
-int main()
-{
-    if (std::strcmp(cvh::detail::opencv_ui_backend_name(), "opencv_intrin") != 0)
-    {
-        return 1;
-    }
-
-    cvh::Mat src({2, 2}, CV_8UC1);
-    src.at<uchar>(0, 0, 0) = 4;
-    src.at<uchar>(0, 1, 0) = 8;
-    src.at<uchar>(1, 0, 0) = 12;
-    src.at<uchar>(1, 1, 0) = 16;
-
-    cvh::Mat dst;
-    cvh::resize(src, dst, cvh::Size(1, 1), 0.0, 0.0, cvh::INTER_LINEAR);
-
-    return dst.at<uchar>(0, 0, 0) == 10 ? 0 : 2;
-}
-EOF
-
-cmake -S "${FAST_CONSUMER_DIR}" -B "${FAST_CONSUMER_DIR}/build" \
-  -DCMAKE_PREFIX_PATH="${INSTALL_DIR}" \
-  >/dev/null
-cmake --build "${FAST_CONSUMER_DIR}/build" \
-  --parallel "${PARALLELISM}" >/dev/null
-"${FAST_CONSUMER_DIR}/build/headers_fast_consumer"
-
-cmake -S "${ROOT_DIR}" -B "${LEGACY_ON_BUILD_DIR}" \
-  -DCVH_BUILD_NATIVE_BACKEND=ON \
-  -DCVH_BUILD_TESTS=OFF \
-  -DCVH_BUILD_BENCHMARKS=OFF \
-  >/dev/null
-cmake --install "${LEGACY_ON_BUILD_DIR}" --prefix "${LEGACY_ON_INSTALL_DIR}" >/dev/null
-require_no_legacy_export "${LEGACY_ON_INSTALL_DIR}/lib/cmake/cvh"
+cmake -E env CVH_HIGHGUI_HEADLESS=1 \
+  "${HEADERS_CONSUMER_DIR}/build/highgui_consumer"
 
 echo "Header-only contract check passed."

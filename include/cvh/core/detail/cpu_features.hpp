@@ -1,52 +1,42 @@
 #ifndef CVH_CORE_DETAIL_CPU_FEATURES_HPP
 #define CVH_CORE_DETAIL_CPU_FEATURES_HPP
 
-#include "cvh/core/detail/native_intrinsics.hpp"
+#include "cvh/core/detail/isa_intrinsics.hpp"
 
-#if CVH_NATIVE_AVX2_COMPILED && defined(_MSC_VER)
+#if CVH_DETAIL_HAVE_AVX2_KERNEL && defined(_MSC_VER)
 #include <intrin.h>
 #endif
 
 namespace cvh {
 namespace cpu {
 
-enum class NativeIsa
+enum class Isa
 {
     None = 0,
     Neon,
     Avx2,
 };
 
-inline constexpr bool native_neon_compiled()
+inline constexpr bool neon_kernel_compiled()
 {
-    return CVH_NATIVE_NEON_COMPILED != 0;
+    return CVH_DETAIL_HAVE_NEON_KERNEL != 0;
 }
 
-inline constexpr bool native_avx2_compiled()
+inline constexpr bool avx2_kernel_compiled()
 {
-    return CVH_NATIVE_AVX2_COMPILED != 0;
+    return CVH_DETAIL_HAVE_AVX2_KERNEL != 0;
 }
 
-inline constexpr bool native_neon_auto_enabled()
-{
-    return CVH_ENABLE_NATIVE_NEON_AUTO != 0;
-}
-
-inline constexpr bool native_avx2_auto_enabled()
-{
-    return CVH_ENABLE_NATIVE_AVX2_AUTO != 0;
-}
-
-inline bool native_neon_runtime_available()
+inline bool neon_runtime_available()
 {
     // Phase N2 targets AArch64 first. Advanced SIMD and FP FMA are part of
-    // the AArch64 execution environment used by this native kernel.
-    return native_neon_compiled();
+    // the AArch64 execution environment used by this specialized kernel.
+    return neon_kernel_compiled();
 }
 
-inline bool native_avx2_runtime_available()
+inline bool avx2_fma_runtime_available()
 {
-#if CVH_NATIVE_AVX2_COMPILED && (defined(__clang__) || defined(__GNUC__))
+#if CVH_DETAIL_HAVE_AVX2_KERNEL && (defined(__clang__) || defined(__GNUC__))
     static const bool available = []() {
 #if defined(__GNUC__) && !defined(__clang__)
         __builtin_cpu_init();
@@ -55,7 +45,7 @@ inline bool native_avx2_runtime_available()
                __builtin_cpu_supports("fma");
     }();
     return available;
-#elif CVH_NATIVE_AVX2_COMPILED && defined(_MSC_VER)
+#elif CVH_DETAIL_HAVE_AVX2_KERNEL && defined(_MSC_VER)
     static const bool available = []() {
         int registers[4] = {};
         __cpuidex(registers, 1, 0);
@@ -80,19 +70,17 @@ inline bool native_avx2_runtime_available()
 #endif
 }
 
-inline NativeIsa best_auto_native_isa()
+inline Isa best_available_isa()
 {
-    if (native_neon_auto_enabled() &&
-        native_neon_runtime_available())
+    if (neon_runtime_available())
     {
-        return NativeIsa::Neon;
+        return Isa::Neon;
     }
-    if (native_avx2_auto_enabled() &&
-        native_avx2_runtime_available())
+    if (avx2_fma_runtime_available())
     {
-        return NativeIsa::Avx2;
+        return Isa::Avx2;
     }
-    return NativeIsa::None;
+    return Isa::None;
 }
 
 }  // namespace cpu

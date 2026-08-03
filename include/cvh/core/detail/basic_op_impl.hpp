@@ -166,7 +166,7 @@ bool apply_mat_mat_integer_ui(const Mat& a,
                               UiArithmeticOperation operation,
                               ScalarOp scalar_op)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
     const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
@@ -252,7 +252,7 @@ bool apply_mat_mat_add_sub_mul_ui(const Mat& a,
                                   UiArithmeticOperation operation,
                                   ScalarOp scalar_op)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
     const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
@@ -322,7 +322,7 @@ bool apply_mat_mat_divide_ui(const Mat& a,
                              Mat& dst,
                              ScalarOp scalar_op)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const size_t outer = a.dims > 1 ? static_cast<size_t>(a.size.p[0]) : 1;
     const size_t pixel_per_outer = a.dims > 1 ? a.total(1, a.dims) : a.total();
@@ -717,7 +717,7 @@ bool apply_mat_scalar_add_sub_mul_ui(const Mat& src,
                                      bool scalar_first,
                                      ScalarOp scalar_op)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     T scalar_values[4] = {};
     for (int channel = 0; channel < src.channels(); ++channel)
@@ -811,7 +811,7 @@ bool apply_mat_scalar_divide_ui(const Mat& src,
                                 bool scalar_first,
                                 ScalarOp scalar_op)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     T scalar_values[4] = {};
     for (int channel = 0; channel < src.channels(); ++channel)
@@ -867,7 +867,7 @@ bool apply_mat_scalar_integer_ui(const Mat& src,
                                  bool scalar_first,
                                  ScalarOp scalar_op)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     T scalar_values[4] = {};
     for (int channel = 0; channel < src.channels(); ++channel)
@@ -1780,7 +1780,7 @@ bool try_apply_raw_mat_mat_bitwise_ui(const Mat& a,
                                       UiBitwiseOperation operation,
                                       Op scalar_op)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!detail::arithm_ui::enabled())
     {
@@ -1920,7 +1920,7 @@ inline bool try_apply_raw_bitwise_not_ui(const Mat& src,
                                          Mat& dst,
                                          const Mat& mask)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!detail::arithm_ui::enabled())
     {
@@ -1980,7 +1980,7 @@ bool try_apply_raw_mat_scalar_bitwise_ui(const Mat& src,
                                          Op scalar_op,
                                          bool scalar_first)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!detail::arithm_ui::enabled())
     {
@@ -2235,7 +2235,7 @@ bool try_apply_inrange_mat_ui(const Mat& src,
                               const Mat& upper,
                               Mat& dst)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!detail::arithm_ui::enabled())
     {
@@ -2282,7 +2282,7 @@ bool try_apply_inrange_scalar_ui(const Mat& src,
                                  const Scalar& upper,
                                  Mat& dst)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!detail::arithm_ui::enabled())
     {

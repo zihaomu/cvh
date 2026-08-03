@@ -18,6 +18,5 @@
 
 #include "imgproc/imgproc.h"
 #include "imgcodecs/imgcodecs.h"
-#include "highgui/highgui.hpp"
 
 #endif // CVH_CVH_H

@@ -80,7 +80,7 @@ void expect_transpose_kernel_bytes_equal(
         1);
 
     cpu::DispatchTag expected_tag = cpu::DispatchTag::Scalar;
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const size_t block =
         element_size == 1 ? 16 : (element_size == 2 ? 8 : 4);

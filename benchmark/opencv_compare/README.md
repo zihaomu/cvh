@@ -6,12 +6,12 @@ header-only `cvh` versus OpenCV upstream.
 
 ## Target Design
 
-Mode B intentionally uses only the fastest header-only profile on the `cvh`
-side:
+Mode B uses the single public compute target and forces its OpenCV Universal
+Intrinsics dispatch policy at runtime:
 
 | Implementation | Meaning |
 |---|---|
-| `cvh_headers_fast` | Current `cvh::headers_fast`, representing the fastest header-only implementation. |
+| `cvh_ui` | Current `cvh::headers` with `OpenCVUIOnly` forced; specialized NEON/AVX2 dispatch is rejected. |
 | `opencv` | Official OpenCV `core` / `imgproc` built on the same machine. |
 
 The compare report is for visibility and prioritization. It is log-only by
@@ -66,7 +66,7 @@ checkout unless you explicitly want that script to manage the repo.
 Existing files:
 
 - `setup_opencv_bench_slim.sh`: historical helper for a slim OpenCV clone.
-- `run_compare.sh`: one-command runner for `cvh::headers_fast` versus
+- `run_compare.sh`: one-command runner for UI-forced `cvh::headers` versus
   upstream OpenCV.
 - `csv_to_markdown.py`: render compare CSV into Markdown.
 - `opencv_compare_header_benchmark.cpp`: pure header-only `cvh` compare cases.
@@ -75,19 +75,18 @@ Existing files:
 
 Current caveats:
 
-- `cvh::headers` is intentionally not a Mode B compare implementation. It is
-  useful for default header-only validation and internal regression, while
-  Mode B should stay easy to read: fastest header-only `cvh` versus upstream
-  OpenCV.
+- Mode B has one CVH implementation: `cvh_ui`. The benchmark links
+  `cvh::headers`, sets `OpenCVUIOnly`, and fails if a specialized ISA tag is
+  observed or an explicitly UI-required case does not report `opencv_ui`.
 - Raw CSV/metadata and rolling `current_*` reports are generated artifacts.
   Curated date-named `*-opencv-upstream-performance.md` snapshots may be
   committed under `benchmark/opencv_compare/results/`.
 - New benchmark reports are written in English by default. Optional
   translations use a locale suffix such as `.zh-CN.md`; the English report is
   the canonical version linked from the project README.
-- A missing `headers_fast` specialization is not an unsupported case:
-  `cvh::headers_fast` inherits the `cvh::headers` implementation and the case
-  remains in the report as `dispatch_path=headers_baseline`.
+- A case without a UI kernel remains in the report through its public header
+  fallback; `headers_baseline` is a dispatch description, not another product
+  target.
 
 ## Dated Snapshots
 
@@ -127,10 +126,10 @@ Stable baseline:
 Explicit implementation:
 
 ```bash
-./benchmark/opencv_compare/run_compare.sh --profile quick --impls headers_fast
+./benchmark/opencv_compare/run_compare.sh --profile quick --impls ui
 ```
 
-`cvh_headers_fast` is accepted as an alias for `headers_fast`.
+`cvh_ui` is accepted as an alias for `ui`.
 
 Focused GEMM attribution:
 

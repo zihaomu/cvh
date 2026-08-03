@@ -1,7 +1,7 @@
 #include "cvh.h"
 
-#if !CVH_ENABLE_OPENCV_INTRIN
-#error "cvh_resize_opencv_intrin_smoke must be compiled with CVH_ENABLE_OPENCV_INTRIN=1"
+#if !CVH_DETAIL_HAVE_OPENCV_UI
+#error "cvh_resize_opencv_intrin_smoke must be compiled with CVH_DETAIL_HAVE_OPENCV_UI=1"
 #endif
 
 #include <vector>

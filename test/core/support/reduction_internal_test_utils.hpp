@@ -318,7 +318,7 @@ void expect_reduce_mat_close(const Mat& actual,
 
 int reduce_test_lanes(int depth)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     return depth == CV_8U
         ? cv::VTraits<cv::v_uint8>::vlanes()

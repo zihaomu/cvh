@@ -11,12 +11,17 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #ifndef CVH_COMPARE_IMPL_NAME
-#define CVH_COMPARE_IMPL_NAME "cvh_headers_fast"
+#define CVH_COMPARE_IMPL_NAME "cvh_ui"
+#endif
+
+#if !CVH_DETAIL_HAVE_OPENCV_UI
+#error "The UI-only OpenCV compare requires CVH_ENABLE_OPTIMIZATION=1"
 #endif
 
 namespace cvh_bench_compare {
@@ -60,10 +65,35 @@ struct ShapeCase
 
 volatile std::uint64_t g_sink = 0;
 
+void require_opencv_ui_dispatch(const char* op, const char* variant)
+{
+    const cvh::cpu::DispatchTag tag = cvh::cpu::last_dispatch_tag();
+    if (tag != cvh::cpu::DispatchTag::OpenCVUI)
+    {
+        throw std::runtime_error(
+            std::string("UI-only compare expected opencv_ui for ") + op +
+            "/" + variant + ", got " +
+            cvh::cpu::dispatch_tag_name(tag));
+    }
+}
+
+void validate_ui_only_rows(const std::vector<CompareRow>& rows)
+{
+    for (const CompareRow& row : rows)
+    {
+        if (row.dispatch_path == "neon" || row.dispatch_path == "avx2")
+        {
+            throw std::runtime_error(
+                "UI-only compare observed specialized ISA dispatch for " +
+                row.op + "/" + row.variant + ": " + row.dispatch_path);
+        }
+    }
+}
+
 void usage()
 {
     std::cout
-        << "Usage: cvh_benchmark_opencv_compare_headers_fast "
+        << "Usage: cvh_benchmark_opencv_compare_ui "
         << "[--profile quick|stable|full] [--warmup N] [--iters N] [--repeats N] "
         << "[--threads N] [--impl name] [--ops GEMM] [--output path]\n";
 }
@@ -131,14 +161,14 @@ Args parse_args(int argc, char** argv)
         std::cerr << "Unsupported profile: " << args.profile << "\n";
         std::exit(2);
     }
-    if (args.impl == "headers_fast")
+    if (args.impl == "ui")
     {
-        args.impl = "cvh_headers_fast";
+        args.impl = "cvh_ui";
     }
-    if (args.impl != "cvh_headers_fast")
+    if (args.impl != "cvh_ui")
     {
         std::cerr << "Unsupported impl: " << args.impl
-                  << " (Mode B only compares cvh_headers_fast against upstream OpenCV)\n";
+                  << " (Mode B only compares cvh_ui against upstream OpenCV)\n";
         std::exit(2);
     }
     if (!args.ops.empty() && args.ops != "GEMM")
@@ -370,7 +400,7 @@ void append_core_mat_cases(const Args& args, std::vector<CompareRow>& rows)
                 shape_name,
                 cvh_ms,
                 opencv_ms,
-                "cvh_headers_fast_inherits_cvh_headers;micro_iters_x1000");
+                "cvh_ui_uses_cvh_headers;micro_iters_x1000");
         }
 
         {
@@ -800,10 +830,12 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
             cvh::Mat src({shape.rows * 2, shape.cols * 2}, CV_8UC1);
             cvh::Mat dst;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::resize(src, dst, cvh::Size(shape.cols, shape.rows), 0.0, 0.0, cvh::INTER_LINEAR); },
                 dst,
                 args);
+            require_opencv_ui_dispatch("RESIZE", "linear_half_u8c1");
             const double opencv_ms = bench_opencv_resize_linear_half(
                 shape.rows, shape.cols, args.warmup, args.iters, args.repeats, seed);
             append_row(rows, args, "imgproc", "RESIZE", "linear_half_u8c1", "opencv_ui", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
@@ -813,10 +845,12 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
             cvh::Mat src({shape.rows, shape.cols}, CV_8UC3);
             cvh::Mat dst;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::cvtColor(src, dst, cvh::COLOR_BGR2GRAY); },
                 dst,
                 args);
+            require_opencv_ui_dispatch("CVTCOLOR", "BGR2GRAY_u8");
             const double opencv_ms = bench_opencv_cvtcolor_bgr2gray(
                 shape.rows, shape.cols, args.warmup, args.iters, args.repeats, seed);
             append_row(rows, args, "imgproc", "CVTCOLOR", "BGR2GRAY_u8", "opencv_ui", "CV_8U", 3, shape_name, cvh_ms, opencv_ms);
@@ -1603,10 +1637,12 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
 
     {
         cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() { cvh::cvtColor(u8_src, dst, cvh::COLOR_BGR2GRAY); },
             dst,
             args);
+        require_opencv_ui_dispatch("CVTCOLOR", "BGR2GRAY_u8_roi");
         const double opencv_ms = bench_opencv_imgproc_roi(
             ImgprocRoiOpId::CvtColorBgr2Gray, shape.rows, shape.cols,
             args.warmup, args.iters, args.repeats, seed);
@@ -1724,6 +1760,7 @@ void write_csv(const std::vector<CompareRow>& rows, const std::string& path)
 int main(int argc, char** argv)
 {
     const auto args = cvh_bench_compare::parse_args(argc, argv);
+    cvh::cpu::set_dispatch_mode(cvh::cpu::DispatchMode::OpenCVUIOnly);
     cvh_bench_compare::configure_opencv_threads(args.threads);
     cvh::setNumThreads(args.threads);
     std::vector<cvh_bench_compare::CompareRow> rows;
@@ -1745,12 +1782,14 @@ int main(int argc, char** argv)
         cvh_bench_compare::append_phase1_cases(args, rows);
     }
 
+    cvh_bench_compare::validate_ui_only_rows(rows);
+
     if (!args.output_csv.empty())
     {
         cvh_bench_compare::write_csv(rows, args.output_csv);
     }
 
-    std::cout << "cvh_benchmark_opencv_compare_headers_fast: impl=" << args.impl
+    std::cout << "cvh_benchmark_opencv_compare_ui: impl=" << args.impl
               << ", profile=" << args.profile
               << ", ops=" << (args.ops.empty() ? "all" : args.ops)
               << ", threads=" << args.threads

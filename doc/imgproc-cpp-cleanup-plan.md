@@ -1,5 +1,9 @@
 # Imgproc C++ Cleanup And Header-only Fast-path Migration Plan
 
+> P7.1 update (2026-07-29): the remaining HighGUI/native `.cpp` backend and
+> its build switch were deleted. Native NEON/AVX2 now means header-inline ISA
+> kernels only; historical references below are retained as migration evidence.
+
 ## 背景
 
 `cvh` 的公共产品定位是纯 header-only。当前 `imgproc` 的公开
@@ -546,7 +550,6 @@ Mode B 至少保留：
 ```bash
 cmake -S . -B build-imgproc-clean \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCVH_BUILD_NATIVE_BACKEND=OFF \
   -DCVH_BUILD_TESTS=ON \
   -DCVH_BUILD_BENCHMARKS=ON
 

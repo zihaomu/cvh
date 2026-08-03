@@ -2,8 +2,8 @@
 
 #include <cstring>
 
-#if !CVH_ENABLE_OPENCV_INTRIN
-#error "cvh_opencv_intrin_smoke must be compiled with CVH_ENABLE_OPENCV_INTRIN=1"
+#if !CVH_DETAIL_HAVE_OPENCV_UI
+#error "cvh_opencv_intrin_smoke must be compiled with CVH_DETAIL_HAVE_OPENCV_UI=1"
 #endif
 
 static_assert(sizeof(cv::hfloat) == 2, "OpenCV UI half must use 16-bit storage");

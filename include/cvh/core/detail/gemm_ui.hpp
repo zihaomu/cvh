@@ -12,11 +12,9 @@ namespace gemm_ui {
 
 inline bool enabled()
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    const cpu::DispatchMode mode = cpu::dispatch_mode();
-    return mode == cpu::DispatchMode::Auto ||
-           mode == cpu::DispatchMode::OpenCVUIOnly;
+    return cpu::opencv_ui_allowed();
 #else
     return false;
 #endif
@@ -24,7 +22,7 @@ inline bool enabled()
 
 inline bool can_vectorize_nn(int n)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     return enabled() &&
            n >= cv::VTraits<cv::v_float32>::vlanes();
@@ -36,7 +34,7 @@ inline bool can_vectorize_nn(int n)
 
 inline bool can_vectorize_nt(int k)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     return enabled() &&
            k >= cv::VTraits<cv::v_float32>::vlanes();
@@ -52,7 +50,7 @@ inline void kernel_nn_row_f32(const float* a,
                               int n,
                               int k)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const int lanes = cv::VTraits<cv::v_float32>::vlanes();
     int col = 0;
@@ -118,7 +116,7 @@ inline void kernel_nn_block_4x2_f32(const float* a,
                                     int n,
                                     int k)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const int lanes = cv::VTraits<cv::v_float32>::vlanes();
     int col = 0;
@@ -237,7 +235,7 @@ inline void kernel_nn_4x2_f32(const float* a,
                               int n,
                               int k)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     int row = 0;
     for (; row <= m - 4; row += 4)
@@ -294,7 +292,7 @@ inline void kernel_nn_n1_block_f32(const float* a,
                                    float* c,
                                    int k)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const int lanes = cv::VTraits<cv::v_float32>::vlanes();
     cv::v_float32 sum0[Rows];
@@ -358,7 +356,7 @@ inline void kernel_nn_n1_4rows_f32(const float* a,
                                    int m,
                                    int k)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     int row = 0;
     for (; row <= m - 4; row += 4)
@@ -408,7 +406,7 @@ inline float kernel_nt_dot_f32(const float* a,
                                const float* b,
                                int k)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const int lanes = cv::VTraits<cv::v_float32>::vlanes();
     cv::v_float32 sum0 = cv::vx_setzero_f32();

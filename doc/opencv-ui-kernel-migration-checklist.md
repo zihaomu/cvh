@@ -126,7 +126,7 @@ Use a command set appropriate to the touched operator. For accepted fast paths,
 run at least:
 
 ```bash
-cmake -S . -B build-p6-kernel -DCVH_BUILD_NATIVE_BACKEND=OFF -DCVH_BUILD_TESTS=ON -DCVH_BUILD_BENCHMARKS=ON
+cmake -S . -B build-p6-kernel -DCVH_BUILD_TESTS=ON -DCVH_BUILD_BENCHMARKS=ON
 cmake --build build-p6-kernel -j --target \
   cvh_header_compile_smoke \
   cvh_include_only_smoke \
@@ -154,7 +154,6 @@ Keep platform gates:
 ```bash
 /usr/bin/c++ -std=c++17 -arch x86_64 -mavx2 \
   -Iinclude -Iinclude/cvh/3rdparty/opencv_intrin \
-  -DCVH_ENABLE_PLATFORM_INTRINSICS=1 \
   -c test/smoke/cvh_opencv_intrin_x86_smoke.cpp \
   -o /tmp/cvh_opencv_intrin_x86.o
 

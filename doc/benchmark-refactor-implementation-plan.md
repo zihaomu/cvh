@@ -1,5 +1,9 @@
 # Benchmark Refactor Implementation Plan
 
+> P7.1 update (2026-07-29): the compiled native backend and its CMake switch
+> were deleted. Historical references below document the former comparison
+> boundary; all current benchmark targets are header-only.
+
 This plan turns the benchmark framework in `benchmark/readme.md` into concrete
 implementation steps. The project direction is pure header-only: benchmark code
 must not make `native` or compiled `.cpp` paths look like part of the product.
@@ -221,7 +225,6 @@ Tasks:
 - Build baseline and current with:
 
 ```bash
--DCVH_BUILD_NATIVE_BACKEND=OFF
 -DCVH_BUILD_TESTS=OFF
 -DCVH_BUILD_BENCHMARKS=ON
 ```
@@ -244,7 +247,7 @@ Completion notes:
 
 - Added `benchmark/internal/run_header_regression.sh`.
 - The runner configures both baseline and current with
-  `CVH_BUILD_NATIVE_BACKEND=OFF`, `CVH_BUILD_TESTS=OFF`, and
+  `CVH_BUILD_TESTS=OFF` and
   `CVH_BUILD_BENCHMARKS=ON`.
 - Supported suites are `core_mat`, `imgproc`, and `all`.
 - The runner writes per-suite baseline/current CSV, Markdown report, JSON
@@ -293,7 +296,7 @@ cvh_benchmark_core_mat_header
 
 DoD:
 
-- Target builds with `CVH_BUILD_NATIVE_BACKEND=OFF`.
+- Target is a pure header-only build.
 - Results include allocation mode and layout.
 - Internal regression script can gate `core_mat`.
 
@@ -351,7 +354,7 @@ cvh_benchmark_imgproc_header
 
 DoD:
 
-- Target builds with `CVH_BUILD_NATIVE_BACKEND=OFF`.
+- Target is a pure header-only build.
 - Existing `cvtColor` and `resize` benchmark coverage is not lost.
 - Results use standard row model or a documented compatible subset.
 - Internal regression script can gate `imgproc`.
@@ -641,7 +644,7 @@ DoD:
 - Mode A metadata and CSV implementation labels match actual CMake linkage.
 - The quick CI wrapper no longer passes an ineffective target selector.
 - Both aggregate targets build and run with
-  `CVH_BUILD_NATIVE_BACKEND=OFF`.
+  the pure header-only product configuration.
 - Documentation contains no remaining claim that an imgproc/core benchmark
   still requires migrated `.cpp` operator code.
 
@@ -655,7 +658,7 @@ Completion notes:
 - Fixed temporary worktree reuse/cleanup by treating worktree `.git` as a file
   rather than a directory.
 - Built and ran both aggregate quick profiles with
-  `CVH_BUILD_NATIVE_BACKEND=OFF`; an imgproc baseline/current runner smoke
+  the pure header-only product configuration; an imgproc baseline/current runner smoke
   matched all 13 rows.
 
 ### P-Bench-12: Aggregate Imgproc Matrix Consolidation

@@ -1,5 +1,5 @@
-#ifndef CVH_CORE_DETAIL_GEMM_NATIVE_HPP
-#define CVH_CORE_DETAIL_GEMM_NATIVE_HPP
+#ifndef CVH_CORE_DETAIL_GEMM_ISA_HPP
+#define CVH_CORE_DETAIL_GEMM_ISA_HPP
 
 #include "cvh/core/detail/cpu_features.hpp"
 #include "cvh/core/detail/dispatch_control.h"
@@ -14,7 +14,7 @@
 
 namespace cvh {
 namespace detail {
-namespace gemm_native {
+namespace gemm_isa {
 
 enum class Backend
 {
@@ -32,9 +32,9 @@ inline cpu::DispatchTag dispatch_tag(Backend backend)
     switch (backend)
     {
         case Backend::Neon:
-            return cpu::DispatchTag::NativeNEON;
+            return cpu::DispatchTag::NEON;
         case Backend::Avx2:
-            return cpu::DispatchTag::NativeAVX2;
+            return cpu::DispatchTag::AVX2;
         case Backend::None:
         default:
             return cpu::DispatchTag::Scalar;
@@ -43,14 +43,14 @@ inline cpu::DispatchTag dispatch_tag(Backend backend)
 
 inline Backend best_auto_backend()
 {
-    const cpu::NativeIsa isa = cpu::best_auto_native_isa();
+    const cpu::Isa isa = cpu::best_available_isa();
     switch (isa)
     {
-        case cpu::NativeIsa::Neon:
+        case cpu::Isa::Neon:
             return Backend::Neon;
-        case cpu::NativeIsa::Avx2:
+        case cpu::Isa::Avx2:
             return Backend::Avx2;
-        case cpu::NativeIsa::None:
+        case cpu::Isa::None:
         default:
             return Backend::None;
     }
@@ -71,13 +71,13 @@ inline Backend select_backend(int m, int n, int k)
     }
     if (mode == cpu::DispatchMode::NeonOnly)
     {
-        return cpu::native_neon_runtime_available()
+        return cpu::neon_runtime_available()
                    ? Backend::Neon
                    : Backend::None;
     }
     if (mode == cpu::DispatchMode::Avx2Only)
     {
-        return cpu::native_avx2_runtime_available() && n >= 16
+        return cpu::avx2_fma_runtime_available() && n >= 16
                    ? Backend::Avx2
                    : Backend::None;
     }
@@ -169,7 +169,7 @@ inline bool run_neon_packed(const float* a,
                             int n,
                             int k)
 {
-    if (!cpu::native_neon_runtime_available() ||
+    if (!cpu::neon_runtime_available() ||
         a == nullptr || packed_b == nullptr || c == nullptr)
     {
         return false;
@@ -194,7 +194,7 @@ inline bool run_neon_packed(const float* a,
                     static_cast<std::size_t>(col / kNeonNr) *
                         static_cast<std::size_t>(k) *
                         static_cast<std::size_t>(kNeonNr);
-#if CVH_NATIVE_NEON_COMPILED
+#if CVH_DETAIL_HAVE_NEON_KERNEL
                 if (valid_rows == kNeonMr &&
                     valid_cols == kNeonNr)
                 {
@@ -252,7 +252,7 @@ inline bool run_neon(const float* a,
                      int k,
                      bool transposed_b)
 {
-    if (!cpu::native_neon_runtime_available())
+    if (!cpu::neon_runtime_available())
     {
         return false;
     }
@@ -303,8 +303,8 @@ inline bool run_nt_f32(Backend backend,
     return false;
 }
 
-}  // namespace gemm_native
+}  // namespace gemm_isa
 }  // namespace detail
 }  // namespace cvh
 
-#endif  // CVH_CORE_DETAIL_GEMM_NATIVE_HPP
+#endif  // CVH_CORE_DETAIL_GEMM_ISA_HPP

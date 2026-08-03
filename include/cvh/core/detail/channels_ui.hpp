@@ -12,9 +12,9 @@ namespace channels_ui {
 
 inline bool enabled()
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    return cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly;
+    return cpu::opencv_ui_allowed();
 #else
     return false;
 #endif
@@ -29,7 +29,7 @@ inline bool extract_u8(const uchar* src,
                        int channels,
                        int channel)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const size_t lanes = static_cast<size_t>(
         cv::VTraits<cv::v_uint8>::vlanes());
@@ -93,7 +93,7 @@ inline bool insert_u8(const uchar* src,
                       int channels,
                       int channel)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const size_t lanes = static_cast<size_t>(
         cv::VTraits<cv::v_uint8>::vlanes());
@@ -165,7 +165,7 @@ inline bool reorder_u8(const uchar* src,
                        int channels,
                        const int* source_for_destination)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const size_t lanes = static_cast<size_t>(
         cv::VTraits<cv::v_uint8>::vlanes());

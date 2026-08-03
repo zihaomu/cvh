@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXPECTATIONS="${ROOT_DIR}/test/ci/header_gate_expectations.json"
 ARCHITECTURE="$(uname -m)"
 PARALLELISM="${CVH_CI_PARALLEL:-2}"
-OPENCV_INTRIN=ON
+OPTIMIZATION=ON
 PROFILE=ui-on
 
 BUILD_DIR="${ROOT_DIR}/build-ci-headers-ui"
@@ -23,8 +23,8 @@ print_env_fingerprint() {
   echo "cmake: $(cmake --version | head -n 1)"
   echo "python: $(python3 --version)"
   echo "build_type: Release"
-  echo "opencv_intrin: ${OPENCV_INTRIN}"
-  echo "target_profiles: cvh::headers, cvh::headers_fast"
+  echo "optimization: ${OPTIMIZATION}"
+  echo "target_profiles: cvh::headers, cvh::highgui"
   echo "parallelism: ${PARALLELISM}"
   echo "ci_headers_env_end"
 }
@@ -63,20 +63,17 @@ python3 "${ROOT_DIR}/scripts/check_test_fixtures.py"
 
 cmake -E remove_directory "${BUILD_DIR}"
 cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
-  -U CVH_BUILD_FULL_BACKEND \
-  -U 'CVH_BUILD_LEGACY_*' \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCVH_BUILD_NATIVE_BACKEND=OFF \
   -DCVH_BUILD_TESTS=ON \
   -DCVH_BUILD_BENCHMARKS=OFF \
-  -DCVH_ENABLE_OPENCV_INTRIN="${OPENCV_INTRIN}"
+  -DCVH_ENABLE_OPTIMIZATION="${OPTIMIZATION}"
 
 echo "ci_headers_cmake_cache_begin"
 if command -v rg >/dev/null 2>&1; then
-  rg '^(CVH_BUILD_NATIVE_BACKEND|CVH_BUILD_FULL_BACKEND|CVH_BUILD_TESTS|CVH_BUILD_BENCHMARKS|CVH_ENABLE_OPENCV_INTRIN|CMAKE_BUILD_TYPE|CMAKE_CXX_COMPILER):' \
+  rg '^(CVH_BUILD_TESTS|CVH_BUILD_BENCHMARKS|CVH_ENABLE_OPTIMIZATION|CMAKE_BUILD_TYPE|CMAKE_CXX_COMPILER):' \
     "${BUILD_DIR}/CMakeCache.txt" || true
 else
-  grep -E '^(CVH_BUILD_NATIVE_BACKEND|CVH_BUILD_FULL_BACKEND|CVH_BUILD_TESTS|CVH_BUILD_BENCHMARKS|CVH_ENABLE_OPENCV_INTRIN|CMAKE_BUILD_TYPE|CMAKE_CXX_COMPILER):' \
+  grep -E '^(CVH_BUILD_TESTS|CVH_BUILD_BENCHMARKS|CVH_ENABLE_OPTIMIZATION|CMAKE_BUILD_TYPE|CMAKE_CXX_COMPILER):' \
     "${BUILD_DIR}/CMakeCache.txt" || true
 fi
 echo "ci_headers_cmake_cache_end"

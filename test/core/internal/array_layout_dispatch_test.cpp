@@ -30,7 +30,7 @@ TEST(ArrayLayoutDispatchInternalTest, masked_copy_matches_scalar_for_common_u8_l
         cpu::set_dispatch_mode(cpu::DispatchMode::Auto);
         copyTo(source, auto_dst, mask);
         expect_same_bytes(scalar_dst, auto_dst);
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
         EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
 #endif
@@ -57,7 +57,7 @@ TEST(ArrayLayoutDispatchInternalTest, channel_ui_matches_scalar_for_c3_c4_roi_an
         cpu::set_dispatch_mode(cpu::DispatchMode::Auto);
         extractChannel(source, auto_extract, channels - 1);
         expect_same_bytes(scalar_extract, auto_extract);
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
         EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
 #endif
@@ -119,7 +119,7 @@ TEST(ArrayLayoutDispatchInternalTest, flip_and_rotate_ui_match_scalar_for_roi_an
         cpu::set_dispatch_mode(cpu::DispatchMode::Auto);
         flip(source, auto_dst, flip_code);
         expect_same_bytes(scalar_dst, auto_dst);
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
         EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
 #endif

@@ -117,11 +117,11 @@ def compare_internal(args: argparse.Namespace) -> int:
 
     baseline_product_rows = [
         row for row in baseline_rows
-        if row.get("status", "OK") == "OK" and row.get("implementation", "") == "cvh_headers_fast"
+        if row.get("status", "OK") == "OK" and row.get("implementation", "") == "cvh_headers"
     ]
     current_product_rows = [
         row for row in current_rows
-        if row.get("status", "OK") == "OK" and row.get("implementation", "") == "cvh_headers_fast"
+        if row.get("status", "OK") == "OK" and row.get("implementation", "") == "cvh_headers"
     ]
     baseline_by_key: Dict[Tuple[str, ...], dict] = {row_key(row): row for row in baseline_product_rows}
     current_by_key: Dict[Tuple[str, ...], dict] = {row_key(row): row for row in current_product_rows}

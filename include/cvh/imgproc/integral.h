@@ -38,10 +38,10 @@ inline void integral(const Mat& src, Mat& sum, int sdepth = -1)
         static_cast<size_t>(cols + 1) *
             static_cast<size_t>(channels) * output_scalar_size);
 
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const bool can_use_ui =
-        cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly &&
+        cpu::opencv_ui_allowed() &&
         output_depth == CV_32S && channels == 1 &&
         static_cast<std::int64_t>(rows) *
                 static_cast<std::int64_t>(cols) * 255 <=

@@ -1,10 +1,13 @@
 # 测试状态台账
 
-- 更新时间：2026-07-25
-- 当前状态：默认 UI-enabled 配置下，`cvh_test_core` 和
-  `cvh_test_imgproc` 均无失败、无 skip。UI-disabled CI 配置的 13 个 Core
-  架构条件 skip 由 `test/ci/header_gate_expectations.json` 显式固定；
-  Imgproc 在该配置下仍为 0 skip，并断言 scalar fallback。
+- 更新时间：2026-07-29
+- 当前状态：默认 UI-enabled header-only 配置下，
+  `cvh_test_core` 的 209 个测试和 `cvh_test_imgproc` 的 187 个测试均无失败、
+  无 skip。native GEMM ISA 测试由 `cvh_test_gemm_isa` 使用
+  `cvh::headers` 独立执行，不重复注册到默认 Core 基线。
+- scalar-only 配置仅保留为本地诊断能力，不属于托管 CI 门禁。
+- `cvh_test_highgui` 在 `CVH_HIGHGUI_HEADLESS=1` 下验证 API 合同；macOS
+  AppKit Runtime 实际窗口 smoke 也已通过，当前无已知 HighGUI 失败。
 
 ## Core upstream 边界
 

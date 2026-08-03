@@ -2,8 +2,9 @@
 #define CVH_IMGPROC_CVTCOLOR_H
 
 #include "../detail/config.h"
+#include "../core/detail/dispatch_control.h"
 #include "detail/common.h"
-#if CVH_ENABLE_OPENCV_INTRIN
+#if CVH_DETAIL_HAVE_OPENCV_UI
 #include "../core/simd/opencv_ui.h"
 #endif
 
@@ -62,7 +63,7 @@ inline void cvtcolor_rgb2gray_u8_scalar_impl(const Mat& src, Mat& dst)
     cvtcolor_color3_to_gray_u8_scalar_impl<true>(src, dst);
 }
 
-#if CVH_ENABLE_OPENCV_INTRIN
+#if CVH_DETAIL_HAVE_OPENCV_UI
 inline cv::v_uint16x8 cvtcolor_bgr2gray_u8_wide_opencv_intrin(const cv::v_uint16x8& bb,
                                                               const cv::v_uint16x8& gg,
                                                               const cv::v_uint16x8& rr,
@@ -169,13 +170,20 @@ inline void cvtcolor_color3_to_gray_fallback_impl(const Mat& src, Mat& dst)
 
     if constexpr (std::is_same_v<T, uchar>)
     {
-#if CVH_ENABLE_OPENCV_INTRIN
-        cvtcolor_color3_to_gray_u8_opencv_intrin_impl<rgb_order>(src, dst);
-#else
-        cvtcolor_color3_to_gray_u8_scalar_impl<rgb_order>(src, dst);
+#if CVH_DETAIL_HAVE_OPENCV_UI
+        if (cpu::opencv_ui_allowed())
+        {
+            cvtcolor_color3_to_gray_u8_opencv_intrin_impl<rgb_order>(src, dst);
+            cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+            return;
+        }
 #endif
+        cvtcolor_color3_to_gray_u8_scalar_impl<rgb_order>(src, dst);
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
         return;
     }
+
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
 
     const int rows = src.size[0];
     const int cols = src.size[1];

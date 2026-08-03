@@ -92,10 +92,10 @@ inline bool try_morph_rect3x3_fastpath(const Mat& src,
     std::vector<uchar> tmp(static_cast<std::size_t>(rows) * static_cast<std::size_t>(row_stride), 0);
     const bool do_parallel_h = should_parallelize_filter_rows(rows, cols, channels, 3);
 
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     const bool use_ui =
-        cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly &&
+        cpu::opencv_ui_allowed() &&
         channels == 1 && cols >= 18;
     if (use_ui)
     {

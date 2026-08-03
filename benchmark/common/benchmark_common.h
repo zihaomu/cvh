@@ -5,7 +5,7 @@
 #include "benchmark_csv.h"
 #include "benchmark_metadata.h"
 
-#if defined(CVH_ENABLE_OPENCV_INTRIN) && CVH_ENABLE_OPENCV_INTRIN
+#if defined(CVH_DETAIL_HAVE_OPENCV_UI) && CVH_DETAIL_HAVE_OPENCV_UI
 #include "cvh/core/simd/opencv_ui.h"
 #endif
 
@@ -322,7 +322,7 @@ inline std::string opencv_intrin_backend_name()
 
 inline int simd_u8_lanes()
 {
-#if defined(CVH_ENABLE_OPENCV_INTRIN) && CVH_ENABLE_OPENCV_INTRIN
+#if defined(CVH_DETAIL_HAVE_OPENCV_UI) && CVH_DETAIL_HAVE_OPENCV_UI
     return cv::VTraits<cv::v_uint8x16>::vlanes();
 #else
     return 1;

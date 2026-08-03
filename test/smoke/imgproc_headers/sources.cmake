@@ -1,3 +1,41 @@
+set(CVH_IMGPROC_PUBLIC_HEADERS
+    include/cvh/imgproc/accumulate.h
+    include/cvh/imgproc/adaptive_threshold.h
+    include/cvh/imgproc/bilateral_filter.h
+    include/cvh/imgproc/blend_linear.h
+    include/cvh/imgproc/blur.h
+    include/cvh/imgproc/box_filter.h
+    include/cvh/imgproc/canny.h
+    include/cvh/imgproc/colormap.h
+    include/cvh/imgproc/convert_maps.h
+    include/cvh/imgproc/copy_make_border.h
+    include/cvh/imgproc/cvtcolor.h
+    include/cvh/imgproc/cvtcolor_two_plane.h
+    include/cvh/imgproc/demosaicing.h
+    include/cvh/imgproc/derivatives.h
+    include/cvh/imgproc/equalize_hist.h
+    include/cvh/imgproc/filter2d.h
+    include/cvh/imgproc/gaussian_blur.h
+    include/cvh/imgproc/geometry_transform.h
+    include/cvh/imgproc/imgproc.h
+    include/cvh/imgproc/integral.h
+    include/cvh/imgproc/kernels.h
+    include/cvh/imgproc/lut.h
+    include/cvh/imgproc/median_blur.h
+    include/cvh/imgproc/morphology.h
+    include/cvh/imgproc/pyramid.h
+    include/cvh/imgproc/rect_sub_pix.h
+    include/cvh/imgproc/remap.h
+    include/cvh/imgproc/resize.h
+    include/cvh/imgproc/sep_filter2d.h
+    include/cvh/imgproc/sobel.h
+    include/cvh/imgproc/sqr_box_filter.h
+    include/cvh/imgproc/stack_blur.h
+    include/cvh/imgproc/threshold.h
+    include/cvh/imgproc/warp_affine.h
+    include/cvh/imgproc/warp_perspective.h
+)
+
 set(CVH_IMGPROC_HEADER_COMPILE_SMOKE_SOURCES
     test/smoke/imgproc_headers/main.cpp
     test/smoke/imgproc_headers/accumulate_compile.cpp

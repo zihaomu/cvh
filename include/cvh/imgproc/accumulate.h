@@ -81,9 +81,9 @@ inline void run(const Mat& src1,
     const int cols = src1.size.p[1];
     const int channels = src1.channels();
 
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    if (cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly &&
+    if (cpu::opencv_ui_allowed() &&
         mask.empty())
     {
         const cv::v_float32x4 alpha_vector =

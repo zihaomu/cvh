@@ -72,7 +72,9 @@ Rules that should not be revisited:
 
 ## Verification Snapshot
 
-P6.7.2 final validation passed.
+P6.7.2 final validation passed. This is a historical P6 snapshot; P7.1 later
+removed the compiled HighGUI/native build mode. A separate optional
+header-only `cvh::highgui` target was added afterward.
 
 - `git diff --check`
 - `scripts/sync_opencv_intrin.py --check`
@@ -84,7 +86,6 @@ P6.7.2 final validation passed.
   - core 25/25
   - imgproc 141/141
   - imgcodecs 7 passed / 1 optional skipped
-  - highgui 4/4
 - x86_64 AVX2 compile-only gate without manually defining
   `CVH_ENABLE_OPENCV_INTRIN=1`
 - `CV_RVV=1` negative compile gate

@@ -120,7 +120,7 @@ TEST(ReductionNonZeroDispatchInternalTest, nonzero_ui_handles_roi_tail_and_hit_p
 
 TEST(ReductionNonZeroDispatchInternalTest, find_nonzero_handles_vector_boundaries)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     bool ui_enabled = false;
     {

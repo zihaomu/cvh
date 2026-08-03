@@ -458,10 +458,9 @@ inline void createHanningWindow(Mat& dst, Size winSize, int type)
             const float row_weight = static_cast<float>(
                 y_weights[static_cast<size_t>(y)]);
             int x = 0;
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-            if (cpu::dispatch_mode() !=
-                cpu::DispatchMode::ScalarOnly)
+            if (cpu::opencv_ui_allowed())
             {
                 const int lanes =
                     cv::VTraits<cv::v_float32>::vlanes();
@@ -496,11 +495,10 @@ inline void createHanningWindow(Mat& dst, Size winSize, int type)
             const double row_weight =
                 y_weights[static_cast<size_t>(y)];
             int x = 0;
-#if CVH_ENABLE_OPENCV_INTRIN && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && \
     (CV_SIMD_64F || CV_SIMD_SCALABLE_64F) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-            if (cpu::dispatch_mode() !=
-                cpu::DispatchMode::ScalarOnly)
+            if (cpu::opencv_ui_allowed())
             {
                 const int lanes =
                     cv::VTraits<cv::v_float64>::vlanes();

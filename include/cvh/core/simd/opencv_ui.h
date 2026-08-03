@@ -16,7 +16,7 @@
 #error "CVH OpenCV Universal Intrinsics RVV is deferred; use NEON or AVX paths until a scalable design exists"
 #endif
 
-#if CVH_ENABLE_OPENCV_INTRIN
+#if CVH_DETAIL_HAVE_OPENCV_UI
 #include "cvh/3rdparty/opencv_intrin/opencv2/core/hal/intrin.hpp"
 #endif
 
@@ -25,7 +25,7 @@ namespace detail {
 
 inline const char* opencv_ui_backend_name()
 {
-#if CVH_ENABLE_OPENCV_INTRIN
+#if CVH_DETAIL_HAVE_OPENCV_UI
     return "opencv_intrin";
 #else
     return "scalar";

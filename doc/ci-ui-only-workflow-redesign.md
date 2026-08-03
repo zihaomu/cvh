@@ -1,22 +1,20 @@
 # UI-Only CI Workflow Redesign
 
-Status: implemented in repository; hosted-run validation pending
+Status: implemented; P7.1 removed the later-obsolete compiled HighGUI/native build mode
 Date: 2026-07-26
 
 ## 1. Decision
 
 Hosted CI validates only the OpenCV Universal Intrinsics (UI) product path.
 
-Core and Imgproc have no native backend. Their UI fast paths and scalar
-fallbacks are both header-only implementations. The repository's legacy
-`CVH_BUILD_NATIVE_BACKEND` name refers only to build-tree HighGUI `.cpp`
-experiments.
+Core and Imgproc have no compiled backend. Their UI, specialized ISA fast paths and
+scalar fallbacks are header-only implementations. P7.1 subsequently deleted
+the HighGUI `.cpp` experiments and their build switch.
 
 The required pull-request and `main` branch gate builds and tests:
 
-- `CVH_BUILD_NATIVE_BACKEND=OFF`
-- `CVH_ENABLE_OPENCV_INTRIN=ON`
-- the public header-only targets, including `cvh::headers_fast`
+- `CVH_ENABLE_OPTIMIZATION=ON`
+- the public header-only targets, including `cvh::headers`
 - all UI compile, dispatch, correctness, and installed-header contract tests
 
 Hosted CI no longer runs:
@@ -26,10 +24,10 @@ Hosted CI no longer runs:
 - scalar, `full`, `lite`, or native implementations in the OpenCV comparison
   benchmark
 
-This is a CI policy change, not a product-code removal. The scalar fallback and
-the `CVH_ENABLE_OPENCV_INTRIN=OFF` configuration remain available for local
-diagnostics. They remain header-only. Removing those implementations or build
-options requires a separate product decision.
+This redesign started as a CI policy change. P7.1 later made the separate
+product decision to remove HighGUI/native build-mode code. The scalar fallback
+and `CVH_ENABLE_OPTIMIZATION=OFF` remain available for local diagnostics and
+remain header-only.
 
 ## 2. Target CI Model
 
@@ -50,7 +48,7 @@ PR label / PR command / manual run
                  |
                  v
         optional: opencv_compare_ui
-        - cvh::headers_fast only
+        - cvh::headers only
         - upstream OpenCV baseline
         - log and report artifact
         - not a required branch-protection check
@@ -59,7 +57,7 @@ PR label / PR command / manual run
 | Job | Purpose | Required |
 | --- | --- | --- |
 | `headers_ui` | Build and test the header-only UI product path | Yes |
-| `opencv_compare_ui` | Compare `cvh::headers_fast` with upstream OpenCV | No |
+| `opencv_compare_ui` | Compare `cvh::headers` with upstream OpenCV | No |
 
 There is no hosted `headers_scalar`, `ui-off`, or legacy HighGUI `native_all`
 job.
@@ -90,13 +88,11 @@ The single job:
 1. checks out the requested revision;
 2. configures a Release header-only build;
 3. forces `CVH_ENABLE_OPENCV_INTRIN=ON`;
-4. forces `CVH_BUILD_NATIVE_BACKEND=OFF` so legacy HighGUI `.cpp` experiments
-   cannot enter the otherwise header-only build;
-5. runs installed-header and public-header contracts;
-6. builds with bounded parallelism;
-7. runs the complete CTest and GoogleTest suites;
-8. validates the UI test inventory and zero-skip expectations;
-9. uploads machine-readable reports even if a test fails.
+4. runs installed-header and public-header contracts;
+5. builds with bounded parallelism;
+6. runs the complete CTest and GoogleTest suites;
+7. validates the UI test inventory and zero-skip expectations;
+8. uploads machine-readable reports even if a test fails.
 
 The stable displayed check name is:
 
@@ -117,7 +113,6 @@ It configures:
 
 ```text
 CVH_ENABLE_OPENCV_INTRIN=ON
-CVH_BUILD_NATIVE_BACKEND=OFF
 CVH_BUILD_TESTS=ON
 CVH_BUILD_BENCHMARKS=OFF
 CMAKE_BUILD_TYPE=Release
@@ -164,7 +159,7 @@ Both the retained UI path and the non-hosted scalar fallback are header-only.
 The optional comparison has one product candidate:
 
 ```text
-cvh::headers_fast (Universal Intrinsics enabled)
+cvh::headers (Universal Intrinsics enabled)
 ```
 
 and one external baseline:
@@ -182,11 +177,11 @@ The workflow and `scripts/ci_compare_log_only.sh` use:
 ```sh
 ./benchmark/opencv_compare/run_compare.sh \
   --profile quick \
-  --impls headers_fast
+  --impls ui
 ```
 
-The wrapper default is `headers_fast`. Benchmark metadata records the
-normalized implementation as `cvh_headers_fast`.
+The wrapper default is `ui`. The executable forces `OpenCVUIOnly`, rejects
+NEON/AVX2 dispatch tags, and records the normalized implementation as `cvh_ui`.
 
 ### 6.2 Trigger Ownership
 
@@ -282,32 +277,30 @@ protection.
 | File | Change |
 | --- | --- |
 | `.github/workflows/ci.yml` | One required UI job; matrix, legacy HighGUI, and compare jobs removed |
-| `.github/workflows/ci-compare-on-demand.yml` | UI-only `headers_fast` compare and artifact upload |
+| `.github/workflows/ci-compare-on-demand.yml` | UI-only `ui` compare and artifact upload |
 | `.github/workflows/ci-compare-toggle.yml` | Label toggle with one immediate dispatch |
 | `scripts/ci_headers_all.sh` | Fixed UI configuration and failure-report preservation |
-| `scripts/ci_compare_log_only.sh` | `headers_fast` default and persistent report artifacts |
+| `scripts/ci_compare_log_only.sh` | `ui` default and persistent report artifacts |
 | `benchmark/opencv_compare/run_compare.sh` | Explicitly enable UI for the comparison build |
 | `test/ci/header_gate_expectations.json` | UI-only hosted expectations |
 | repository branch protection | Require only the stable UI check after first hosted run |
 
-`scripts/ci_native_all.sh` is not deleted, but it is no longer a hosted CI
-entry point. Its name refers to the legacy HighGUI `.cpp` build switch; it does
-not provide native Core or Imgproc implementations.
+P7.1 deleted `scripts/ci_native_all.sh` together with the legacy compiled
+HighGUI implementation. The optional `cvh::highgui` replacement and specialized
+NEON/AVX2 kernels are header-inline code paths.
 
 ## 11. Acceptance Criteria
 
 The redesign is complete when:
 
 1. A normal push or pull request creates exactly one required validation job.
-2. Its cache shows `CVH_ENABLE_OPENCV_INTRIN=ON` and
-   `CVH_BUILD_NATIVE_BACKEND=OFF`.
-3. No hosted workflow runs `ui-off`, scalar-only, or the legacy HighGUI
-   `native_all` job.
+2. Its cache shows `CVH_ENABLE_OPTIMIZATION=ON`.
+3. No hosted workflow runs `ui-off` or scalar-only as the required lane.
 4. The UI CTest inventory passes and Core/Imgproc reports contain zero failures
    and zero skipped UI tests.
 5. A deliberate test failure still leaves downloadable XML reports.
-6. The compare workflow invokes only `--impls headers_fast`.
-7. Compare metadata contains `cvh_headers_fast` and no scalar, native, `full`,
+6. The compare workflow invokes only `--impls ui`.
+7. Compare metadata contains `cvh_ui` and no scalar, native, `full`,
    or `lite` CVH implementation.
 8. `/cvh-compare on` causes exactly one immediate compare run, and
    `/cvh-compare off` prevents later labeled-PR runs.

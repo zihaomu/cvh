@@ -42,7 +42,12 @@ function(cvh_assert_all_test_sources_registered module_root)
 endfunction()
 
 function(cvh_assert_public_header_compile_smoke header_root)
-    cmake_parse_arguments(CVH "" "" "HEADERS;SOURCES" ${ARGN})
+    cmake_parse_arguments(CVH "" "SOURCE_DIR" "HEADERS;SOURCES" ${ARGN})
+
+    if(NOT CVH_SOURCE_DIR)
+        message(FATAL_ERROR
+            "cvh_assert_public_header_compile_smoke requires SOURCE_DIR")
+    endif()
 
     file(GLOB discovered_headers
         CONFIGURE_DEPENDS
@@ -67,11 +72,11 @@ function(cvh_assert_public_header_compile_smoke header_root)
 
         get_filename_component(header_name "${absolute_header}" NAME_WE)
         list(APPEND expected_sources
-            "${CMAKE_CURRENT_SOURCE_DIR}/test/smoke/core_headers/${header_name}_compile.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/${CVH_SOURCE_DIR}/${header_name}_compile.cpp"
         )
     endforeach()
     list(APPEND expected_sources
-        "${CMAKE_CURRENT_SOURCE_DIR}/test/smoke/core_headers/main.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/${CVH_SOURCE_DIR}/main.cpp"
     )
 
     set(registered_sources)
@@ -93,13 +98,13 @@ function(cvh_assert_public_header_compile_smoke header_root)
     list(SORT registered_headers)
     if(NOT "${discovered_headers}" STREQUAL "${registered_headers}")
         message(FATAL_ERROR
-            "Core public header inventory does not match include/cvh/core/*.h")
+            "Public header inventory does not match ${header_root}/*.h")
     endif()
 
     list(SORT expected_sources)
     list(SORT registered_sources)
     if(NOT "${expected_sources}" STREQUAL "${registered_sources}")
         message(FATAL_ERROR
-            "Core public header compile-smoke source inventory is incomplete")
+            "Public header compile-smoke source inventory is incomplete for ${header_root}")
     endif()
 endfunction()

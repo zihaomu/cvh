@@ -4,21 +4,24 @@
 
 `cvh`（cv-header-only）是一个独立品牌的纯 header-only C++ 计算机视觉库。
 项目以 OpenCV 作为 API 风格和行为兼容参照，在不引入必需库构建步骤的
-前提下，提供常用 `Mat`、`core`、`imgproc`、`imgcodecs` 能力，并为 AI
+前提下，提供常用 `Mat`、`core`、`imgproc`、`imgcodecs` 能力和可选
+`highgui` 显示子集，并为 AI
 vision preprocessing/postprocessing 的热点路径提供可验证的 header-only
 加速。项目不是 OpenCV 的发行版，也不以完整替代 OpenCV 为目标。
 
-公开产品面只包含两个 CMake target：
+公开产品面包含两个 CMake INTERFACE target：
 
 ```cmake
 cvh::headers
-cvh::headers_fast
+cvh::highgui
 ```
 
-- `cvh::headers`：默认 header-only 入口，默认启用 OpenCV Universal Intrinsics 作为内部 SIMD dialect，并保留 scalar fallback 正确性基线。
-- `cvh::headers_fast`：header-only fast profile，在 `cvh::headers` 之上启用额外平台 fast-profile toggles。
+- `cvh::headers`：唯一计算入口，默认启用所有已接纳优化并保留 scalar fallback。
+- `cvh::highgui`：可选窗口与事件循环入口，依赖平台系统 GUI 库，但不生成 cvh 二进制。
 
-历史 `.cpp` 实现只能作为 legacy/experimental 代码存在，不进入公开产品结构，也不作为公开 API 可用性的前提。
+P7.1 已删除旧编译型 HighGUI `.cpp/.mm` 后端。HighGUI 随后以
+C++17 inline header 重新实现；scalar、OpenCV UI、direct NEON 和 direct
+AVX2 也均为 header 内联实现。
 
 ## 核心目标
 
@@ -26,25 +29,30 @@ cvh::headers_fast
 - 保证用户仅包含 headers 或链接 interface target 即可使用。
 - 保持公开依赖、宏开关、安装导出和文档叙事一致。
 - 先建立 correctness contract，再引入 benchmark-gated SIMD fast-path。
-- 用 benchmark 决定 fast-path 是否进入默认 OpenCV UI 路径或额外 fast profile。
+- 用 benchmark 决定 fast-path 是否进入 `cvh::headers` 默认 dispatch。
 
 ## 非目标
 
 - 不追求完整复现 OpenCV 全模块。
 - 不承诺所有算子、所有类型、所有 flag 与 OpenCV 完全一致。
-- 不把任何 `.cpp` 实现作为公开 API 的唯一来源。
-- 不把 xsimd 作为 `cvh::headers_fast` 的默认或推荐性能路线。
+- 不承诺完整复现 OpenCV HighGUI；当前只提供五个基础窗口 API。
+- 不引入项目 `.cpp` 实现。
+- 不把 xsimd 作为默认或推荐性能路线。
 - 不承诺所有路径都快于 OpenCV；只承诺 benchmark-gated 的热点优化。
 
 ## Header-only Contract
 
 公开 API 必须满足：
 
-- `include/` 内可独立完成编译。
-- `cvh::headers` 不依赖 `src/`。
-- `cvh::headers_fast` 不依赖 `src/`，只通过 interface compile definitions 启用额外平台 fast-profile toggles。
+- `include/` 内可独立完成编译，仓库不存在产品实现 `src/`。
+- `cvh::headers` 只传播 headers、compile features 和唯一优化策略宏。
+- `cvh::highgui` 只传播 inline headers 和平台系统 GUI 链接依赖，不生成 cvh 库文件。
 - 每个标记为 Supported 的算子必须有 header-only correctness test。
 - 没有 header-only 实现或链接不过的 API 必须标记为 WIP 或移出公开入口。
+
+CPU 优化的唯一公开策略宏是 `CVH_ENABLE_OPTIMIZATION`，默认值为 `1`；
+设为 `0` 时只编译 scalar 路径。OpenCV UI、NEON 和 AVX2 的编译能力均由
+内部检测结果表示，消费者不配置逐 ISA 宏。
 
 ## Public Targets
 
@@ -55,21 +63,24 @@ cvh::headers_fast
 要求：
 
 - 默认启用 OpenCV Universal Intrinsics。
+- 自动编译当前工具链支持的已接纳 NEON/AVX2 kernel，并在运行时安全选择。
 - 不默认启用 xsimd。
 - 不要求 OpenCV 库或其它二进制依赖。
 - 保留 scalar fallback 和标准 C++ 实现作为 correctness 基线。
 
-### `cvh::headers_fast`
+### `cvh::highgui`
 
-加速入口，适合愿意接受额外平台 fast-profile toggles 的用户。
+可选显示入口，继承 `cvh::headers`。
 
 要求：
 
-- 继承 `cvh::headers`。
-- 不需要传播 `CVH_ENABLE_OPENCV_INTRIN=1`，该宏已经默认开启。
-- 传播 `CVH_ENABLE_PLATFORM_INTRINSICS=1`。
-- 不传播 `CVH_ENABLE_XSIMD=1`。
-- 不编译或链接 `.cpp`。
+- 公开 `namedWindow`、`imshow`、`waitKey`、`destroyWindow` 和
+  `destroyAllWindows`；
+- macOS 使用纯 C++ Objective-C Runtime 调用 AppKit，Windows 使用 Win32，
+  Linux desktop 使用 X11；
+- 不进入默认聚合头，避免计算型用户被迫引入 GUI 依赖；
+- 只链接系统 GUI framework/library，不生成 cvh 编译产物；
+- 使用 C++17 inline 状态保证多翻译单元 ODR 安全。
 
 当前 accepted fast-path：
 
@@ -115,7 +126,16 @@ cvh::headers_fast
 
 ### `highgui`
 
-显示和事件循环不属于纯 header-only 产品承诺。`imshow` / `waitKey` 在 header-only fallback 下应明确报错，并建议用户使用 `imwrite` 或应用自己的 UI/event loop。
+提供最小显示闭环：
+
+- `namedWindow`
+- `imshow`
+- `waitKey`
+- `destroyWindow`
+- `destroyAllWindows`
+
+当前 `imshow` 输入限制为二维 `CV_8U` C1/C3/C4。窗口和事件调用应由应用
+UI 线程驱动；Linux 无 X11、无桌面会话或其它不支持的平台会给出明确错误。
 
 ## SIMD Strategy
 
@@ -125,7 +145,7 @@ cvh::headers_fast
 - OpenCV Universal Intrinsics 是默认内部 SIMD dialect。业务 SIMD kernel 可以直接使用 `cv::v_*`、`cv::VTraits`、`CV_SIMD`、`CV_SIMD_WIDTH` 和 `vx_*`，但这些类型不构成 `cvh` 用户公开 API。
 - direct platform intrinsics 只能在 benchmark 证明 OpenCV Universal Intrinsics 不足时进入候选。
 
-xsimd 不再作为图像 kernel 的主性能路线。P5.3 已移除 public adapter surface、legacy `.cpp` xsimd kernel、内部 `XSimdOnly` dispatch、测试入口和 vendor 目录；默认 header-only target、`cvh::headers_fast`、安装导出和 header-only CI 都不能依赖它。
+xsimd 不再作为图像 kernel 的主性能路线。P5.3 已移除 public adapter surface、legacy `.cpp` xsimd kernel、内部 `XSimdOnly` dispatch、测试入口和 vendor 目录；默认 header-only target、安装导出和 header-only CI 都不能依赖它。
 
 `cvh::detail::simd` 二次 facade 不再作为未来路线。P6 开始，已接受的 OpenCV UI fast path 会迁移到 direct OpenCV UI 写法；scalar fallback 保持为显式 `*_scalar_impl` 或 benchmark helper，而不是伪装成 SIMD backend。
 
@@ -142,11 +162,13 @@ OpenCV UI 原始表达，只替换 OpenCV runtime/module 依赖。
 - 品牌短名统一写作 `cvh`，全称统一写作 `cv-header-only`。
 - `OpenCV-style`、`OpenCV-compatible` 或“与 OpenCV API 对齐”只描述 API
   风格、兼容目标或对照基线，不作为项目名称。
-- 模块描述应明确 `core`、`imgproc`、`imgcodecs` 是有边界的兼容子集，
+- 模块描述应明确 `core`、`imgproc`、`imgcodecs`、`highgui` 是有边界的兼容子集，
   避免暗示全部 OpenCV API 均已实现。
 - 第一屏定位必须是 pure header-only。
-- 推荐用法只写 `cvh::headers` 和 `cvh::headers_fast`。
-- `.cpp` 历史代码只能被描述为 legacy/experimental。
+- 计算用法统一使用 `cvh::headers`，窗口用法显式使用
+  `cvh::highgui`。
+- 产品实现不得新增 `.cpp`、运行时函数指针 backend 注册表或编译型
+  backend；HighGUI 的 inline 窗口状态表不属于 backend dispatch。
 - 算子支持状态必须区分 Supported、Supported + fast path、WIP、Out of scope。
 - 性能描述必须绑定 benchmark，不写泛化的“整体快于 OpenCV”。
 
@@ -160,7 +182,7 @@ OpenCV UI 原始表达，只替换 OpenCV runtime/module 依赖。
 - 文档明确输入约束和未支持范围。
 - README 支持矩阵能追溯到 `scripts/ci_headers_all.sh` 中的 header-only test/gate。
 
-一个 SIMD fast-path 进入默认 OpenCV UI 路径或额外 fast profile，至少需要：
+一个 CPU fast-path 进入默认 dispatch，至少需要：
 
 - scalar fallback 已稳定。
 - fast-path 正确性与 scalar 对齐。

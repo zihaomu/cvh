@@ -644,7 +644,6 @@ compare quick smoke 生成 46 行；新增路径明确标为
 
 ```bash
 cmake -S . -B build-api-p1 \
-  -DCVH_BUILD_NATIVE_BACKEND=OFF \
   -DCVH_BUILD_TESTS=ON \
   -DCVH_BUILD_BENCHMARKS=ON
 cmake --build build-api-p1 -j
@@ -692,7 +691,7 @@ SIMD/分块优化的基线，不宣称当前已具备 fast path。
 
 最终 gate（2026-07-24）：
 
-- 配置和完整构建通过，`CVH_BUILD_NATIVE_BACKEND=OFF`。
+- 配置和完整纯 header-only 构建通过。
 - 默认 CTest `16/16` 通过；OpenCV 隔离差分 `19/19` 通过。
 - `ci_headers_all.sh` 通过：Core `162` 个 case 通过、`2` 个已记录的
   `OutputArray` 非目标 case 跳过；Imgproc `173/173` 通过。

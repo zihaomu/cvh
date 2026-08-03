@@ -6,6 +6,12 @@
 >
 > Status: all findings closed.
 >
+> P7.1 update (2026-07-29): the compiled HighGUI/native backend and the
+> `lite/full/native` mode split were removed after this review. HighGUI was
+> subsequently restored as the optional header-only `cvh::highgui` target.
+> Historical target names below document the 2026-07-25 closure snapshot; the
+> current inventory is owned by `test/ci/header_gate_expectations.json`.
+>
 > Follow-up: TDR-3 and TDR-5 were refined after tracing the dispatch
 > instrumentation and the complete CI call chain. The closure implementation
 > and executable evidence are recorded below.
@@ -323,8 +329,9 @@ Closure:
 The original closure below introduced separate UI-enabled and UI-disabled
 lanes. That hosted-CI policy was superseded on 2026-07-26: the required gate is
 now UI-only, while the scalar fallback remains a local header-only diagnostic.
-Core and Imgproc have no native backend; the legacy native build switch only
-covers build-tree HighGUI `.cpp` experiments. See
+Core and Imgproc have no compiled backend. P7.1 subsequently removed the
+build-tree HighGUI `.cpp` experiments and legacy mode switch; the current
+HighGUI tests exercise the replacement inline-header implementation. See
 [`ci-ui-only-workflow-redesign.md`](ci-ui-only-workflow-redesign.md).
 
 `scripts/ci_headers_all.sh` has two layers of coverage. It first calls

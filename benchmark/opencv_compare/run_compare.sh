@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "${COMPARE_DIR}/../.." && pwd)"
 SETUP_SCRIPT="${COMPARE_DIR}/setup_opencv_bench_slim.sh"
 
 PROFILE="${CVH_COMPARE_PROFILE:-quick}"
-IMPLS="${CVH_COMPARE_IMPLS:-headers_fast}"
+IMPLS="${CVH_COMPARE_IMPLS:-ui}"
 WARMUP=""
 ITERS=""
 REPEATS=""
@@ -32,11 +32,11 @@ REPORT_SCRIPT="${COMPARE_DIR}/csv_to_markdown.py"
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--profile quick|stable|full] [--impls headers_fast] [--ops GEMM] [--warmup N] [--iters N] [--repeats N] [--output path] [--baseline]
+Usage: $(basename "$0") [--profile quick|stable|full] [--impls ui] [--ops GEMM] [--warmup N] [--iters N] [--repeats N] [--output path] [--baseline]
 
 Environment:
   CVH_COMPARE_PROFILE   (default: ${PROFILE})
-  CVH_COMPARE_IMPLS     (default: ${IMPLS}, value: headers_fast; cvh_headers_fast is accepted as an alias)
+  CVH_COMPARE_IMPLS     (default: ${IMPLS}, value: ui; cvh_ui is accepted as an alias)
   CVH_COMPARE_WARMUP    (profile default, quick=1 stable=2 full=1)
   CVH_COMPARE_ITERS     (profile default, quick=5 stable=20 full=10)
   CVH_COMPARE_REPEATS   (profile default, quick=1 stable=5 full=3)
@@ -133,12 +133,12 @@ for raw_impl in "${RAW_IMPLS[@]}"; do
     continue
   fi
 
-  if [[ "${impl}" == "cvh_headers_fast" ]]; then
-    impl="headers_fast"
+  if [[ "${impl}" == "cvh_ui" ]]; then
+    impl="ui"
   fi
 
-  if [[ "${impl}" != "headers_fast" ]]; then
-    echo "Unsupported impl: ${impl} (Mode B only compares headers_fast against upstream OpenCV)" >&2
+  if [[ "${impl}" != "ui" ]]; then
+    echo "Unsupported impl: ${impl} (Mode B only compares ui against upstream OpenCV)" >&2
     exit 2
   fi
 
@@ -155,11 +155,11 @@ for raw_impl in "${RAW_IMPLS[@]}"; do
 done
 
 if [[ "${#REQUESTED_IMPLS[@]}" -eq 0 ]]; then
-  echo "No valid impl selected. Use --impls headers_fast" >&2
+  echo "No valid impl selected. Use --impls ui" >&2
   exit 2
 fi
 
-IMPLS_NORMALIZED="cvh_headers_fast"
+IMPLS_NORMALIZED="cvh_ui"
 
 case "${PROFILE}" in
   quick)
@@ -420,38 +420,37 @@ mkdir -p "${BUILD_DIR}" "$(dirname "${OUTPUT_CSV}")" "$(dirname "${OUTPUT_META}"
 
 cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-  -DCVH_BUILD_NATIVE_BACKEND=OFF \
   -DCVH_BUILD_TESTS=OFF \
   -DCVH_BUILD_BENCHMARKS=ON \
-  -DCVH_ENABLE_OPENCV_INTRIN=ON \
+  -DCVH_ENABLE_OPTIMIZATION=ON \
   -DCVH_ENABLE_OPENCV_COMPARE=ON \
   -DCVH_OPENCV_BENCH_DIR="${OPENCV_DIR}" \
   -DOpenCV_DIR="${OPENCV_CONFIG_DIR}"
 
 BENCH_TARGETS=()
 for impl in "${REQUESTED_IMPLS[@]-}"; do
-  BENCH_TARGETS+=("cvh_benchmark_opencv_compare_headers_fast")
+  BENCH_TARGETS+=("cvh_benchmark_opencv_compare_ui")
 done
 
 cmake --build "${BUILD_DIR}" --target "${BENCH_TARGETS[@]}" -j
 
 TMP_OUTPUT_CSVS=()
 for impl in "${REQUESTED_IMPLS[@]-}"; do
-  BENCH_BIN="${BUILD_DIR}/cvh_benchmark_opencv_compare_headers_fast"
+  BENCH_BIN="${BUILD_DIR}/cvh_benchmark_opencv_compare_ui"
 
   if [[ ! -x "${BENCH_BIN}" ]]; then
     echo "Missing benchmark binary for impl=${impl}: ${BENCH_BIN}" >&2
     exit 2
   fi
 
-  IMPL_OUTPUT_CSV="${OUTPUT_CSV}.cvh_headers_fast.tmp.csv"
+  IMPL_OUTPUT_CSV="${OUTPUT_CSV}.cvh_ui.tmp.csv"
   TMP_OUTPUT_CSVS+=("${IMPL_OUTPUT_CSV}")
 
-  echo "opencv_compare: running benchmark (impl=cvh_headers_fast, profile=${PROFILE}, ops=${OPS:-all}, opencv_variant=${OPENCV_VARIANT}, warmup=${WARMUP}, iters=${ITERS}, repeats=${REPEATS}, threads=${THREADS}, omp_dynamic=${OMP_DYNAMIC_MODE}, omp_proc_bind=${OMP_PROC_BIND_MODE})"
+  echo "opencv_compare: running benchmark (impl=cvh_ui, profile=${PROFILE}, ops=${OPS:-all}, opencv_variant=${OPENCV_VARIANT}, warmup=${WARMUP}, iters=${ITERS}, repeats=${REPEATS}, threads=${THREADS}, omp_dynamic=${OMP_DYNAMIC_MODE}, omp_proc_bind=${OMP_PROC_BIND_MODE})"
   echo "opencv_compare: benchmark stage can take several minutes for quick profile with large kernels."
   BENCH_ARGS=(
     --profile "${PROFILE}"
-    --impl "cvh_headers_fast"
+    --impl "cvh_ui"
     --threads "${THREADS}"
     --warmup "${WARMUP}"
     --iters "${ITERS}"

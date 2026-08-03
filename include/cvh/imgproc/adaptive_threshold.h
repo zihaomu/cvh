@@ -80,9 +80,9 @@ inline void adaptiveThreshold(const Mat& src,
             : static_cast<int>(std::floor(C));
     const uchar maximum = saturate_cast<uchar>(maxValue);
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    if (cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly)
+    if (cpu::opencv_ui_allowed())
     {
         const int difference_threshold = -delta;
         if (difference_threshold < -255 ||

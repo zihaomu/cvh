@@ -2,8 +2,8 @@
 #include "cvh/core/simd/opencv_ui.h"
 #include "common/benchmark_common.h"
 
-#if !CVH_ENABLE_OPENCV_INTRIN
-#error "cvh_benchmark_cvtcolor_bgr2gray_header must be compiled with CVH_ENABLE_OPENCV_INTRIN=1"
+#if !CVH_DETAIL_HAVE_OPENCV_UI
+#error "cvh_benchmark_cvtcolor_bgr2gray_header must be compiled with CVH_DETAIL_HAVE_OPENCV_UI=1"
 #endif
 
 #include <algorithm>
@@ -608,7 +608,7 @@ int main(int argc, char** argv)
                     args,
                     operation.name,
                     cvh_bench::opencv_intrin_backend_name(),
-                    "public_headers_fast_cvtColor",
+                    "public_headers_cvtColor",
                     allocation_mode,
                     shape,
                     public_entry,

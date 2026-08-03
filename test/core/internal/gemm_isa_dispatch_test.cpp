@@ -5,37 +5,37 @@
 
 namespace {
 
-cvh::cpu::DispatchMode available_native_mode()
+cvh::cpu::DispatchMode available_isa_mode()
 {
-    if (cvh::cpu::native_neon_runtime_available())
+    if (cvh::cpu::neon_runtime_available())
     {
         return cvh::cpu::DispatchMode::NeonOnly;
     }
     return cvh::cpu::DispatchMode::Avx2Only;
 }
 
-cvh::cpu::DispatchTag available_native_tag()
+cvh::cpu::DispatchTag available_isa_tag()
 {
-    if (cvh::cpu::native_neon_runtime_available())
+    if (cvh::cpu::neon_runtime_available())
     {
-        return cvh::cpu::DispatchTag::NativeNEON;
+        return cvh::cpu::DispatchTag::NEON;
     }
-    return cvh::cpu::DispatchTag::NativeAVX2;
+    return cvh::cpu::DispatchTag::AVX2;
 }
 
-bool native_available()
+bool isa_available()
 {
-    return cvh::cpu::native_neon_runtime_available() ||
-           cvh::cpu::native_avx2_runtime_available();
+    return cvh::cpu::neon_runtime_available() ||
+           cvh::cpu::avx2_fma_runtime_available();
 }
 
 }  // namespace
 
-TEST(GemmNativeDispatchTest, forced_native_nn_matches_scalar_with_tails)
+TEST(GemmIsaDispatchTest, forced_isa_nn_matches_scalar_with_tails)
 {
-    if (!native_available())
+    if (!isa_available())
     {
-        GTEST_SKIP() << "No native GEMM ISA is available";
+        GTEST_SKIP() << "No specialized GEMM ISA is available";
     }
 
     const cvh::test::DispatchModeGuard dispatch_mode_guard;
@@ -47,18 +47,18 @@ TEST(GemmNativeDispatchTest, forced_native_nn_matches_scalar_with_tails)
     cpu::set_dispatch_mode(cpu::DispatchMode::ScalarOnly);
     const Mat reference = gemm(a, b);
 
-    cpu::set_dispatch_mode(available_native_mode());
+    cpu::set_dispatch_mode(available_isa_mode());
     const Mat actual = gemm(a, b);
 
     expect_mat_close(actual, reference, 2e-3f, 2e-4f);
-    EXPECT_EQ(cpu::last_dispatch_tag(), available_native_tag());
+    EXPECT_EQ(cpu::last_dispatch_tag(), available_isa_tag());
 }
 
-TEST(GemmNativeDispatchTest, auto_selects_native_for_dense_fp32)
+TEST(GemmIsaDispatchTest, auto_selects_isa_for_dense_fp32)
 {
-    if (!native_available())
+    if (!isa_available())
     {
-        GTEST_SKIP() << "No native GEMM ISA is available";
+        GTEST_SKIP() << "No specialized GEMM ISA is available";
     }
 
     const cvh::test::DispatchModeGuard dispatch_mode_guard;
@@ -74,14 +74,14 @@ TEST(GemmNativeDispatchTest, auto_selects_native_for_dense_fp32)
     const Mat actual = gemm(a, b);
 
     expect_mat_close(actual, reference, 2e-3f, 2e-4f);
-    EXPECT_EQ(cpu::last_dispatch_tag(), available_native_tag());
+    EXPECT_EQ(cpu::last_dispatch_tag(), available_isa_tag());
 }
 
-TEST(GemmNativeDispatchTest, forced_native_nt_matches_scalar)
+TEST(GemmIsaDispatchTest, forced_isa_nt_matches_scalar)
 {
-    if (!native_available())
+    if (!isa_available())
     {
-        GTEST_SKIP() << "No native GEMM ISA is available";
+        GTEST_SKIP() << "No specialized GEMM ISA is available";
     }
 
     const cvh::test::DispatchModeGuard dispatch_mode_guard;
@@ -93,18 +93,18 @@ TEST(GemmNativeDispatchTest, forced_native_nt_matches_scalar)
     cpu::set_dispatch_mode(cpu::DispatchMode::ScalarOnly);
     const Mat reference = gemm(a, b_transposed, false, true);
 
-    cpu::set_dispatch_mode(available_native_mode());
+    cpu::set_dispatch_mode(available_isa_mode());
     const Mat actual = gemm(a, b_transposed, false, true);
 
     expect_mat_close(actual, reference, 2e-3f, 2e-4f);
-    EXPECT_EQ(cpu::last_dispatch_tag(), available_native_tag());
+    EXPECT_EQ(cpu::last_dispatch_tag(), available_isa_tag());
 }
 
-TEST(GemmNativeDispatchTest, packed_b_reuses_native_panel)
+TEST(GemmIsaDispatchTest, packed_b_reuses_isa_panel)
 {
-    if (!cvh::cpu::native_neon_runtime_available())
+    if (!cvh::cpu::neon_runtime_available())
     {
-        GTEST_SKIP() << "Persistent native B panels are NEON-specific";
+        GTEST_SKIP() << "Persistent ISA B panels are NEON-specific";
     }
 
     const cvh::test::DispatchModeGuard dispatch_mode_guard;
@@ -116,20 +116,20 @@ TEST(GemmNativeDispatchTest, packed_b_reuses_native_panel)
     cpu::set_dispatch_mode(cpu::DispatchMode::ScalarOnly);
     const Mat reference = gemm(a, b);
     const GemmPackedB packed = gemm_pack_b(b);
-    ASSERT_FALSE(packed.native_packed_fp32.empty());
+    ASSERT_FALSE(packed.isa_packed_fp32.empty());
 
     cpu::set_dispatch_mode(cpu::DispatchMode::NeonOnly);
     const Mat actual = gemm(a, packed);
 
     expect_mat_close(actual, reference, 2e-3f, 2e-4f);
-    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::NativeNEON);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::NEON);
 }
 
-TEST(GemmNativeDispatchTest, neon_packed_fp16_matches_scalar)
+TEST(GemmIsaDispatchTest, neon_packed_fp16_matches_scalar)
 {
-    if (!cvh::cpu::native_neon_runtime_available())
+    if (!cvh::cpu::neon_runtime_available())
     {
-        GTEST_SKIP() << "FP16 native packing is NEON-specific";
+        GTEST_SKIP() << "FP16 ISA packing is NEON-specific";
     }
 
     const cvh::test::DispatchModeGuard dispatch_mode_guard;
@@ -148,10 +148,10 @@ TEST(GemmNativeDispatchTest, neon_packed_fp16_matches_scalar)
     const Mat actual = gemm(a, packed);
 
     expect_mat_close(actual, reference, 3e-2f, 8e-3f);
-    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::NativeNEON);
+    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::NEON);
 }
 
-TEST(GemmNativeDispatchTest, scalar_ui_and_native_modes_are_distinct)
+TEST(GemmIsaDispatchTest, scalar_ui_and_isa_modes_are_distinct)
 {
     const cvh::test::DispatchModeGuard dispatch_mode_guard;
     Mat a({8, 33}, CV_32F);
@@ -166,7 +166,7 @@ TEST(GemmNativeDispatchTest, scalar_ui_and_native_modes_are_distinct)
     cpu::set_dispatch_mode(cpu::DispatchMode::OpenCVUIOnly);
     const Mat ui = gemm(a, b);
     expect_mat_close(ui, scalar, 1e-3f, 1e-4f);
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
 #endif

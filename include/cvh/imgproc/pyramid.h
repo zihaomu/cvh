@@ -76,9 +76,9 @@ using PyramidWorkType =
 
 inline bool pyramid_ui_enabled()
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
-    return cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly;
+    return cpu::opencv_ui_allowed();
 #else
     return false;
 #endif
@@ -174,7 +174,7 @@ inline int horizontal_downsample_u8_c1_ui(
     int begin,
     int end)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!pyramid_ui_enabled())
     {
@@ -235,7 +235,7 @@ inline int horizontal_downsample_u8_c3_ui(
     int begin,
     int end)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!pyramid_ui_enabled())
     {
@@ -369,7 +369,7 @@ inline int horizontal_downsample_u8_c4_ui(
     int begin,
     int end)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!pyramid_ui_enabled())
     {
@@ -436,7 +436,7 @@ inline int horizontal_downsample_f32_c1_ui(
     int begin,
     int end)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!pyramid_ui_enabled())
     {
@@ -600,7 +600,7 @@ inline int vertical_pyramid_row_ui(
     int width,
     int shift)
 {
-#if CVH_ENABLE_OPENCV_INTRIN && CV_SIMD128 && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
     (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
     if (!pyramid_ui_enabled())
     {

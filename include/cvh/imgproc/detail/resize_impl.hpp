@@ -286,8 +286,9 @@ inline bool try_resize_fastpath_u8(const Mat& src, Mat& dst, Size dsize, double 
         return false;
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN
-    if (resize_linear_u8c1_downsample2_opencv_intrin_supported(src, dst_rows, dst_cols, interpolation))
+#if CVH_DETAIL_HAVE_OPENCV_UI
+    if (cpu::opencv_ui_allowed() &&
+        resize_linear_u8c1_downsample2_opencv_intrin_supported(src, dst_rows, dst_cols, interpolation))
     {
         return false;
     }

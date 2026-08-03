@@ -3,7 +3,7 @@
 
 #include "cvh/core/mat.h"
 #include "cvh/core/basic_op.h"
-#include "cvh/core/detail/gemm_native.hpp"
+#include "cvh/core/detail/gemm_isa.hpp"
 #include "cvh/core/detail/gemm_ui.hpp"
 #include "cvh/core/parallel.h"
 #include "cvh/core/system.h"
@@ -228,37 +228,37 @@ GemmPackedB gemm_pack_b_impl(const Mat& b)
         }
     }
 
-    if (cpu::native_neon_runtime_available())
+    if (cpu::neon_runtime_available())
     {
-        packed.native_packed_step =
-            detail::gemm_native::neon_packed_b_elements(K, N);
-        packed.native_packed_fp32.resize(
-            batch_count * packed.native_packed_step + 15);
-        packed.native_alignment_offset =
-            detail::gemm_native::aligned_float_offset(
-                packed.native_packed_fp32);
+        packed.isa_packed_step =
+            detail::gemm_isa::neon_packed_b_elements(K, N);
+        packed.isa_packed_fp32.resize(
+            batch_count * packed.isa_packed_step + 15);
+        packed.isa_alignment_offset =
+            detail::gemm_isa::aligned_float_offset(
+                packed.isa_packed_fp32);
         for (size_t i = 0; i < batch_count; ++i)
         {
-            float* native_ptr =
-                packed.native_packed_fp32.data() +
-                packed.native_alignment_offset +
-                i * packed.native_packed_step;
+            float* isa_ptr =
+                packed.isa_packed_fp32.data() +
+                packed.isa_alignment_offset +
+                i * packed.isa_packed_step;
             if (packed.type == CV_32F)
             {
-                detail::gemm_native::pack_neon_b(
+                detail::gemm_isa::pack_neon_b(
                     packed.packed_fp32.data() +
                         i * packed.packed_step,
-                    native_ptr,
+                    isa_ptr,
                     K,
                     N,
                     false);
             }
             else
             {
-                detail::gemm_native::pack_neon_b(
+                detail::gemm_isa::pack_neon_b(
                     packed.packed_fp16.data() +
                         i * packed.packed_step,
-                    native_ptr,
+                    isa_ptr,
                     K,
                     N,
                     false);
@@ -326,20 +326,20 @@ void gemm_impl_naive(const Mat& a, const Mat& b, Mat& c)
 
     const float* pa = (const float*)a.data;
     float* pc = (float*)c.data;
-    detail::gemm_native::Backend native_backend =
-        detail::gemm_native::select_backend(M, N, K);
+    detail::gemm_isa::Backend isa_backend =
+        detail::gemm_isa::select_backend(M, N, K);
     if (b.type() == CV_16F &&
-        native_backend == detail::gemm_native::Backend::Avx2)
+        isa_backend == detail::gemm_isa::Backend::Avx2)
     {
-        native_backend = detail::gemm_native::Backend::None;
+        isa_backend = detail::gemm_isa::Backend::None;
     }
     const bool use_ui =
         b.type() == CV_32F &&
         (N == 1 ? detail::gemm_ui::can_vectorize_nt(K)
                 : detail::gemm_ui::can_vectorize_nn(N));
     cpu::set_last_dispatch_tag(
-        native_backend != detail::gemm_native::Backend::None
-            ? detail::gemm_native::dispatch_tag(native_backend)
+        isa_backend != detail::gemm_isa::Backend::None
+            ? detail::gemm_isa::dispatch_tag(isa_backend)
             : use_ui ? cpu::DispatchTag::OpenCVUI
                      : cpu::DispatchTag::Scalar);
 
@@ -363,8 +363,8 @@ void gemm_impl_naive(const Mat& a, const Mat& b, Mat& c)
             const float* pb = reinterpret_cast<const float*>(b.data);
             const float* pbi = lin_b * step_b + pb;
 
-            if (detail::gemm_native::run_nn_f32(
-                    native_backend,
+            if (detail::gemm_isa::run_nn_f32(
+                    isa_backend,
                     pai,
                     pbi,
                     pci,
@@ -399,9 +399,9 @@ void gemm_impl_naive(const Mat& a, const Mat& b, Mat& c)
             const hfloat* pb = reinterpret_cast<const hfloat*>(b.data);
             const hfloat* pbi = lin_b * step_b + pb;
 
-            if (native_backend ==
-                    detail::gemm_native::Backend::Neon &&
-                detail::gemm_native::run_neon(
+            if (isa_backend ==
+                    detail::gemm_isa::Backend::Neon &&
+                detail::gemm_isa::run_neon(
                     pai, pbi, pci, M, N, K, false))
             {
                 return;
@@ -467,20 +467,20 @@ void gemm_impl_naive_packed(const Mat& a, const GemmPackedB& packed_b, Mat& c)
 
     const float* pa = reinterpret_cast<const float*>(a.data);
     float* pc = reinterpret_cast<float*>(c.data);
-    detail::gemm_native::Backend native_backend =
-        detail::gemm_native::select_backend(M, N, K);
+    detail::gemm_isa::Backend isa_backend =
+        detail::gemm_isa::select_backend(M, N, K);
     if (packed_b.type == CV_16F &&
-        native_backend == detail::gemm_native::Backend::Avx2)
+        isa_backend == detail::gemm_isa::Backend::Avx2)
     {
-        native_backend = detail::gemm_native::Backend::None;
+        isa_backend = detail::gemm_isa::Backend::None;
     }
     const bool use_ui =
         packed_b.type == CV_32F &&
         (N == 1 ? detail::gemm_ui::can_vectorize_nt(K)
                 : detail::gemm_ui::can_vectorize_nn(N));
     cpu::set_last_dispatch_tag(
-        native_backend != detail::gemm_native::Backend::None
-            ? detail::gemm_native::dispatch_tag(native_backend)
+        isa_backend != detail::gemm_isa::Backend::None
+            ? detail::gemm_isa::dispatch_tag(isa_backend)
             : use_ui ? cpu::DispatchTag::OpenCVUI
                      : cpu::DispatchTag::Scalar);
 
@@ -502,19 +502,19 @@ void gemm_impl_naive_packed(const Mat& a, const GemmPackedB& packed_b, Mat& c)
         if (packed_b.type == CV_32F)
         {
             const float* packed_ptr = packed_b.packed_fp32.data() + lin_b * packed_b.packed_step;
-            if (native_backend ==
-                    detail::gemm_native::Backend::Neon &&
-                packed_b.native_packed_step ==
-                    detail::gemm_native::neon_packed_b_elements(K, N) &&
-                packed_b.native_packed_fp32.size() >=
-                    packed_b.native_alignment_offset +
+            if (isa_backend ==
+                    detail::gemm_isa::Backend::Neon &&
+                packed_b.isa_packed_step ==
+                    detail::gemm_isa::neon_packed_b_elements(K, N) &&
+                packed_b.isa_packed_fp32.size() >=
+                    packed_b.isa_alignment_offset +
                         (lin_b + 1) *
-                            packed_b.native_packed_step &&
-                detail::gemm_native::run_neon_packed(
+                            packed_b.isa_packed_step &&
+                detail::gemm_isa::run_neon_packed(
                     pai,
-                    packed_b.native_packed_fp32.data() +
-                        packed_b.native_alignment_offset +
-                        lin_b * packed_b.native_packed_step,
+                    packed_b.isa_packed_fp32.data() +
+                        packed_b.isa_alignment_offset +
+                        lin_b * packed_b.isa_packed_step,
                     pci,
                     M,
                     N,
@@ -522,8 +522,8 @@ void gemm_impl_naive_packed(const Mat& a, const GemmPackedB& packed_b, Mat& c)
             {
                 return;
             }
-            if (native_backend ==
-                    detail::gemm_native::Backend::Avx2 &&
+            if (isa_backend ==
+                    detail::gemm_isa::Backend::Avx2 &&
                 detail::gemm_avx2::kernel_nn_f32(
                     pai, packed_ptr, pci, M, N, K))
             {
@@ -553,19 +553,19 @@ void gemm_impl_naive_packed(const Mat& a, const GemmPackedB& packed_b, Mat& c)
         else
         {
             const hfloat* packed_ptr = packed_b.packed_fp16.data() + lin_b * packed_b.packed_step;
-            if (native_backend ==
-                    detail::gemm_native::Backend::Neon &&
-                packed_b.native_packed_step ==
-                    detail::gemm_native::neon_packed_b_elements(K, N) &&
-                packed_b.native_packed_fp32.size() >=
-                    packed_b.native_alignment_offset +
+            if (isa_backend ==
+                    detail::gemm_isa::Backend::Neon &&
+                packed_b.isa_packed_step ==
+                    detail::gemm_isa::neon_packed_b_elements(K, N) &&
+                packed_b.isa_packed_fp32.size() >=
+                    packed_b.isa_alignment_offset +
                         (lin_b + 1) *
-                            packed_b.native_packed_step &&
-                detail::gemm_native::run_neon_packed(
+                            packed_b.isa_packed_step &&
+                detail::gemm_isa::run_neon_packed(
                     pai,
-                    packed_b.native_packed_fp32.data() +
-                        packed_b.native_alignment_offset +
-                        lin_b * packed_b.native_packed_step,
+                    packed_b.isa_packed_fp32.data() +
+                        packed_b.isa_alignment_offset +
+                        lin_b * packed_b.isa_packed_step,
                     pci,
                     M,
                     N,
@@ -702,22 +702,22 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
     MatShape stride_c = make_strides(shape_c);
     const float* pa = (const float*)a.data;
     float* pc = (float*)c.data;
-    detail::gemm_native::Backend native_backend =
-        detail::gemm_native::select_backend(M, N, K);
+    detail::gemm_isa::Backend isa_backend =
+        detail::gemm_isa::select_backend(M, N, K);
     if (b.type() == CV_16F &&
-        native_backend == detail::gemm_native::Backend::Avx2)
+        isa_backend == detail::gemm_isa::Backend::Avx2)
     {
-        native_backend = detail::gemm_native::Backend::None;
+        isa_backend = detail::gemm_isa::Backend::None;
     }
     if (b.type() == CV_8S)
     {
-        native_backend = detail::gemm_native::Backend::None;
+        isa_backend = detail::gemm_isa::Backend::None;
     }
     const bool use_ui =
         b.type() == CV_32F && detail::gemm_ui::can_vectorize_nt(K);
     cpu::set_last_dispatch_tag(
-        native_backend != detail::gemm_native::Backend::None
-            ? detail::gemm_native::dispatch_tag(native_backend)
+        isa_backend != detail::gemm_isa::Backend::None
+            ? detail::gemm_isa::dispatch_tag(isa_backend)
             : use_ui ? cpu::DispatchTag::OpenCVUI
                      : cpu::DispatchTag::Scalar);
 
@@ -740,8 +740,8 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
         {
             const float* pb = reinterpret_cast<const float*>(b.data);
             const float* pbi = lin_b * step_b + pb;
-            if (detail::gemm_native::run_nt_f32(
-                    native_backend,
+            if (detail::gemm_isa::run_nt_f32(
+                    isa_backend,
                     pai,
                     pbi,
                     pci,
@@ -779,9 +779,9 @@ void gemm_impl_row(const Mat& a, const Mat& b, const Mat* b_scales, Mat& c)
         {
             const hfloat* pb = reinterpret_cast<const hfloat*>(b.data);
             const hfloat* pbi = lin_b * step_b + pb;
-            if (native_backend ==
-                    detail::gemm_native::Backend::Neon &&
-                detail::gemm_native::run_neon(
+            if (isa_backend ==
+                    detail::gemm_isa::Backend::Neon &&
+                detail::gemm_isa::run_neon(
                     pai, pbi, pci, M, N, K, true))
             {
                 return;

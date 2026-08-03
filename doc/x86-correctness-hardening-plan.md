@@ -325,7 +325,6 @@ Expected:
 cmake -S . -B build-x86-v3 \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_FLAGS=-march=x86-64-v3 \
-  -DCVH_BUILD_NATIVE_BACKEND=OFF \
   -DCVH_BUILD_TESTS=ON \
   -DCVH_BUILD_BENCHMARKS=OFF \
   -DCVH_ENABLE_OPENCV_INTRIN=ON
@@ -346,7 +345,6 @@ Expected:
 cmake -S . -B build-x86-sanitizers \
   -DCMAKE_BUILD_TYPE=Debug \
   "-DCMAKE_CXX_FLAGS=-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer" \
-  -DCVH_BUILD_NATIVE_BACKEND=OFF \
   -DCVH_BUILD_TESTS=ON \
   -DCVH_BUILD_BENCHMARKS=OFF \
   -DCVH_ENABLE_OPENCV_INTRIN=ON

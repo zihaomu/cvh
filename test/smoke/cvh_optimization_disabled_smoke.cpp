@@ -4,8 +4,8 @@
 
 #include <cstring>
 
-#if CVH_ENABLE_OPENCV_INTRIN
-#error "UI-disabled smoke requires CVH_ENABLE_OPENCV_INTRIN=0"
+#if CVH_DETAIL_HAVE_OPENCV_UI
+#error "Optimization-disabled smoke requires CVH_DETAIL_HAVE_OPENCV_UI=0"
 #endif
 
 int main()

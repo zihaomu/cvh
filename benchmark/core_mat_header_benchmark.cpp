@@ -51,7 +51,7 @@ struct ResultRow
     std::string shape;
     std::size_t elements = 0;
     std::size_t pixels = 0;
-    std::string implementation = "cvh_headers_fast";
+    std::string implementation = "cvh_headers";
     std::string dispatch_path = "header_only";
     std::string allocation_mode;
     int warmup = 0;

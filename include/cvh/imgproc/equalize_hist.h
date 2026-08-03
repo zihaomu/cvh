@@ -70,10 +70,10 @@ inline void equalizeHist(const Mat& src, Mat& dst)
                     static_cast<float>(cumulative) * scale)));
     }
 
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_AVX_512VBMI)
     const bool use_ui =
-        cpu::dispatch_mode() != cpu::DispatchMode::ScalarOnly &&
+        cpu::opencv_ui_allowed() &&
         source.size.p[1] >= cv::VTraits<cv::v_uint8>::vlanes();
 #else
     const bool use_ui = false;
@@ -85,7 +85,7 @@ inline void equalizeHist(const Mat& src, Mat& dst)
         uchar* output =
             dst.data + static_cast<size_t>(y) * dst.step(0);
         int x = 0;
-#if CVH_ENABLE_OPENCV_INTRIN && (CV_SIMD || CV_SIMD_SCALABLE) && \
+#if CVH_DETAIL_HAVE_OPENCV_UI && (CV_SIMD || CV_SIMD_SCALABLE) && \
     (CV_NEON || CV_AVX_512VBMI)
         if (use_ui)
         {

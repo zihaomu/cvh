@@ -2,8 +2,8 @@
 
 #include <cstring>
 
-#if !CVH_ENABLE_OPENCV_INTRIN
-#error "cvh_opencv_intrin_x86_smoke must be compiled with CVH_ENABLE_OPENCV_INTRIN=1"
+#if !CVH_DETAIL_HAVE_OPENCV_UI
+#error "cvh_opencv_intrin_x86_smoke must be compiled with CVH_DETAIL_HAVE_OPENCV_UI=1"
 #endif
 
 #if !CV_SSE2

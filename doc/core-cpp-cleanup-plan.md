@@ -1,5 +1,9 @@
 # Core C++ Cleanup And Header-only Migration Plan
 
+> P7.1 update (2026-07-29): the remaining HighGUI/native `.cpp` backend and
+> its CMake targets were deleted. References below to `cvh::native` describe
+> the historical cleanup baseline.
+
 ## 背景
 
 `cvh` 的公共产品目标是纯 header-only，但 `core` 中仍有一批
@@ -354,7 +358,6 @@ Mode B 首批计算矩阵：
 ```bash
 cmake -S . -B build-core-clean \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCVH_BUILD_NATIVE_BACKEND=OFF \
   -DCVH_BUILD_TESTS=ON \
   -DCVH_BUILD_BENCHMARKS=ON
 
