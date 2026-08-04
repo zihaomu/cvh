@@ -308,10 +308,34 @@ std::vector<Phase2BenchmarkResult> run_phase2_benchmarks(
         result.suite = spec.suite;
         result.op = spec.op;
         result.variant = spec.variant;
-        result.dispatch_path =
-            dispatch_tag == cvh::cpu::DispatchTag::Unknown
-                ? "public_header_scalar"
-                : cvh::cpu::dispatch_tag_name(dispatch_tag);
+        const bool point_transform_fastpath =
+            spec.id == Phase2OpId::TransformF32C3ToC4 ||
+            spec.id == Phase2OpId::PerspectiveTransformF32C3;
+        const bool histogram_fastpath =
+            spec.id == Phase2OpId::CalcHist ||
+            spec.id == Phase2OpId::CompareHistCorrel ||
+            spec.id == Phase2OpId::CompareHistChiSqr ||
+            spec.id == Phase2OpId::CompareHistIntersect ||
+            spec.id == Phase2OpId::CompareHistBhattacharyya;
+        const bool random_fastpath =
+            spec.id == Phase2OpId::RanduU8C3 ||
+            spec.id == Phase2OpId::RandnU8C3 ||
+            spec.id == Phase2OpId::RanduF32C3 ||
+            spec.id == Phase2OpId::RandnF32C3 ||
+            spec.id == Phase2OpId::RanduU8C1Roi;
+        if (dispatch_tag == cvh::cpu::DispatchTag::OpenCVUI)
+        {
+            result.dispatch_path = "opencv_ui";
+        }
+        else if (dispatch_tag == cvh::cpu::DispatchTag::Scalar &&
+                 (point_transform_fastpath || histogram_fastpath || random_fastpath))
+        {
+            result.dispatch_path = "header_fastpath";
+        }
+        else
+        {
+            result.dispatch_path = "public_header_scalar";
+        }
         result.depth = spec.depth;
         result.channels = spec.channels;
         result.layout = spec.layout;
@@ -356,6 +380,17 @@ std::vector<Phase2BenchmarkResult> run_phase2_benchmarks(
         if (result.dispatch_path == "public_header_scalar")
         {
             result.note += ";no_ui_fastpath";
+        }
+        else if (result.dispatch_path == "header_fastpath")
+        {
+            if (point_transform_fastpath)
+                result.note +=
+                    ";coefficients=prepacked;channels=specialized;span=continuous";
+            else if (histogram_fastpath)
+                result.note += ";method=split;rows=typed;accumulator=local";
+            else
+                result.note +=
+                    ";engine=xorshift64star;distributions=hoisted;channels=unrolled;rows=typed";
         }
         results.push_back(std::move(result));
     }

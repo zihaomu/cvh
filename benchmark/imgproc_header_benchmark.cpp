@@ -1,5 +1,6 @@
 #include "cvh.h"
 #include "common/benchmark_common.h"
+#include "cvh/core/detail/dispatch_control.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -2030,6 +2031,8 @@ void append_v01_region_rows(const Args& args,
                 static_cast<std::uint64_t>(component_count);
         },
         rows);
+    rows.back().note =
+        "row-pointer two-pass union-find; vector canonical labels";
     append_v01_operator_row(
         args,
         "CONNECTED_COMPONENTS_WITH_STATS",
@@ -2051,6 +2054,8 @@ void append_v01_region_rows(const Args& args,
                 static_cast<std::uint64_t>(component_count);
         },
         rows);
+    rows.back().note =
+        "fused canonical relabel and component statistics";
 
     cvh::Mat contour_mask({matrix_rows, matrix_cols}, CV_8UC1);
     contour_mask = 0;
@@ -2095,6 +2100,8 @@ void append_v01_region_rows(const Args& args,
             return hash ^ static_cast<std::uint64_t>(contours.size());
         },
         rows);
+    rows.back().note =
+        "mode-specialized row-indexed workspace; reusable vector queue";
 }
 
 void append_v01_shape_rows(const Args& args,
@@ -2244,6 +2251,8 @@ void append_v01_histogram_template_rows(const Args& args,
         },
         [&]() { return common::checksum_mat_bytes(histogram); },
         rows);
+    rows.back().dispatch_path = "header_fastpath";
+    rows.back().note = "typed row scan; U8 value-to-bin lookup table";
 
     cvh::Mat other({256, 1}, CV_32FC1);
     other = 1.0f;
@@ -2274,6 +2283,9 @@ void append_v01_histogram_template_rows(const Args& args,
                 return bits;
             },
             rows);
+        rows.back().dispatch_path = "header_fastpath";
+        rows.back().note =
+            "method-specialized contiguous reduction; double accumulator";
     }
 
     constexpr int template_rows = 16;
@@ -2292,6 +2304,7 @@ void append_v01_histogram_template_rows(const Args& args,
              cvh::TM_CCORR,
              cvh::TM_CCORR_NORMED})
     {
+        cvh::cpu::reset_last_dispatch_tag();
         append_v01_operator_row(
             args,
             "MATCH_TEMPLATE",
@@ -2306,6 +2319,16 @@ void append_v01_histogram_template_rows(const Args& args,
             [&]() { cvh::matchTemplate(image, templ, result, method); },
             [&]() { return common::checksum_mat_bytes(result); },
             rows);
+        const cvh::cpu::DispatchTag dispatch =
+            cvh::cpu::last_dispatch_tag();
+        rows.back().dispatch_path =
+            dispatch == cvh::cpu::DispatchTag::OpenCVUI
+                ? "opencv_ui"
+                : "public_header_scalar";
+        rows.back().note =
+            dispatch == cvh::cpu::DispatchTag::OpenCVUI
+                ? "method-specialized correlation; squared-window integral"
+                : "typed scalar fallback; squared-window integral";
     }
 }
 

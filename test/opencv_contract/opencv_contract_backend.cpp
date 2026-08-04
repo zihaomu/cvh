@@ -1699,4 +1699,21 @@ bool validate_phase2_template_match(int method,
     return matches_float_values(expected, actual_data, actual_bytes, 2e-5);
 }
 
+bool validate_phase2_template_match_u8_roi(int method,
+                                           const void* actual_data,
+                                           std::size_t actual_bytes)
+{
+    cv::Mat storage(9, 79, CV_8UC1);
+    for (int row = 0; row < storage.rows; ++row)
+        for (int column = 0; column < storage.cols; ++column)
+            storage.at<unsigned char>(row, column) =
+                static_cast<unsigned char>(
+                    (row * 31 + column * 17 + row * column * 3) & 255);
+    cv::Mat image = storage(cv::Range(1, 9), cv::Range(1, 79));
+    cv::Mat templ = image(cv::Range(2, 7), cv::Range(3, 70));
+    cv::Mat expected;
+    cv::matchTemplate(image, templ, expected, method);
+    return matches_float_values(expected, actual_data, actual_bytes, 2e-5);
+}
+
 }  // namespace cvh_test_opencv_contract

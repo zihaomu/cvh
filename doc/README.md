@@ -21,6 +21,13 @@ binary dependency of the normal cvh package.
   remaining Core and Imgproc expansion roadmap.
 - [opencv-ui-kernel-migration-checklist.md](opencv-ui-kernel-migration-checklist.md):
   current rules for OpenCV Universal Intrinsics and specialized ISA kernels.
+- [cvh-phase2-p0-operator-acceleration-plan.md](cvh-phase2-p0-operator-acceleration-plan.md):
+  implementation batches, correctness gates, upstream comparisons, and live
+  status for the second-stage acceleration of the 17 Phase 2-P0 operation
+  families.
+- [cvh-v0.1-imgproc-performance-floor-acceleration-plan.md](cvh-v0.1-imgproc-performance-floor-acceleration-plan.md):
+  third-stage performance closure, quantitative floors, SIMD/UI audit, and
+  live status for the existing v0.1 Imgproc hotspots.
 - [cvh-v0.1-release-readiness-and-next-stage-plan.md](cvh-v0.1-release-readiness-and-next-stage-plan.md):
   P7.2 onboarding, P7.3 platforms, P7.4 performance baseline, and `0.1.0`
   release gates.
@@ -38,6 +45,8 @@ binary dependency of the normal cvh package.
 | GEMM implementation facts | `gemm-optimization.md` |
 | Supported operation families | API coverage |
 | Current code/document closure work | v0.1 release closure plan |
+| Phase 2-P0 acceleration work | Phase 2-P0 operator acceleration plan |
+| v0.1 Imgproc performance-floor work | v0.1 Imgproc performance-floor acceleration plan |
 | Unfinished release work | release-readiness plan |
 | Test status | test manifests and `test/failing-tests.md` |
 | Performance numbers | dated benchmark report plus CSV/metadata |

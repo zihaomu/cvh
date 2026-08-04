@@ -1919,6 +1919,9 @@ void append_v01_operator_rows(const Args& args, std::vector<ResultRow>& rows)
             },
             [&]() { return common::checksum_mat_bytes(matrix); },
             rows);
+        rows.back().dispatch_path = "header_fastpath";
+        rows.back().note =
+            "lightweight 64-bit engine; channel-unrolled typed span; persistent distributions";
 
         ResultRow randn_row = make_v01_operator_row(
             args, "RANDN", "C3", depth, 3, "continuous", matrix_shape,
@@ -1935,6 +1938,9 @@ void append_v01_operator_rows(const Args& args, std::vector<ResultRow>& rows)
             },
             [&]() { return common::checksum_mat_bytes(matrix); },
             rows);
+        rows.back().dispatch_path = "header_fastpath";
+        rows.back().note =
+            "lightweight 64-bit engine; channel-unrolled typed span; persistent distributions";
     }
 
     cvh::Mat storage({matrix_rows + 2, matrix_cols + 3}, CV_8UC1);
@@ -1953,6 +1959,9 @@ void append_v01_operator_rows(const Args& args, std::vector<ResultRow>& rows)
         },
         [&]() { return common::checksum_mat_bytes(roi); },
         rows);
+    rows.back().dispatch_path = "header_fastpath";
+    rows.back().note =
+        "lightweight 64-bit engine; typed ROI rows; distribution setup hoisted";
 
     cvh::Mat source({point_count, 1}, CV_32FC3);
     common::fill_mat_f32_lcg(source, 0x8102u);
@@ -1976,6 +1985,9 @@ void append_v01_operator_rows(const Args& args, std::vector<ResultRow>& rows)
         [&]() { cvh::transform(source, destination, affine); },
         [&]() { return common::checksum_mat_bytes(destination); },
         rows);
+    rows.back().dispatch_path = "header_fastpath";
+    rows.back().note =
+        "prepacked coefficients; channel-specialized continuous span";
 
     cvh::Mat perspective({4, 4}, CV_64FC1);
     perspective = 0.0f;
@@ -1998,6 +2010,9 @@ void append_v01_operator_rows(const Args& args, std::vector<ResultRow>& rows)
         },
         [&]() { return common::checksum_mat_bytes(destination); },
         rows);
+    rows.back().dispatch_path = "header_fastpath";
+    rows.back().note =
+        "prepacked coefficients; C3 continuous point span";
 }
 
 }  // namespace cvh_bench

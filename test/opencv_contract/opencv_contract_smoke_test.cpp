@@ -1587,4 +1587,22 @@ TEST(OpenCVContractSmoke_TEST, phase2_histogram_and_template_matching_match_upst
             method, actual.data, actual.total() * actual.elemSize()))
             << "method=" << method;
     }
+
+
+    Mat u8_storage({9, 79}, CV_8UC1);
+    for (int row = 0; row < u8_storage.size[0]; ++row)
+        for (int column = 0; column < u8_storage.size[1]; ++column)
+            u8_storage.at<uchar>(row, column) = static_cast<uchar>(
+                (row * 31 + column * 17 + row * column * 3) & 255);
+    Mat u8_image = u8_storage(Range(1, 9), Range(1, 79));
+    Mat u8_template = u8_image(Range(2, 7), Range(3, 70));
+    for (int method : {TM_SQDIFF, TM_SQDIFF_NORMED, TM_CCORR, TM_CCORR_NORMED})
+    {
+        Mat actual;
+        matchTemplate(u8_image, u8_template, actual, method);
+        EXPECT_TRUE(
+            cvh_test_opencv_contract::validate_phase2_template_match_u8_roi(
+                method, actual.data, actual.total() * actual.elemSize()))
+            << "U8 ROI method=" << method;
+    }
 }

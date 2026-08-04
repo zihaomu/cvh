@@ -84,6 +84,109 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
             return f"CVH `~{ratio:.2f}x`"
         return f"OpenCV `~{(1.0 / ratio):.2f}x`"
 
+    match_template_has_ui = any(
+        r.get("op", "") == "MATCH_TEMPLATE"
+        and r.get("dispatch_path", "") == "opencv_ui"
+        for r in supported
+    )
+    histogram_has_fastpath = any(
+        r.get("op", "") in {"CALC_HIST", "COMPARE_HIST"}
+        and r.get("dispatch_path", "") == "header_fastpath"
+        for r in supported
+    )
+    if match_template_has_ui and histogram_has_fastpath:
+        histogram_template_cause = (
+            "Template matching uses UI correlation and squared-window integrals; histogram paths use typed scans and method-specialized double reductions"
+        )
+        histogram_template_follow_up = (
+            "Keep histogram/template numeric and dispatch coverage stable, then continue with random fills"
+        )
+    elif match_template_has_ui:
+        histogram_template_cause = (
+            "Template matching now uses a method-specialized UI correlation path and squared-window integral; histogram construction and comparison remain scalar"
+        )
+        histogram_template_follow_up = (
+            "Keep template matching correctness and dispatch coverage stable, then prioritize histogram construction"
+        )
+    else:
+        histogram_template_cause = (
+            "Histogram and direct-spatial template kernels have no CVH UI fast path in v0.1"
+        )
+        histogram_template_follow_up = (
+            "Prioritize template matching by absolute runtime, then histogram construction"
+        )
+    point_transform_ratios = [
+        to_float(r.get("speedup", "0"))
+        for r in supported
+        if r.get("op", "") in {"TRANSFORM", "PERSPECTIVE_TRANSFORM"}
+    ]
+    point_transforms_optimized = (
+        point_transform_ratios and min(point_transform_ratios) >= 0.25
+    )
+    random_has_fastpath = any(
+        r.get("op", "") in {"RANDU", "RANDN"}
+        and r.get("dispatch_path", "") == "header_fastpath"
+        for r in supported
+    )
+    if point_transforms_optimized and random_has_fastpath:
+        random_transform_cause = (
+            "Point transforms use prepacked channel-specialized spans; random fills use a lightweight 64-bit engine, hoisted distributions, and typed row kernels"
+        )
+        random_transform_follow_up = (
+            "Keep transform and random statistical/dispatch coverage stable"
+        )
+    elif point_transforms_optimized:
+        random_transform_cause = (
+            "Point transforms use prepacked coefficients and channel-specialized continuous spans; random fills remain scalar public-header paths"
+        )
+        random_transform_follow_up = (
+            "Keep point-transform numeric coverage stable and prioritize random-fill loop structure"
+        )
+    else:
+        random_transform_cause = (
+            "The v0.1 implementations are scalar public-header paths; upstream uses optimized RNG and transform kernels"
+        )
+        random_transform_follow_up = (
+            "Treat the focused P2-P0 report as optimization prioritization, not a release gate"
+        )
+    connected_component_ratios = [
+        to_float(r.get("speedup", "0"))
+        for r in supported
+        if r.get("op", "")
+        in {"CONNECTED_COMPONENTS", "CONNECTED_COMPONENTS_WITH_STATS"}
+    ]
+    connected_components_optimized = (
+        connected_component_ratios
+        and min(connected_component_ratios) >= 0.25
+    )
+    contour_ratios = [
+        to_float(r.get("speedup", "0"))
+        for r in supported
+        if r.get("op", "") == "FIND_CONTOURS"
+    ]
+    contours_optimized = contour_ratios and min(contour_ratios) >= 0.25
+    if connected_components_optimized and contours_optimized:
+        regions_cause = (
+            "Connected components use row-pointer union-find and fused statistics; contour discovery uses a mode-specialized row-indexed workspace"
+        )
+        regions_follow_up = (
+            "Keep label/statistics and contour ordering fixed, then continue with point transforms"
+        )
+    elif connected_components_optimized:
+        regions_cause = (
+            "Connected components now use row-pointer union-find, vector canonicalization, and fused statistics; contour discovery remains the scan-heavy scalar hotspot"
+        )
+        regions_follow_up = (
+            "Keep label/statistics ordering fixed and prioritize contour workspace and discovery scans"
+        )
+    else:
+        regions_cause = (
+            "CVH currently favors explicit scalar correctness and deterministic ordering over specialized scans"
+        )
+        regions_follow_up = (
+            "Separate scan-heavy region work from micro shape primitives when selecting fast paths"
+        )
+
     generated_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
 
     lines = []
@@ -220,20 +323,20 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
                 [
                     "P2 random / point transform",
                     group_result({"RANDU", "RANDN", "TRANSFORM", "PERSPECTIVE_TRANSFORM"}),
-                    "The v0.1 implementations are scalar public-header paths; upstream uses optimized RNG and transform kernels",
-                    "Treat the focused P2-P0 report as optimization prioritization, not a release gate",
+                    random_transform_cause,
+                    random_transform_follow_up,
                 ],
                 [
                     "P2 regions / contours / shape",
                     group_result({"CONNECTED_COMPONENTS", "CONNECTED_COMPONENTS_WITH_STATS", "FIND_CONTOURS", "BOUNDING_RECT", "CONTOUR_AREA", "ARC_LENGTH", "APPROX_POLY_DP", "CONVEX_HULL", "IS_CONTOUR_CONVEX", "MOMENTS"}),
-                    "CVH currently favors explicit scalar correctness and deterministic ordering over specialized scans",
-                    "Separate scan-heavy region work from micro shape primitives when selecting fast paths",
+                    regions_cause,
+                    regions_follow_up,
                 ],
                 [
                     "P2 histogram / template",
                     group_result({"CALC_HIST", "COMPARE_HIST", "MATCH_TEMPLATE"}),
-                    "Histogram and direct-spatial template kernels have no CVH UI fast path in v0.1",
-                    "Prioritize template matching by absolute runtime, then histogram construction",
+                    histogram_template_cause,
+                    histogram_template_follow_up,
                 ],
             ],
         )

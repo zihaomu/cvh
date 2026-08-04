@@ -371,6 +371,10 @@ bool validate_phase2_template_match(int method,
                                     const void* actual_data,
                                     std::size_t actual_bytes);
 
+bool validate_phase2_template_match_u8_roi(int method,
+                                           const void* actual_data,
+                                           std::size_t actual_bytes);
+
 }  // namespace cvh_test_opencv_contract
 
 #endif  // CVH_TEST_OPENCV_CONTRACT_BACKEND_H

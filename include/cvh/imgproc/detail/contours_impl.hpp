@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <deque>
 #include <vector>
 
 namespace cvh
@@ -34,19 +33,22 @@ struct ContourWorkspace
 inline std::vector<uchar> exterior_background(const ContourWorkspace& workspace)
 {
     std::vector<uchar> exterior(workspace.pixels.size(), 0);
-    std::deque<Point> queue;
+    std::vector<int> queue;
+    queue.reserve(workspace.pixels.size());
     exterior[0] = 1;
-    queue.emplace_back(0, 0);
+    queue.push_back(0);
     const int dx[4] = {1, 0, -1, 0};
     const int dy[4] = {0, 1, 0, -1};
-    while (!queue.empty())
+    std::size_t head = 0;
+    while (head < queue.size())
     {
-        const Point point = queue.front();
-        queue.pop_front();
+        const int point_index = queue[head++];
+        const int point_y = point_index / workspace.columns;
+        const int point_x = point_index - point_y * workspace.columns;
         for (int direction = 0; direction < 4; ++direction)
         {
-            const int x = point.x + dx[direction];
-            const int y = point.y + dy[direction];
+            const int x = point_x + dx[direction];
+            const int y = point_y + dy[direction];
             if (x < 0 || y < 0 || x >= workspace.columns || y >= workspace.rows)
             {
                 continue;
@@ -55,7 +57,7 @@ inline std::vector<uchar> exterior_background(const ContourWorkspace& workspace)
             if (exterior[index] == 0 && workspace.at(y, x) == 0)
             {
                 exterior[index] = 1;
-                queue.emplace_back(x, y);
+                queue.push_back(static_cast<int>(index));
             }
         }
     }
@@ -81,6 +83,7 @@ inline std::vector<Point> fetch_contour(ContourWorkspace& workspace,
            direction != direction_end);
 
     std::vector<Point> contour;
+    contour.reserve(32);
     Point point(start_x - 1 + coordinate_offset.x,
                 start_y - 1 + coordinate_offset.y);
     if (direction == direction_end)
@@ -163,12 +166,18 @@ inline void findContours(const Mat& image, std::vector<std::vector<Point>>& cont
     workspace.pixels.assign(static_cast<size_t>(workspace.rows) * workspace.columns, 0);
     for (int row = 0; row < image.size[0]; ++row)
     {
+        const uchar* source = image.data +
+            static_cast<std::size_t>(row) * image.step(0);
+        int* destination = workspace.pixels.data() +
+            static_cast<std::size_t>(row + 1) * workspace.columns + 1;
         for (int column = 0; column < image.size[1]; ++column)
         {
-            workspace.at(row + 1, column + 1) = image.at<uchar>(row, column) != 0 ? 1 : 0;
+            destination[column] = source[column] != 0 ? 1 : 0;
         }
     }
-    const std::vector<uchar> exterior = detail::exterior_background(workspace);
+    const std::vector<uchar> exterior = mode == RETR_EXTERNAL
+        ? detail::exterior_background(workspace)
+        : std::vector<uchar>();
     contours.clear();
     int label = 2;
     for (int row = 1; row <= image.size[0]; ++row)
@@ -188,8 +197,10 @@ inline void findContours(const Mat& image, std::vector<std::vector<Point>>& cont
             }
             if (found)
             {
-                const bool is_external = !hole &&
-                    exterior[static_cast<size_t>(row) * workspace.columns + origin_x - 1] != 0;
+                const bool is_external = mode == RETR_LIST ||
+                    (!hole &&
+                     exterior[static_cast<size_t>(row) * workspace.columns +
+                              origin_x - 1] != 0);
                 std::vector<Point> contour = detail::fetch_contour(
                     workspace, origin_x, row, hole, method, label, offset);
                 if (mode == RETR_LIST || is_external)

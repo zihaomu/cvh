@@ -1,0 +1,65 @@
+{
+  "arch": "arm64",
+  "build_type": "Release",
+  "compare_mode": "current",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.0.123.102)",
+  "cpu_model": "Apple M5",
+  "fingerprint": {
+    "arch": "arm64",
+    "build_type": "Release",
+    "cpu_model": "Apple M5",
+    "impls": [
+      "cvh_ui"
+    ],
+    "iters": 10,
+    "omp_dynamic": "false",
+    "omp_proc_bind": "close",
+    "opencv_cmake": {
+      "WITH_CAROTENE": "ON",
+      "WITH_IPP": "OFF",
+      "WITH_KLEIDICV": "ON",
+      "WITH_LAPACK": "ON"
+    },
+    "opencv_config_dir": "../opencv/build-slim",
+    "opencv_variant": "default",
+    "ops": [],
+    "profile": "full",
+    "repeats": 3,
+    "sample_count": 30,
+    "system": "Darwin",
+    "threads": 1,
+    "warmup": 1
+  },
+  "generated_at_utc": "2026-08-04T07:32:02Z",
+  "hostname": "zmus-MacBook-Air.local",
+  "impls": [
+    "cvh_ui"
+  ],
+  "iters": 10,
+  "kernel": "25.4.0",
+  "omp_dynamic": "false",
+  "omp_proc_bind": "close",
+  "opencv_cmake": {
+    "WITH_CAROTENE": "ON",
+    "WITH_IPP": "OFF",
+    "WITH_KLEIDICV": "ON",
+    "WITH_LAPACK": "ON"
+  },
+  "opencv_config_dir": "../opencv/build-slim",
+  "opencv_dir": "../opencv",
+  "opencv_git_commit": "d48bf69f65444a13f8a34b8982b083c1b78fa0e8",
+  "opencv_git_dirty": true,
+  "opencv_variant": "default",
+  "opencv_version": "4.14.0",
+  "ops": [],
+  "output_csv": "benchmark/opencv_compare/results/2026-08-04-opencv-upstream-performance.csv",
+  "output_md": "benchmark/opencv_compare/results/2026-08-04-opencv-upstream-performance.en.md",
+  "profile": "full",
+  "repeats": 3,
+  "repo_git_commit": "8360e586d8c004954a2cfd0b22ce1a1476cf9af9",
+  "repo_git_dirty": true,
+  "sample_count": 30,
+  "system": "Darwin",
+  "threads": 1,
+  "warmup": 1
+}
