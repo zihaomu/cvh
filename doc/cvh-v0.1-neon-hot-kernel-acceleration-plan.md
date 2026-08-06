@@ -1,7 +1,7 @@
 # cvh v0.1 高频 NEON 热点加速计划
 
 更新时间：2026-08-06  
-状态：H0–H1 完成；H2 进行中；H3–H5 待执行
+状态：H0–H1、H3 完成；H2 performance floor 待决；H4 进行中；H5 待执行
 
 ## 1. 目的与阶段定位
 
@@ -256,9 +256,9 @@ case。若某项因 upstream 特殊 HAL 或平台库无法达到，必须保留�
 | --- | --- | --- | --- |
 | H0 | focused matrix 与 stage dispatch 可信化 | 完成 | baseline、`kernel_route`、三模式报告 |
 | H1 | CVTCOLOR packed/YUV U8 NEON | 完成 | color NEON header、tests、before/after |
-| H2 | Resize bilinear U8C3 NEON | 进行中 | resize NEON header、tests、before/after |
-| H3 | Sobel/Scharr/spatialGradient shared NEON | 待执行 | derivative3 NEON header、tests、before/after |
-| H4 | 全量正确性与跨平台 fallback | 待执行 | ARM runtime、x86 compile/runtime、sanitizer evidence |
+| H2 | Resize bilinear U8C3 NEON | floor 待决 | resize NEON header、tests、before/after |
+| H3 | Sobel/Scharr/spatialGradient shared NEON | 完成 | derivative3 NEON header、tests、before/after |
+| H4 | 全量正确性与跨平台 fallback | 进行中 | ARM runtime、x86 compile/runtime、sanitizer evidence |
 | H5 | product-auto full report 与文档收口 | 待执行 | date-named Markdown/CSV/metadata、完成定义 |
 
 ### H0：Focused matrix 与 telemetry
@@ -453,6 +453,19 @@ H0 只改善观测，不修改目标 kernel 性能。
 - 当前 derivative targeted 11/11、独立头编译、ODR smoke 与
   `git diff --check` 通过；
 - Canny 未接入新 primitive，继续走原有已验证路径。
+- H3 实现提交为 `16e64ce`；该 clean revision 上三轮 stable 每轮均为
+  210 行，metadata 均记录 `repo_git_dirty=false`；
+- 三轮逐 case 中位数：Sobel 9 个目标最差 relative `1.1972`，Scharr
+  4 个目标最差 `1.1000`，spatialGradient 4 个目标最差 `0.5655`；均超过
+  对应 `0.65/0.50` family floor；
+- 相对 H0，derivative 目标最小 candidate 提升 `2.20x`，最小 gap closure
+  `82.0%`，超过 `1.25x/30%` retention gate；
+- 三轮 dispatch 分布完全一致：Auto 为 57 NEON + 7 UI + 6 scalar；UIOnly
+  为 18 UI + 52 scalar；ScalarOnly 为 70 scalar；后两种模式均未观察到
+  direct NEON；
+- 三轮证据保存在 ignored 的
+  `build-v01-neon-hot/results/h3-final-run{1,2,3}.{csv,md,meta.json}`；H3
+  correctness、dispatch、performance 和 clean-evidence 条件齐备，H3 关闭。
 
 1. 建立三行、channel-stride aware 的 interior kernel；边界列独立 scalar。
 2. Sobel 使用 `[1,2,1]` smoothing 与 `[-1,0,1]` derivative；Scharr 使用
