@@ -1,7 +1,7 @@
 # cvh v0.1 高频 NEON 热点加速计划
 
 更新时间：2026-08-06  
-状态：H0 完成；H1 进行中；H2–H5 待执行
+状态：H0–H1 完成；H2 进行中；H3–H5 待执行
 
 ## 1. 目的与阶段定位
 
@@ -255,8 +255,8 @@ case。若某项因 upstream 特殊 HAL 或平台库无法达到，必须保留�
 | 批次 | 内容 | 状态 | 主要产物 |
 | --- | --- | --- | --- |
 | H0 | focused matrix 与 stage dispatch 可信化 | 完成 | baseline、`kernel_route`、三模式报告 |
-| H1 | CVTCOLOR packed/YUV U8 NEON | 进行中 | color NEON header、tests、before/after |
-| H2 | Resize bilinear U8C3 NEON | 待执行 | resize NEON header、tests、before/after |
+| H1 | CVTCOLOR packed/YUV U8 NEON | 完成 | color NEON header、tests、before/after |
+| H2 | Resize bilinear U8C3 NEON | 进行中 | resize NEON header、tests、before/after |
 | H3 | Sobel/Scharr/spatialGradient shared NEON | 待执行 | derivative3 NEON header、tests、before/after |
 | H4 | 全量正确性与跨平台 fallback | 待执行 | ARM runtime、x86 compile/runtime、sanitizer evidence |
 | H5 | product-auto full report 与文档收口 | 待执行 | date-named Markdown/CSV/metadata、完成定义 |
@@ -345,6 +345,18 @@ H0 只改善观测，不修改目标 kernel 性能。
   分别提升约 `2.20x`、`2.40x`，均超过 YUV `>=0.45` 初测 floor；
 - H1 当前颜色专项 65/65 通过，独立头编译、ODR 和 `git diff --check`
   通过；待 clean revision 三轮 stable Auto/UI/scalar 后关闭 H1。
+- H1 实现提交为 `eb776fb`；该 clean revision 上三轮 stable 每轮均为 210
+  行，metadata 均记录 `repo_git_dirty=false`；
+- 三轮逐 case 中位数 gate：packed 目标最差 relative `0.7438`、最小
+  candidate 提升 `4.32x`、最小 gap closure `97.3%`；YUV 目标最差
+  relative `0.4854`、最小 candidate 提升 `2.37x`、最小 gap closure
+  `75.2%`；全部超过 family floor、`1.25x` retention 和 `30%` gap
+  closure；
+- 三轮 dispatch 分布一致：Auto 为 30 NEON + 18 UI + 22 scalar；UIOnly
+  为 18 UI + 52 scalar；ScalarOnly 为 70 scalar；UIOnly/ScalarOnly 未观察到
+  direct NEON；
+- 非 CVTCOLOR focused case 的三轮中位数没有一项回退超过 `5%`；H1
+  correctness、dispatch、performance 和 non-target gate 齐备，H1 关闭。
 
 #### H1.1 Packed channel
 
@@ -374,6 +386,32 @@ H0 只改善观测，不修改目标 kernel 性能。
 - `BGR2NV12` 继续保留正确性与 dispatch 观测，但不伪造 upstream 性能参考。
 
 ### H2：Resize bilinear U8C3
+
+#### H2 实时记录（2026-08-06）
+
+- 已新增 `detail/resize_neon.hpp` 与 `ResizeDispatchInternalTest`；selector 仅接入
+  ARM64 `Auto/NeonOnly`、U8C3、`INTER_LINEAR` 且输出 workload 不少于
+  256 像素的 case，UIOnly、ScalarOnly、小图和非目标类型保持原路径；
+- `0.5x` 使用 2x2 widen/pair-add 专用 kernel；通用比例每次调用只建立一次
+  x/y map，并对安全的 16-source-pixel 窗口使用 `vld3q + vqtbl + float FMA +
+  vst3` 处理 8 个输出，border、无法安全 overread 的尾部继续使用 scalar；
+- direct correctness 当前覆盖 `0.5x/0.75x/1.5x`、36x52 与 480x640 的
+  exact 0.75x、odd-size ROI、non-contiguous step、tail 以及
+  Auto/NeonOnly/UIOnly/ScalarOnly；已通过 scalar byte-exact 对照；
+- 最终保留源码上，Resize targeted 13/13、Imgproc 独立头编译与 ODR smoke、
+  `git diff --check` 均通过；
+- 当前保留候选的单轮 stable 探测：`0.5x` relative 为 `2.20–2.50`，
+  `1.5x` 为 `0.96–0.99`；`0.75x` continuous/ROI 的 CVH latency 约
+  `0.157–0.160 ms`，相对 H0 `0.333 ms` 提升约 `2.1x`，关闭约 `60%`
+  的 OpenCV 延迟差距，但 relative 仍仅约 `0.35`；
+- 已实测并删除三个未通过候选：12-output float block 因计算/存储额外 lane
+  使 continuous 降至约 `0.32x` 且 ROI 无法形成安全窗口；精确 3/4 fixed-point
+  kernel 为维持现有 float/std::round 合同需要 half-way tie 修正，最终仅
+  `0.08–0.14x`；关闭 tie 修正虽可达到约 `0.60x`，但 checksum 与 byte-exact
+  合同不一致，因此仅保留在 ignored probe 数据中，未进入源码；
+- 当前通用 candidate 已超过 `1.25x` retention 与 `30%` gap-closure 门槛，
+  但 0.75x continuous/ROI 尚未达到 family `>=0.50` floor。H2 保持进行中，
+  在没有进一步正确性等价的优化或用户明确批准例外前不关闭。
 
 1. 每次调用只计算一次 x index、x weight 和 y mapping；禁止 per-pixel 分配。
 2. interior block 将 source index/weight 打包，NEON 完成横向、纵向 fixed-point
@@ -511,8 +549,8 @@ git diff --check
 - [x] H0 focused matrix 覆盖三类 family 的主流尺寸、ROI、tail 和 fallback；
 - [x] 每个 focused case 均有完整
       `algorithm_path -> dispatch_path -> isa_observed -> kernel_route`；
-- [ ] packed RGB/BGRA U8 达到 `relative >= 0.70`；
-- [ ] 目标 YUV U8 路径达到 `relative >= 0.45`；
+- [x] packed RGB/BGRA U8 达到 `relative >= 0.70`；
+- [x] 目标 YUV U8 路径达到 `relative >= 0.45`；
 - [ ] Resize bilinear U8C3 达到 `relative >= 0.50`；
 - [ ] Sobel/Scharr 目标路径达到 `relative >= 0.65`；
 - [ ] spatialGradient 达到 `relative >= 0.50`；

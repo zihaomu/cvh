@@ -272,6 +272,7 @@ inline void resize_fallback(const Mat& src, Mat& dst, Size dsize, double fx, dou
 }  // namespace detail
 }  // namespace cvh
 
+#include "detail/resize_neon.hpp"
 #include "detail/resize_impl.hpp"
 
 namespace cvh {

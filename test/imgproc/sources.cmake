@@ -37,6 +37,7 @@ set(CVH_IMGPROC_TEST_SOURCES
     test/imgproc/internal/derivatives_dispatch_test.cpp
     test/imgproc/internal/median_blur_dispatch_test.cpp
     test/imgproc/internal/pyramid_dispatch_test.cpp
+    test/imgproc/internal/resize_dispatch_test.cpp
     test/imgproc/morphology/morphology_test.cpp
     test/imgproc/statistics/integral_test.cpp
     test/imgproc/statistics/phase2_analysis_test.cpp

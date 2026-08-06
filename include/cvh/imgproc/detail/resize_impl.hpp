@@ -320,6 +320,11 @@ inline bool try_resize_fastpath_u8(const Mat& src, Mat& dst, Size dsize, double 
 inline void resize_fast_impl(const Mat& src, Mat& dst, Size dsize, double fx, double fy, int interpolation)
 {
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    if (resize_neon::try_resize_linear_u8c3(
+            src, dst, dsize, fx, fy, interpolation))
+    {
+        return;
+    }
     if (resize_fastpath::try_resize_fastpath_u8(src, dst, dsize, fx, fy, interpolation))
     {
         return;
