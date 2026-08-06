@@ -1,7 +1,7 @@
 # cvh v0.1 高频 NEON 热点加速计划
 
 更新时间：2026-08-06  
-状态：H0–H1、H3、H5 完成；H2 performance floor 待决；H4 本机闭环、外部 x86 runtime gate 待执行
+状态：H0–H1、H3、H5 完成；H2 已穷尽本轮候选、performance floor 例外待用户决定；H4 本机闭环、外部 x86 runtime gate 待执行
 
 ## 1. 目的与阶段定位
 
@@ -256,7 +256,7 @@ case。若某项因 upstream 特殊 HAL 或平台库无法达到，必须保留�
 | --- | --- | --- | --- |
 | H0 | focused matrix 与 stage dispatch 可信化 | 完成 | baseline、`kernel_route`、三模式报告 |
 | H1 | CVTCOLOR packed/YUV U8 NEON | 完成 | color NEON header、tests、before/after |
-| H2 | Resize bilinear U8C3 NEON | floor 待决 | resize NEON header、tests、before/after |
+| H2 | Resize bilinear U8C3 NEON | 候选收口，floor 例外待决 | resize NEON header、tests、before/after |
 | H3 | Sobel/Scharr/spatialGradient shared NEON | 完成 | derivative3 NEON header、tests、before/after |
 | H4 | 全量正确性与跨平台 fallback | 本机闭环，外部 gate 待执行 | ARM runtime、x86 compile/runtime、sanitizer evidence |
 | H5 | product-auto full report 与文档收口 | 完成 | date-named Markdown/CSV/metadata、完成定义 |
@@ -410,8 +410,19 @@ H0 只改善观测，不修改目标 kernel 性能。
   `0.08–0.14x`；关闭 tie 修正虽可达到约 `0.60x`，但 checksum 与 byte-exact
   合同不一致，因此仅保留在 ignored probe 数据中，未进入源码；
 - 当前通用 candidate 已超过 `1.25x` retention 与 `30%` gap-closure 门槛，
-  但 0.75x continuous/ROI 尚未达到 family `>=0.50` floor。H2 保持进行中，
-  在没有进一步正确性等价的优化或用户明确批准例外前不关闭。
+  但 0.75x continuous/ROI 尚未达到 family `>=0.50` floor；在没有进一步
+  正确性等价的优化或用户明确批准例外前，H2 performance gate 不关闭。
+- H5 后追加的第二轮 exact 3/4 polyphase 收口实验已结束：16 个连续 source
+  pixel 生成 12 个输出，主体使用分母 36 的整数 NEON 累加；但现有 float
+  映射在 half-way tie 上受实际 FMA 舍入影响，不能用单一 fixed-point 规则
+  等价替换。逐 tie scalar 精确回算虽通过 Resize targeted 13/13，stable
+  relative 仅 `0.0886–0.1103`；改为 4-lane NEON float 条件回算后仍只有
+  `0.1226–0.2961`，低于当前通用 NEON 的约 `0.35`，也远低于 `0.50` floor；
+- 两个第二轮 candidate 均已从产品源码和测试诊断代码完整删除，probe CSV 只在
+  ignored build 目录中留作本地证据，不覆盖 H5 已发布的 clean report。至此本轮
+  已规划的 12-output float、fixed-point、scalar tie 与 vector tie 四类候选均已
+  验证并回退；H2 的实现工作收口，剩余事项仅为用户是否明确批准 Resize
+  `0.75x` performance-floor 例外，本文不自动批准。
 
 1. 每次调用只计算一次 x index、x weight 和 y mapping；禁止 per-pixel 分配。
 2. interior block 将 source index/weight 打包，NEON 完成横向、纵向 fixed-point
@@ -659,7 +670,8 @@ git diff --check
       正确 fallback；
 - [x] optimized、optimization-off、OpenCV differential、sanitizer、header
       compile、ODR 和 install consumer 全部通过；
-- [ ] Linux x86_64 编译与现有 UI/scalar runtime 无新增失败；
+- [x] x86_64 cross-compile 证明 direct NEON 不进入非 ARM 构建；
+- [ ] Linux x86_64 现有 UI/scalar runtime 无新增失败；
 - [x] full Imgproc 与 full compare 无超过 `1%` 的稳定非目标回退；
 - [x] 最终 product-auto 报告来自 clean revision，并提交 Markdown/CSV/metadata；
 - [x] 本文状态、benchmark index 与必要 dispatch 文档实时同步；
