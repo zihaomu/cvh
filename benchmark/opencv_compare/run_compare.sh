@@ -260,18 +260,10 @@ write_compare_metadata() {
   local opencv_config_dir="$4"
   local generated_at
   generated_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  local repo_git_commit
-  repo_git_commit="$(git -C "${ROOT_DIR}" rev-parse HEAD 2>/dev/null || printf '%s' 'unknown')"
-  local repo_git_dirty="false"
-  if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain 2>/dev/null)" ]]; then
-    repo_git_dirty="true"
-  fi
-  local opencv_git_commit
-  opencv_git_commit="$(git -C "${OPENCV_DIR}" rev-parse HEAD 2>/dev/null || printf '%s' 'unknown')"
-  local opencv_git_dirty="false"
-  if [[ -n "$(git -C "${OPENCV_DIR}" status --porcelain 2>/dev/null)" ]]; then
-    opencv_git_dirty="true"
-  fi
+  local repo_git_commit="${RUN_REPO_GIT_COMMIT}"
+  local repo_git_dirty="${RUN_REPO_GIT_DIRTY}"
+  local opencv_git_commit="${RUN_OPENCV_GIT_COMMIT}"
+  local opencv_git_dirty="${RUN_OPENCV_GIT_DIRTY}"
   local opencv_version
   opencv_version="$(awk '/^SET\(OpenCV_VERSION / {gsub(/[()]/, ""); print $2; exit}' "${opencv_config_dir}/OpenCVConfig.cmake" 2>/dev/null || true)"
   opencv_version="${opencv_version:-unknown}"
@@ -423,6 +415,20 @@ fi
 if ! OPENCV_CONFIG_DIR="$(find_opencv_dir "${OPENCV_DIR}")"; then
   echo "Cannot find OpenCVConfig.cmake under ${OPENCV_DIR}/build-slim" >&2
   exit 2
+fi
+
+# Freeze source identities before creating benchmark outputs. Otherwise an output
+# path inside the repository makes an initially clean release candidate appear
+# dirty in its own metadata.
+RUN_REPO_GIT_COMMIT="$(git -C "${ROOT_DIR}" rev-parse HEAD 2>/dev/null || printf '%s' 'unknown')"
+RUN_REPO_GIT_DIRTY="false"
+if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain 2>/dev/null)" ]]; then
+  RUN_REPO_GIT_DIRTY="true"
+fi
+RUN_OPENCV_GIT_COMMIT="$(git -C "${OPENCV_DIR}" rev-parse HEAD 2>/dev/null || printf '%s' 'unknown')"
+RUN_OPENCV_GIT_DIRTY="false"
+if [[ -n "$(git -C "${OPENCV_DIR}" status --porcelain 2>/dev/null)" ]]; then
+  RUN_OPENCV_GIT_DIRTY="true"
 fi
 
 mkdir -p "${BUILD_DIR}" "$(dirname "${OUTPUT_CSV}")" "$(dirname "${OUTPUT_META}")" "$(dirname "${OUTPUT_MD}")"

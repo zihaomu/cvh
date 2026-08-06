@@ -509,6 +509,8 @@ targeted unit / differential
 | 2026-08-04 | B7 | `6175707` + working tree | canonical internal runner 单向 quick 报 Core 13/416 超 8%；stable baseline-first 报 Core 186/716、Imgproc 49/204，但反向后分别降到 69、25，几何平均 Core 从 `0.9705` 反转为 `1.0096`、Imgproc 从 `1.6177` 变为 `1.7001` | 用同二进制跨轮差验证是否为执行顺序/机器状态偏差 |
 | 2026-08-04 | B7 | `6175707` + working tree | 同一个 candidate 二进制的两份 stable 结果自身相差 Core `1.3050x`、Imgproc `1.0913x`，且 Imgproc 仍有 5 个 >8% 假告警（stackBlur 同二进制波动约 `2.1x`）；证明双进程 runner 当前不满足逐 case 发布判定的稳定性前提。本轮不据此回退代码，保留原始 forward/reverse/balanced 结果，最终采用同进程 OpenCV compare 三轮中位数及 focused gate | 审计并执行 Linux x86_64 环境；随后生成干净 RC compare 报告 |
 | 2026-08-04 | B7 | `6175707` + working tree | 当前宿主为 Darwin arm64；Docker、Podman、Colima、Lima、nerdctl、Linux x86_64 cross compiler、QEMU、Multipass/Tart 与 `gh` 均不可用。仓库已有 Ubuntu `ci-x86-correctness.yml` 和 `scripts/ci_x86_correctness.sh`，但未推送的 working tree 无法取得同 revision Linux 证据 | 不擅自 push；先建立干净本地 RC、完成最终报告，Linux x86_64 明确保留为远端 CI 待补项 |
+| 2026-08-04 | B7 | `9cad23c` | 建立首个干净代码 RC；Phase 2-P0 stable focused 三轮均 26/26 `OK`，几何平均 `0.7696 / 0.7657 / 0.7723`，中位数 `0.7696 >= 0.7336`；无筛选 stable 311/311 `OK`，整体/Core/Imgproc 为 `0.7411 / 0.6464 / 0.8490` | 运行 full 并生成最终报告 |
+| 2026-08-04 | B7 | `9cad23c` | 首次 full 369 `OK` + 1 expected unsupported，整体/Core/Imgproc 为 `0.7321 / 0.6427 / 0.8323`，性能达标；但 runner 在写入 untracked CSV 后才读取 git 状态，把原本干净的 RC 错标为 dirty，报告不能作为最终发布证据 | 在输出创建前冻结 source identity，提交新 RC 后完整重跑 full；不手改元数据 |
 
 ### 11.3 B0 当前证据
 
