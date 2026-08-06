@@ -1,7 +1,7 @@
 # cvh v0.1 高频 NEON 热点加速计划
 
 更新时间：2026-08-06  
-状态：H0–H1、H3 完成；H2 performance floor 待决；H4 本机闭环、外部 x86 runtime gate 待执行；H5 待执行
+状态：H0–H1、H3、H5 完成；H2 performance floor 待决；H4 本机闭环、外部 x86 runtime gate 待执行
 
 ## 1. 目的与阶段定位
 
@@ -259,7 +259,7 @@ case。若某项因 upstream 特殊 HAL 或平台库无法达到，必须保留�
 | H2 | Resize bilinear U8C3 NEON | floor 待决 | resize NEON header、tests、before/after |
 | H3 | Sobel/Scharr/spatialGradient shared NEON | 完成 | derivative3 NEON header、tests、before/after |
 | H4 | 全量正确性与跨平台 fallback | 本机闭环，外部 gate 待执行 | ARM runtime、x86 compile/runtime、sanitizer evidence |
-| H5 | product-auto full report 与文档收口 | 待执行 | date-named Markdown/CSV/metadata、完成定义 |
+| H5 | product-auto full report 与文档收口 | 完成 | date-named Markdown/CSV/metadata、完成定义 |
 
 ### H0：Focused matrix 与 telemetry
 
@@ -531,6 +531,27 @@ H0 只改善观测，不修改目标 kernel 性能。
 
 ### H5：报告与收口
 
+#### H5 实时记录（2026-08-06）
+
+- 从 clean `adac8bd` 以单线程 product `cvh_auto`、full profile、
+  `warmup=1/iters=10/repeats=3` 生成 370 行报告；metadata 明确记录
+  `repo_git_dirty=false`；
+- Markdown、CSV、metadata 三件套使用
+  `2026-08-06-v0.1-neon-hot-opencv-upstream-performance` 固定命名并已写入
+  results；369 行有效，唯一 `UNSUPPORTED` 仍是 upstream 没有单调用编码器的
+  BGR-to-NV12 对照；
+- 最终几何平均为 overall `0.7901`、Core `0.6434`、Imgproc `0.9671`；相对
+  同 fingerprint 的 pre-hot-kernel product-auto 快照，35 个目标 case 的
+  OpenCV/CVH 几何平均提升 `2.1259x`；
+- 排除 CVTCOLOR/RESIZE/SOBEL/SCHARR/SPATIAL_GRADIENT 后，334 个有效非目标
+  case 的 normalized OpenCV/CVH 几何平均保留 `0.9925x`，即回退 `0.75%`，
+  未超过 `1%` gate；其中 151 个非目标 Imgproc case 为 `1.0031x`，没有回退；
+- product-auto 实际观察到 30 个 direct NEON case：GEMM 10、CVTCOLOR 10、
+  Resize 2、Sobel 6、Scharr 1、spatialGradient 1；370 行的
+  `kernel_route` 均非空；
+- 已更新 results index 与 CPU direct-ISA route inventory；本轮未修改 API
+  coverage 或 v0.1 support matrix。
+
 1. 从 clean release-candidate revision 运行单线程 product `cvh_auto` full
    profile；
 2. 提交 Markdown、CSV、metadata 三件套；
@@ -639,7 +660,7 @@ git diff --check
 - [x] optimized、optimization-off、OpenCV differential、sanitizer、header
       compile、ODR 和 install consumer 全部通过；
 - [ ] Linux x86_64 编译与现有 UI/scalar runtime 无新增失败；
-- [ ] full Imgproc 与 full compare 无超过 `1%` 的稳定非目标回退；
-- [ ] 最终 product-auto 报告来自 clean revision，并提交 Markdown/CSV/metadata；
-- [ ] 本文状态、benchmark index 与必要 dispatch 文档实时同步；
-- [ ] API coverage 和 v0.1 support matrix 未因本轮性能实现发生变化。
+- [x] full Imgproc 与 full compare 无超过 `1%` 的稳定非目标回退；
+- [x] 最终 product-auto 报告来自 clean revision，并提交 Markdown/CSV/metadata；
+- [x] 本文状态、benchmark index 与必要 dispatch 文档实时同步；
+- [x] API coverage 和 v0.1 support matrix 未因本轮性能实现发生变化。

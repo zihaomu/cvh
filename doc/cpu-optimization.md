@@ -1,6 +1,6 @@
 # CPU Optimization Configuration And Dispatch
 
-Updated: 2026-08-03
+Updated: 2026-08-06
 
 ## 1. Public Configuration
 
@@ -107,7 +107,29 @@ An operator without a specialized ISA kernel can still use OpenCV UI. An
 operator without either optimized path remains a valid scalar implementation.
 Optimization availability must never change public API availability.
 
-## 7. OpenCV Comparison Policy
+## 7. Retained Direct-ISA Routes
+
+The following table is the current direct-ISA inventory. It describes product
+`Auto`; an ineligible case continues through the operator's existing OpenCV UI
+or scalar implementation.
+
+| Public operator | Direct-kernel eligibility | Apple/AArch64 `Auto` | x86 `Auto` |
+| --- | --- | --- | --- |
+| `gemm` | FP32 NN/NT, `m>=2`, `n>=8`, `k>=8`, work `>=32768`; AVX2 also requires `n>=16` | direct NEON packed-B kernel | direct AVX2/FMA when available, otherwise scalar |
+| `cvtColor` packed U8 | supported RGB/BGR/BGRA/RGBA shuffle, alpha/drop-alpha, BGRA/RGBA-to-gray, and gray expansion; width `>=16`, pixels `>=256` | direct NEON interior with scalar tail; existing BGR/RGB-to-gray UI route is deliberately retained | existing UI/scalar route |
+| `cvtColor` YUV U8 | YUV444 interleaved, YUV420 planar/semi-planar, and packed YUV422 supported codes; pixels `>=256`, plus format-specific even dimensions | direct NEON luma/chroma conversion with scalar tail | existing UI/scalar route |
+| `resize` | `INTER_LINEAR`, U8C3, destination width `>=8`, destination pixels `>=256` | direct NEON; 0.5x uses a specialized average kernel, other ratios use the NEON table-gather kernel | existing UI/scalar route |
+| `Sobel` / `Scharr` | 3x3 U8 C1/C3/C4 to S16/F32, first derivative in one axis, scale 1, delta 0, replicate/reflect101 border, workload `>=256` | shared direct NEON three-row interior; scalar border and overlapping NEON tail | existing UI/scalar route |
+| `spatialGradient` | U8C1, replicate/reflect101 border, pixels `>=256` | shared direct NEON three-row kernel emits dx/dy together | existing UI/scalar route |
+
+`NeonOnly` may force eligible AArch64 kernels for correctness tests.
+`OpenCVUIOnly` and `ScalarOnly` never enter a direct NEON kernel. Benchmark
+rows record the actual route as
+`algorithm_path -> dispatch_path -> isa_observed -> kernel_route`; the current
+full product report observed 30 direct-NEON rows (10 GEMM, 10 color, 2 resize,
+6 Sobel, 1 Scharr, and 1 spatial-gradient row).
+
+## 8. OpenCV Comparison Policy
 
 The optional OpenCV comparison defaults to product `Auto` dispatch so eligible
 specialized NEON/AVX2 kernels are measured before OpenCV UI and scalar
@@ -115,7 +137,7 @@ fallbacks. Diagnostic `cvh_ui` runs force `OpenCVUIOnly` and reject `neon` or
 `avx2`; `cvh_scalar` runs reject every accelerated dispatch. All modes use the
 same public target and report the actual per-case dispatch tag.
 
-## 8. Source Ownership
+## 9. Source Ownership
 
 | Area | Source |
 | --- | --- |
@@ -126,7 +148,7 @@ same public target and report the actual per-case dispatch tag.
 | OpenCV UI facade | `include/cvh/core/simd/opencv_ui.h` |
 | CMake propagation | `CMakeLists.txt` |
 
-## 9. Validation
+## 10. Validation
 
 Required checks include:
 
