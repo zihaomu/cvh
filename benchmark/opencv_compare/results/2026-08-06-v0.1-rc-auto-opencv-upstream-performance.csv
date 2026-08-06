@@ -1,0 +1,371 @@
+impl,profile,suite,op,variant,algorithm_path,dispatch_path,isa_observed,depth,channels,layout,shape,cvh_ms,opencv_ms,speedup,status,note
+cvh_auto,full,core_mat,MAT_CREATE,reuse_same_shape,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,480x640,0.000016,0.000001,0.073617,OK,cvh_ui_uses_cvh_headers;micro_iters_x1000
+cvh_auto,full,core_mat,MAT_CLONE,full_copy,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,480x640,0.003846,0.003788,0.984815,OK,
+cvh_auto,full,core_mat,MAT_COPYTO,continuous_reuse,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,480x640,0.003471,0.003492,1.005964,OK,
+cvh_auto,full,core_mat,MAT_SETTO,scalar_all,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,480x640,0.004033,0.004083,1.012372,OK,
+cvh_auto,full,core_mat,MAT_CONVERTTO,CV_8U_to_CV_32F,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,480x640,0.011588,0.011408,0.984535,OK,
+cvh_auto,full,core_mat,MAT_RESHAPE,to_column_view,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,480x640,0.000044,0.000015,0.330880,OK,micro_iters_x1000
+cvh_auto,full,core_mat,MAT_CREATE,reuse_same_shape,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,720x1280,0.000015,0.000001,0.073286,OK,cvh_ui_uses_cvh_headers;micro_iters_x1000
+cvh_auto,full,core_mat,MAT_CLONE,full_copy,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,720x1280,0.009963,0.010958,1.099955,OK,
+cvh_auto,full,core_mat,MAT_COPYTO,continuous_reuse,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,720x1280,0.009933,0.010396,1.046561,OK,
+cvh_auto,full,core_mat,MAT_SETTO,scalar_all,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,720x1280,0.011012,0.010804,0.981085,OK,
+cvh_auto,full,core_mat,MAT_CONVERTTO,CV_8U_to_CV_32F,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,720x1280,0.031679,0.034212,1.079971,OK,
+cvh_auto,full,core_mat,MAT_RESHAPE,to_column_view,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,720x1280,0.000043,0.000015,0.339645,OK,micro_iters_x1000
+cvh_auto,full,core_mat,MAT_CREATE,reuse_same_shape,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,1080x1920,0.000016,0.000001,0.071846,OK,cvh_ui_uses_cvh_headers;micro_iters_x1000
+cvh_auto,full,core_mat,MAT_CLONE,full_copy,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,1080x1920,0.024400,0.027204,1.114926,OK,
+cvh_auto,full,core_mat,MAT_COPYTO,continuous_reuse,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,1080x1920,0.025238,0.024075,0.953938,OK,
+cvh_auto,full,core_mat,MAT_SETTO,scalar_all,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,1080x1920,0.024521,0.024846,1.013250,OK,
+cvh_auto,full,core_mat,MAT_CONVERTTO,CV_8U_to_CV_32F,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,1080x1920,0.082954,0.080092,0.965493,OK,
+cvh_auto,full,core_mat,MAT_RESHAPE,to_column_view,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,1080x1920,0.000042,0.000015,0.350316,OK,micro_iters_x1000
+cvh_auto,full,core_mat,MAT_CREATE,reuse_same_shape,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,479x641,0.000015,0.000001,0.077622,OK,cvh_ui_uses_cvh_headers;micro_iters_x1000
+cvh_auto,full,core_mat,MAT_CLONE,full_copy,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,479x641,0.005154,0.003900,0.756664,OK,
+cvh_auto,full,core_mat,MAT_COPYTO,continuous_reuse,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,479x641,0.003729,0.003446,0.924005,OK,
+cvh_auto,full,core_mat,MAT_SETTO,scalar_all,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,479x641,0.004100,0.003879,0.946122,OK,
+cvh_auto,full,core_mat,MAT_CONVERTTO,CV_8U_to_CV_32F,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,479x641,0.012258,0.014429,1.177079,OK,
+cvh_auto,full,core_mat,MAT_RESHAPE,to_column_view,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,479x641,0.000045,0.000015,0.336282,OK,micro_iters_x1000
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.009338,0.006988,0.748327,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.009683,0.006950,0.717731,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.009250,0.007008,0.757654,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,scalar,scalar,unknown,CV_8U,1,continuous,480x640,0.262258,0.065004,0.247863,OK,correctness=upstream_pass;u8_divide_abs_tolerance=1
+cvh_auto,full,core_mat,TRANSPOSE,continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.006633,0.006438,0.970468,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.027354,0.021829,0.798020,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.028383,0.021912,0.772021,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.027400,0.022262,0.812500,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,scalar,scalar,unknown,CV_8U,3,continuous,480x640,0.528150,0.194171,0.367643,OK,correctness=upstream_pass;u8_divide_abs_tolerance=1
+cvh_auto,full,core_mat,TRANSPOSE,continuous,scalar,scalar,unknown,CV_8U,3,continuous,480x640,0.231558,0.080187,0.346295,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.040796,0.030846,0.756102,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.040446,0.027071,0.669311,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.040529,0.030096,0.742575,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.040512,0.031637,0.780932,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,TRANSPOSE,continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.073196,0.073725,1.007229,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.114408,0.089512,0.782394,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.114225,0.085008,0.744219,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.114062,0.094467,0.828201,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.114304,0.107338,0.939052,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,TRANSPOSE,continuous,scalar,scalar,unknown,CV_32F,3,continuous,480x640,0.275300,0.157021,0.570363,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.029967,0.022512,0.751251,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.030058,0.016908,0.562517,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.030517,0.022558,0.739215,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,scalar,scalar,unknown,CV_8U,1,continuous,720x1280,0.952554,0.212138,0.222704,OK,correctness=upstream_pass;u8_divide_abs_tolerance=1
+cvh_auto,full,core_mat,TRANSPOSE,continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.054000,0.029288,0.542361,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,720x1280,0.090000,0.062058,0.689537,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,720x1280,0.088262,0.066621,0.754804,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,720x1280,0.091567,0.067429,0.736393,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,scalar,scalar,unknown,CV_8U,3,continuous,720x1280,1.649800,0.612392,0.371191,OK,correctness=upstream_pass;u8_divide_abs_tolerance=1
+cvh_auto,full,core_mat,TRANSPOSE,continuous,scalar,scalar,unknown,CV_8U,3,continuous,720x1280,0.737563,0.372938,0.505635,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,720x1280,0.117617,0.093708,0.796726,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,720x1280,0.117550,0.096317,0.819367,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,720x1280,0.115908,0.094033,0.811273,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,720x1280,0.115437,0.092875,0.804548,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,TRANSPOSE,continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,720x1280,0.282246,0.281692,0.998036,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,720x1280,0.347079,0.278796,0.803263,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,720x1280,0.338246,0.277521,0.820471,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,720x1280,0.347579,0.315208,0.906868,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,720x1280,0.376908,0.371062,0.984490,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,TRANSPOSE,continuous,scalar,scalar,unknown,CV_32F,3,continuous,720x1280,0.908079,0.618200,0.680778,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.062758,0.050438,0.803679,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.065700,0.050463,0.768075,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.062487,0.050433,0.807096,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,scalar,scalar,unknown,CV_8U,1,continuous,1080x1920,1.810283,0.458050,0.253027,OK,correctness=upstream_pass;u8_divide_abs_tolerance=1
+cvh_auto,full,core_mat,TRANSPOSE,continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.095787,0.118767,1.239897,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,1080x1920,0.192646,0.151929,0.788645,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,1080x1920,0.194487,0.148217,0.762088,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,1080x1920,0.194162,0.155167,0.799159,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,scalar,scalar,unknown,CV_8U,3,continuous,1080x1920,3.620317,1.389929,0.383925,OK,correctness=upstream_pass;u8_divide_abs_tolerance=1
+cvh_auto,full,core_mat,TRANSPOSE,continuous,scalar,scalar,unknown,CV_8U,3,continuous,1080x1920,1.746763,0.715992,0.409896,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,1080x1920,0.262554,0.199667,0.760478,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,1080x1920,0.252754,0.202058,0.799426,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,1080x1920,0.255788,0.199021,0.778071,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,1080x1920,0.256429,0.211617,0.825244,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,TRANSPOSE,continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,1080x1920,0.569104,0.580288,1.019651,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,1080x1920,0.742629,0.604629,0.814174,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,1080x1920,0.738571,0.615487,0.833349,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,1080x1920,0.737917,0.636979,0.863213,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,1080x1920,0.764354,0.627437,0.820873,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,TRANSPOSE,continuous,scalar,scalar,unknown,CV_32F,3,continuous,1080x1920,2.527904,1.397267,0.552737,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.009425,0.007117,0.755088,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.009796,0.007062,0.720972,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.009683,0.006875,0.709985,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,scalar,scalar,unknown,CV_8U,1,continuous,479x641,0.261225,0.066675,0.255240,OK,correctness=upstream_pass;u8_divide_abs_tolerance=1
+cvh_auto,full,core_mat,TRANSPOSE,continuous,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.010200,0.009312,0.912990,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,479x641,0.028817,0.022071,0.765907,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,479x641,0.026908,0.021404,0.795450,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_8U,3,continuous,479x641,0.027492,0.021642,0.787211,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,scalar,scalar,unknown,CV_8U,3,continuous,479x641,0.527146,0.199725,0.378880,OK,correctness=upstream_pass;u8_divide_abs_tolerance=1
+cvh_auto,full,core_mat,TRANSPOSE,continuous,scalar,scalar,unknown,CV_8U,3,continuous,479x641,0.236446,0.080142,0.338943,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,479x641,0.039850,0.028896,0.725117,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,479x641,0.039642,0.029292,0.738913,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,479x641,0.040021,0.029379,0.734094,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,479x641,0.040271,0.029333,0.728401,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,TRANSPOSE,continuous,opencv_ui,opencv_ui,unknown,CV_32F,1,continuous,479x641,0.031583,0.030383,0.962005,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,ADD,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,479x641,0.113371,0.087771,0.774192,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,SUBTRACT,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,479x641,0.113592,0.088154,0.776062,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,MULTIPLY,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,479x641,0.113138,0.088483,0.782086,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,DIVIDE,mat_mat_continuous,opencv_ui,opencv_ui,unknown,CV_32F,3,continuous,479x641,0.112696,0.088596,0.786151,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,TRANSPOSE,continuous,scalar,scalar,unknown,CV_32F,3,continuous,479x641,0.268196,0.112417,0.419159,OK,correctness=upstream_pass
+cvh_auto,full,core_mat,GEMM,fp32_nn_end_to_end,gemm_nn,neon,neon,CV_32F,1,continuous,128x128x128,0.031838,0.003708,0.116476,OK,correctness=upstream_pass;shape=square_128;component=public_end_to_end;iters=10
+cvh_auto,full,core_mat,GEMM,fp32_nn_pack_once,gemm_nn_packed_b,neon,neon,CV_32F,1,continuous,128x128x128,0.031658,0.003517,0.111083,OK,correctness=upstream_pass;shape=square_128;component=public_pack_once;opencv_reuses_B_without_public_pack_handle;iters=10
+cvh_auto,full,core_mat,GEMM,fp32_nn_end_to_end,gemm_nn,neon,neon,CV_32F,1,continuous,32x512x64,0.019117,0.108704,5.686348,OK,correctness=upstream_pass;shape=skinny_m32_k512_n64;component=public_end_to_end;iters=10
+cvh_auto,full,core_mat,GEMM,fp32_nn_pack_once,gemm_nn_packed_b,neon,neon,CV_32F,1,continuous,32x512x64,0.017038,0.107933,6.335043,OK,correctness=upstream_pass;shape=skinny_m32_k512_n64;component=public_pack_once;opencv_reuses_B_without_public_pack_handle;iters=10
+cvh_auto,full,core_mat,GEMM,fp32_nn_end_to_end,gemm_nn,neon,neon,CV_32F,1,continuous,256x32x256,0.032154,0.005146,0.160035,OK,correctness=upstream_pass;shape=wide_m256_k32_n256;component=public_end_to_end;iters=10
+cvh_auto,full,core_mat,GEMM,fp32_nn_pack_once,gemm_nn_packed_b,neon,neon,CV_32F,1,continuous,256x32x256,0.031462,0.005333,0.169513,OK,correctness=upstream_pass;shape=wide_m256_k32_n256;component=public_pack_once;opencv_reuses_B_without_public_pack_handle;iters=10
+cvh_auto,full,core_mat,GEMM,fp32_nn_end_to_end,gemm_nn,neon,neon,CV_32F,1,continuous,256x256x256,0.255350,0.020808,0.081490,OK,correctness=upstream_pass;shape=square_256;component=public_end_to_end;iters=10
+cvh_auto,full,core_mat,GEMM,fp32_nn_pack_once,gemm_nn_packed_b,neon,neon,CV_32F,1,continuous,256x256x256,0.249117,0.020783,0.083428,OK,correctness=upstream_pass;shape=square_256;component=public_pack_once;opencv_reuses_B_without_public_pack_handle;iters=10
+cvh_auto,full,core_mat,GEMM,fp32_nn_end_to_end,gemm_nn,neon,neon,CV_32F,1,continuous,512x512x512,2.011625,0.167458,0.083245,OK,correctness=upstream_pass;shape=square_512;component=public_end_to_end;iters=1
+cvh_auto,full,core_mat,GEMM,fp32_nn_pack_once,gemm_nn_packed_b,neon,neon,CV_32F,1,continuous,512x512x512,1.990208,0.160459,0.080624,OK,correctness=upstream_pass;shape=square_512;component=public_pack_once;opencv_reuses_B_without_public_pack_handle;iters=1
+cvh_auto,full,imgproc,RESIZE,linear_half_u8c1,resize_linear,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.017692,0.011621,0.656854,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2GRAY_u8,cvtcolor_bgr2gray,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.029288,0.029313,1.000854,OK,
+cvh_auto,full,imgproc,THRESHOLD,binary_u8,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,480x640,0.004629,0.004675,1.009916,OK,
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate,gauss5x5_fixedpoint,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.068804,0.026983,0.392177,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate,box3x3,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.040529,0.041379,1.020970,OK,
+cvh_auto,full,imgproc,LUT,invert_u8,header_fastpath,header_fastpath,unknown,CV_8U,1,continuous,480x640,0.033162,0.025479,0.768314,OK,
+cvh_auto,full,imgproc,COPY_MAKE_BORDER,2px_replicate,header_fastpath,header_fastpath,unknown,CV_8U,1,continuous,480x640,0.007121,0.006037,0.847868,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate,cross3_direct,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.030554,0.083758,2.741306,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate,binomial3_typed,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.039283,0.081879,2.084321,OK,
+cvh_auto,full,imgproc,SOBEL,dx1_ksize3_replicate,derivative_convolve,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.275175,0.105104,0.381954,OK,
+cvh_auto,full,imgproc,CANNY,aperture3_l1,canny_fused_gradient_ring_nms,opencv_ui,unknown,CV_8U,1,continuous,480x640,3.806112,3.957096,1.039669,OK,
+cvh_auto,full,imgproc,ERODE,3x3_replicate,morph_rect3x3,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.035204,0.020604,0.585276,OK,
+cvh_auto,full,imgproc,DILATE,3x3_replicate,morph_rect3x3,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.035275,0.021538,0.610560,OK,
+cvh_auto,full,imgproc,WARP_AFFINE,linear_inverse_replicate,affine_translation_u8_fixed_scanline,scalar,unknown,CV_8U,1,continuous,480x640,0.069475,0.286254,4.120248,OK,U8 linear path uses fixed coordinate blocks and shared sampling
+cvh_auto,full,imgproc,REMAP,float_linear_u8c3,remap_float_fixed_blocks,scalar,unknown,CV_8U,3,continuous,480x640,0.725337,0.708083,0.976212,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,REMAP,fixed_linear_u8c3,remap_fixed_contiguous_blocks,scalar,unknown,CV_8U,3,continuous,480x640,0.452088,0.695208,1.537774,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,WARP_PERSPECTIVE,projective_linear_u8c3,fixed_coordinate_block,scalar,unknown,CV_8U,3,continuous,480x640,2.168917,0.989367,0.456157,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,GET_RECT_SUB_PIX,full_frame_u8c3,public_header_scalar,public_header_scalar,unknown,CV_8U,3,continuous,480x640,0.010658,0.139971,13.132563,OK,no qualified SIMD fast path
+cvh_auto,full,imgproc,RESIZE,linear_half_u8c1,resize_linear,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.055467,0.037142,0.669620,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2GRAY_u8,cvtcolor_bgr2gray,opencv_ui,unknown,CV_8U,3,continuous,720x1280,0.089992,0.090904,1.010139,OK,
+cvh_auto,full,imgproc,THRESHOLD,binary_u8,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,720x1280,0.014217,0.014375,1.011135,OK,
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate,gauss5x5_fixedpoint,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.164946,0.084317,0.511178,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate,box3x3,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.112146,0.114954,1.025042,OK,
+cvh_auto,full,imgproc,LUT,invert_u8,header_fastpath,header_fastpath,unknown,CV_8U,1,continuous,720x1280,0.099812,0.076608,0.767522,OK,
+cvh_auto,full,imgproc,COPY_MAKE_BORDER,2px_replicate,header_fastpath,header_fastpath,unknown,CV_8U,1,continuous,720x1280,0.018433,0.017529,0.950948,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate,cross3_direct,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.080350,0.248204,3.089038,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate,binomial3_typed,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.107829,0.242088,2.245102,OK,
+cvh_auto,full,imgproc,SOBEL,dx1_ksize3_replicate,derivative_convolve,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.810750,0.309329,0.381535,OK,
+cvh_auto,full,imgproc,CANNY,aperture3_l1,canny_fused_gradient_ring_nms,opencv_ui,unknown,CV_8U,1,continuous,720x1280,11.664879,12.090071,1.036451,OK,
+cvh_auto,full,imgproc,ERODE,3x3_replicate,morph_rect3x3,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.088417,0.060462,0.683836,OK,
+cvh_auto,full,imgproc,DILATE,3x3_replicate,morph_rect3x3,opencv_ui,unknown,CV_8U,1,continuous,720x1280,0.088408,0.060421,0.683428,OK,
+cvh_auto,full,imgproc,WARP_AFFINE,linear_inverse_replicate,affine_translation_u8_fixed_scanline,scalar,unknown,CV_8U,1,continuous,720x1280,0.205858,0.866875,4.211026,OK,U8 linear path uses fixed coordinate blocks and shared sampling
+cvh_auto,full,imgproc,REMAP,float_linear_u8c3,remap_float_fixed_blocks,scalar,unknown,CV_8U,3,continuous,720x1280,1.897796,2.125212,1.119832,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,REMAP,fixed_linear_u8c3,remap_fixed_contiguous_blocks,scalar,unknown,CV_8U,3,continuous,720x1280,1.108392,2.068475,1.866195,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,WARP_PERSPECTIVE,projective_linear_u8c3,fixed_coordinate_block,scalar,unknown,CV_8U,3,continuous,720x1280,6.269525,3.020142,0.481718,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,GET_RECT_SUB_PIX,full_frame_u8c3,public_header_scalar,public_header_scalar,unknown,CV_8U,3,continuous,720x1280,0.032571,0.429746,13.194205,OK,no qualified SIMD fast path
+cvh_auto,full,imgproc,RESIZE,linear_half_u8c1,resize_linear,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.120850,0.080804,0.668632,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2GRAY_u8,cvtcolor_bgr2gray,opencv_ui,unknown,CV_8U,3,continuous,1080x1920,0.203771,0.200271,0.982824,OK,
+cvh_auto,full,imgproc,THRESHOLD,binary_u8,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,1080x1920,0.032679,0.033242,1.017216,OK,
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate,gauss5x5_fixedpoint,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.347783,0.194500,0.559256,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate,box3x3,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.258492,0.257258,0.995229,OK,
+cvh_auto,full,imgproc,LUT,invert_u8,header_fastpath,header_fastpath,unknown,CV_8U,1,continuous,1080x1920,0.218879,0.172387,0.787592,OK,
+cvh_auto,full,imgproc,COPY_MAKE_BORDER,2px_replicate,header_fastpath,header_fastpath,unknown,CV_8U,1,continuous,1080x1920,0.040321,0.039667,0.983778,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate,cross3_direct,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.177221,0.542950,3.063692,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate,binomial3_typed,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.236671,0.565121,2.387793,OK,
+cvh_auto,full,imgproc,SOBEL,dx1_ksize3_replicate,derivative_convolve,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,1.795971,0.768367,0.427828,OK,
+cvh_auto,full,imgproc,CANNY,aperture3_l1,canny_fused_gradient_ring_nms,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,26.537962,27.716417,1.044406,OK,
+cvh_auto,full,imgproc,ERODE,3x3_replicate,morph_rect3x3,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.181438,0.132367,0.729544,OK,
+cvh_auto,full,imgproc,DILATE,3x3_replicate,morph_rect3x3,opencv_ui,unknown,CV_8U,1,continuous,1080x1920,0.186104,0.132729,0.713198,OK,
+cvh_auto,full,imgproc,WARP_AFFINE,linear_inverse_replicate,affine_translation_u8_fixed_scanline,scalar,unknown,CV_8U,1,continuous,1080x1920,0.440588,1.944638,4.413737,OK,U8 linear path uses fixed coordinate blocks and shared sampling
+cvh_auto,full,imgproc,REMAP,float_linear_u8c3,remap_float_fixed_blocks,scalar,unknown,CV_8U,3,continuous,1080x1920,4.056821,5.085758,1.253631,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,REMAP,fixed_linear_u8c3,remap_fixed_contiguous_blocks,scalar,unknown,CV_8U,3,continuous,1080x1920,2.301183,4.709650,2.046621,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,WARP_PERSPECTIVE,projective_linear_u8c3,fixed_coordinate_block,scalar,unknown,CV_8U,3,continuous,1080x1920,14.038721,6.810542,0.485126,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,GET_RECT_SUB_PIX,full_frame_u8c3,public_header_scalar,public_header_scalar,unknown,CV_8U,3,continuous,1080x1920,0.078812,0.974187,12.360825,OK,no qualified SIMD fast path
+cvh_auto,full,imgproc,RESIZE,linear_half_u8c1,resize_linear,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.018142,0.012858,0.708774,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2GRAY_u8,cvtcolor_bgr2gray,opencv_ui,unknown,CV_8U,3,continuous,479x641,0.029750,0.030292,1.018205,OK,
+cvh_auto,full,imgproc,THRESHOLD,binary_u8,headers_baseline,headers_baseline,unknown,CV_8U,1,continuous,479x641,0.004638,0.004646,1.001790,OK,
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate,gauss5x5_fixedpoint,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.068867,0.028608,0.415416,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate,box3x3,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.040821,0.039875,0.976830,OK,
+cvh_auto,full,imgproc,LUT,invert_u8,header_fastpath,header_fastpath,unknown,CV_8U,1,continuous,479x641,0.033371,0.025554,0.765763,OK,
+cvh_auto,full,imgproc,COPY_MAKE_BORDER,2px_replicate,header_fastpath,header_fastpath,unknown,CV_8U,1,continuous,479x641,0.006750,0.006213,0.920370,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate,cross3_direct,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.031383,0.083988,2.676184,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate,binomial3_typed,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.039512,0.084862,2.147738,OK,
+cvh_auto,full,imgproc,SOBEL,dx1_ksize3_replicate,derivative_convolve,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.275883,0.105679,0.383057,OK,
+cvh_auto,full,imgproc,CANNY,aperture3_l1,canny_fused_gradient_ring_nms,opencv_ui,unknown,CV_8U,1,continuous,479x641,3.799638,3.961271,1.042539,OK,
+cvh_auto,full,imgproc,ERODE,3x3_replicate,morph_rect3x3,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.036558,0.020983,0.573967,OK,
+cvh_auto,full,imgproc,DILATE,3x3_replicate,morph_rect3x3,opencv_ui,unknown,CV_8U,1,continuous,479x641,0.037325,0.021092,0.565082,OK,
+cvh_auto,full,imgproc,WARP_AFFINE,linear_inverse_replicate,affine_translation_u8_fixed_scanline,scalar,unknown,CV_8U,1,continuous,479x641,0.071429,0.297296,4.162105,OK,U8 linear path uses fixed coordinate blocks and shared sampling
+cvh_auto,full,imgproc,REMAP,float_linear_u8c3,remap_float_fixed_blocks,scalar,unknown,CV_8U,3,continuous,479x641,0.548754,0.712638,1.298646,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,REMAP,fixed_linear_u8c3,remap_fixed_contiguous_blocks,scalar,unknown,CV_8U,3,continuous,479x641,0.296700,0.696762,2.348374,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,WARP_PERSPECTIVE,projective_linear_u8c3,fixed_coordinate_block,scalar,unknown,CV_8U,3,continuous,479x641,2.158896,1.031188,0.477646,OK,Shared fixed coordinate block and U8 bilinear sampling path
+cvh_auto,full,imgproc,GET_RECT_SUB_PIX,full_frame_u8c3,public_header_scalar,public_header_scalar,unknown,CV_8U,3,continuous,479x641,0.017233,0.141708,8.222935,OK,no qualified SIMD fast path
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate_u8c3,gauss5x5_fixedpoint,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.174379,0.087813,0.503572,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate_u8c3,box3x3,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.119367,0.113850,0.953784,OK,
+cvh_auto,full,imgproc,COPY_MAKE_BORDER,2px_replicate_u8c3,header_fastpath,header_fastpath,unknown,CV_8U,3,continuous,480x640,0.019083,0.018133,0.950223,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate_u8c3,cross3_direct,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.082992,0.247421,2.981272,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate_u8c3,binomial3_typed,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.109371,0.245417,2.243894,OK,
+cvh_auto,full,imgproc,WARP_AFFINE,linear_inverse_replicate_u8c3,affine_translation_u8_fixed_scanline,scalar,unknown,CV_8U,3,continuous,480x640,0.212817,0.743025,3.491385,OK,Translation scanline separates border and contiguous interior sampling
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate_u8c4,gauss5x5_fixedpoint,opencv_ui,unknown,CV_8U,4,continuous,480x640,0.226200,0.118654,0.524554,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate_u8c4,box3x3,opencv_ui,unknown,CV_8U,4,continuous,480x640,0.155717,0.151913,0.975570,OK,
+cvh_auto,full,imgproc,COPY_MAKE_BORDER,2px_replicate_u8c4,header_fastpath,header_fastpath,unknown,CV_8U,4,continuous,480x640,0.025617,0.023312,0.910051,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate_u8c4,cross3_direct,opencv_ui,unknown,CV_8U,4,continuous,480x640,0.107250,0.326900,3.048019,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate_u8c4,binomial3_typed,opencv_ui,unknown,CV_8U,4,continuous,480x640,0.146754,0.327612,2.232389,OK,
+cvh_auto,full,imgproc,WARP_AFFINE,linear_inverse_replicate_u8c4,affine_translation_u8_fixed_scanline,scalar,unknown,CV_8U,4,continuous,480x640,0.315671,0.479117,1.517773,OK,Translation scanline separates border and contiguous interior sampling
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate_f32c1,gauss5x5_ring_f32,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.103775,0.104117,1.003292,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate_f32c1,box3x3,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.064621,0.095504,1.477917,OK,
+cvh_auto,full,imgproc,COPY_MAKE_BORDER,2px_replicate_f32c1,header_fastpath,header_fastpath,unknown,CV_32F,1,continuous,480x640,0.025442,0.023613,0.928106,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate_f32c1,cross3_direct,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.053946,0.064537,1.196337,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate_f32c1,binomial3_typed,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.073388,0.071196,0.970135,OK,
+cvh_auto,full,imgproc,WARP_AFFINE,linear_inverse_replicate_f32c1,affine_translation_f32_scanline,scalar,unknown,CV_32F,1,continuous,480x640,0.919500,0.456967,0.496973,OK,Translation scanline separates border and contiguous interior sampling
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate_f32c3,gauss5x5_ring_f32,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.276496,0.288087,1.041924,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate_f32c3,box3x3,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.191904,0.272508,1.420023,OK,
+cvh_auto,full,imgproc,COPY_MAKE_BORDER,2px_replicate_f32c3,header_fastpath,header_fastpath,unknown,CV_32F,3,continuous,480x640,0.070513,0.075450,1.070023,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate_f32c3,cross3_direct,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.150325,0.171463,1.140612,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate_f32c3,binomial3_typed,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.210296,0.193750,0.921321,OK,
+cvh_auto,full,imgproc,WARP_AFFINE,linear_inverse_replicate_f32c3,affine_translation_f32_scanline,scalar,unknown,CV_32F,3,continuous,480x640,1.211275,0.654871,0.540646,OK,Translation scanline separates border and contiguous interior sampling
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate_f32c4,gauss5x5_ring_f32,opencv_ui,unknown,CV_32F,4,continuous,480x640,0.353983,0.381450,1.077593,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate_f32c4,box3x3,opencv_ui,unknown,CV_32F,4,continuous,480x640,0.239146,0.362712,1.516700,OK,
+cvh_auto,full,imgproc,COPY_MAKE_BORDER,2px_replicate_f32c4,header_fastpath,header_fastpath,unknown,CV_32F,4,continuous,480x640,0.095988,0.095608,0.996049,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate_f32c4,cross3_direct,opencv_ui,unknown,CV_32F,4,continuous,480x640,0.197317,0.220396,1.116966,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate_f32c4,binomial3_typed,opencv_ui,unknown,CV_32F,4,continuous,480x640,0.281875,0.245283,0.870185,OK,
+cvh_auto,full,imgproc,WARP_AFFINE,linear_inverse_replicate_f32c4,affine_translation_f32_scanline,scalar,unknown,CV_32F,4,continuous,480x640,1.347687,0.705617,0.523576,OK,Translation scanline separates border and contiguous interior sampling
+cvh_auto,full,imgproc,LUT,invert_u8c3,header_fastpath,header_fastpath,unknown,CV_8U,3,continuous,480x640,0.097700,0.076679,0.784842,OK,
+cvh_auto,full,imgproc,SOBEL,dx1_ksize3_replicate_u8c3,derivative_convolve,scalar,unknown,CV_8U,3,continuous,480x640,0.583575,0.303183,0.519528,OK,
+cvh_auto,full,imgproc,ERODE,3x3_replicate_u8c3,morph_rect3x3,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.090000,0.060400,0.671111,OK,
+cvh_auto,full,imgproc,DILATE,3x3_replicate_u8c3,morph_rect3x3,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.089987,0.061396,0.682270,OK,
+cvh_auto,full,imgproc,LUT,invert_u8c4,header_fastpath,header_fastpath,unknown,CV_8U,4,continuous,480x640,0.131354,0.101504,0.772751,OK,
+cvh_auto,full,imgproc,SOBEL,dx1_ksize3_replicate_u8c4,derivative_convolve,scalar,unknown,CV_8U,4,continuous,480x640,0.848213,0.396396,0.467331,OK,
+cvh_auto,full,imgproc,ERODE,3x3_replicate_u8c4,morph_rect3x3,opencv_ui,unknown,CV_8U,4,continuous,480x640,0.115992,0.079846,0.688376,OK,
+cvh_auto,full,imgproc,DILATE,3x3_replicate_u8c4,morph_rect3x3,opencv_ui,unknown,CV_8U,4,continuous,480x640,0.116650,0.080558,0.690598,OK,
+cvh_auto,full,imgproc,RESIZE,nearest_0.75_u8c3,header_fastpath,header_fastpath,unknown,CV_8U,3,continuous,480x640,0.115367,0.088083,0.763508,OK,
+cvh_auto,full,imgproc,RESIZE,nearest_exact_0.75_u8c3,header_fastpath,header_fastpath,unknown,CV_8U,3,continuous,480x640,0.117583,0.094583,0.804394,OK,
+cvh_auto,full,imgproc,RESIZE,linear_0.75_u8c3,header_fastpath,header_fastpath,unknown,CV_8U,3,continuous,480x640,0.333608,0.056279,0.168698,OK,
+cvh_auto,full,imgproc,RESIZE,linear_0.75_f32c1,headers_baseline,headers_baseline,unknown,CV_32F,1,continuous,480x640,0.174313,0.079979,0.458826,OK,
+cvh_auto,full,imgproc,RESIZE,linear_0.75_f32c3,headers_baseline,headers_baseline,unknown,CV_32F,3,continuous,480x640,0.385462,0.238821,0.619569,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2RGB_u8,header_fastpath,header_fastpath,unknown,CV_8U,3,continuous,480x640,0.115425,0.014863,0.128763,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2BGRA_u8,header_fastpath,header_fastpath,unknown,CV_8U,3,continuous,480x640,0.245204,0.017458,0.071199,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGRA2GRAY_u8,header_fastpath,header_fastpath,unknown,CV_8U,4,continuous,480x640,0.157829,0.036533,0.231474,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2GRAY_f32,header_fastpath,header_fastpath,unknown,CV_32F,3,continuous,480x640,0.079308,0.039262,0.495062,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2RGB_f32,header_fastpath,header_fastpath,unknown,CV_32F,3,continuous,480x640,0.136571,0.058221,0.426306,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2YUV_u8,header_fastpath,header_fastpath,unknown,CV_8U,3,yuv444_interleaved,480x640,0.271104,0.068917,0.254207,OK,
+cvh_auto,full,imgproc,CVTCOLOR,YUV2BGR_u8,header_fastpath,header_fastpath,unknown,CV_8U,3,yuv444_interleaved,480x640,0.276354,0.052404,0.189627,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2I420_u8,header_fastpath,header_fastpath,unknown,CV_8U,3,yuv420_i420,480x640,0.347275,0.052550,0.151321,OK,
+cvh_auto,full,imgproc,CVTCOLOR,I420_TO_BGR_u8,header_fastpath,header_fastpath,unknown,CV_8U,1,yuv420_i420,480x640,0.824646,0.065333,0.079226,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2YUY2_u8,header_fastpath,header_fastpath,unknown,CV_8U,3,yuv422_yuy2,480x640,0.325017,0.056525,0.173914,OK,
+cvh_auto,full,imgproc,CVTCOLOR,YUY2_TO_BGR_u8,header_fastpath,header_fastpath,unknown,CV_8U,2,yuv422_yuy2,480x640,0.372962,0.064112,0.171901,OK,
+cvh_auto,full,imgproc,CVTCOLOR,NV12_TO_BGR_u8,header_fastpath,header_fastpath,unknown,CV_8U,1,yuv420_nv12,480x640,0.376467,0.065658,0.174407,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2NV12_u8,unsupported,unsupported,unknown,CV_8U,3,yuv420_nv12,480x640,-1.000000,-1.000000,0.000000,UNSUPPORTED,upstream OpenCV has NV12 decode but no single-call BGR-to-NV12 encoder
+cvh_auto,full,imgproc,RESIZE,linear_0.75_u8c3_roi,header_fastpath,header_fastpath,unknown,CV_8U,3,roi,479x641,0.332263,0.055400,0.166736,OK,
+cvh_auto,full,imgproc,CVTCOLOR,BGR2GRAY_u8_roi,cvtcolor_bgr2gray,opencv_ui,unknown,CV_8U,3,roi,479x641,0.030983,0.030192,0.974448,OK,
+cvh_auto,full,imgproc,THRESHOLD,binary_f32c3_roi,header_fastpath,header_fastpath,unknown,CV_32F,3,roi,479x641,0.067754,0.059029,0.871226,OK,
+cvh_auto,full,imgproc,BOX_FILTER,3x3_replicate_u8c3_roi,box3x3,opencv_ui,unknown,CV_8U,3,roi,479x641,0.120575,0.113654,0.942602,OK,
+cvh_auto,full,imgproc,GAUSSIAN,5x5_replicate_u8c3_roi,gauss5x5_fixedpoint,opencv_ui,unknown,CV_8U,3,roi,479x641,0.178704,0.294233,1.646482,OK,
+cvh_auto,full,imgproc,FILTER2D,3x3_replicate_u8c3_roi,cross3_direct,opencv_ui,unknown,CV_8U,3,roi,479x641,0.082525,0.245954,2.980360,OK,
+cvh_auto,full,imgproc,SEP_FILTER2D,3x3_replicate_u8c3_roi,binomial3_typed,opencv_ui,unknown,CV_8U,3,roi,479x641,0.112088,0.245942,2.194194,OK,
+cvh_auto,full,core_mat,ABSDIFF,mat_mat_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.027733,0.021492,0.774942,OK,phase1_representative_case
+cvh_auto,full,core_mat,BITWISE_AND,mat_mat_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.031079,0.021862,0.703445,OK,phase1_representative_case
+cvh_auto,full,core_mat,BITWISE_NOT,u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.030446,0.014750,0.484467,OK,phase1_representative_case
+cvh_auto,full,core_mat,BITWISE_OR,mat_mat_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.031021,0.022146,0.713899,OK,phase1_representative_case
+cvh_auto,full,core_mat,BITWISE_XOR,mat_mat_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.031238,0.021883,0.700546,OK,phase1_representative_case
+cvh_auto,full,core_mat,IN_RANGE,scalar_bounds_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.175892,0.107250,0.609750,OK,phase1_representative_case
+cvh_auto,full,core_mat,MIN,mat_mat_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.034500,0.022246,0.644806,OK,phase1_representative_case
+cvh_auto,full,core_mat,MAX,mat_mat_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.034367,0.018096,0.526553,OK,phase1_representative_case
+cvh_auto,full,core_mat,SCALE_ADD,f32c3,phase1_public_header,scalar,unknown,CV_32F,3,continuous,480x640,0.109479,0.088221,0.805824,OK,phase1_representative_case
+cvh_auto,full,core_mat,CONVERT_SCALE_ABS,f32c3_to_u8c3,phase1_public_header,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.102883,0.062658,0.609023,OK,phase1_representative_case
+cvh_auto,full,core_mat,CONVERT_FP16,f32c1_to_fp16,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.014850,0.018079,1.217455,OK,phase1_representative_case
+cvh_auto,full,core_mat,SQRT,positive_f32c1,phase1_public_header,scalar,unknown,CV_32F,1,continuous,480x640,0.037192,0.036712,0.987115,OK,phase1_representative_case
+cvh_auto,full,core_mat,POW,power_1_75_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.491729,0.407350,0.828403,OK,phase1_representative_case
+cvh_auto,full,core_mat,EXP,bounded_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.165917,0.075854,0.457182,OK,phase1_representative_case
+cvh_auto,full,core_mat,LOG,positive_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.266842,0.123913,0.464367,OK,phase1_representative_case
+cvh_auto,full,core_mat,CHECK_RANGE,quiet_f32c1,phase1_public_header,public_header_baseline,unknown,CV_32F,1,continuous,480x640,0.154696,0.110108,0.711773,OK,phase1_representative_case
+cvh_auto,full,core_mat,PATCH_NANS,one_nan_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.029979,0.018575,0.619596,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORM,inf_single_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.038308,0.012192,0.318251,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORM,l1_single_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.072642,0.022500,0.309740,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORM,l2_single_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.072225,0.034579,0.478769,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORM,inf_diff_zero_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.097667,0.040254,0.412158,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORM,l1_diff_zero_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.101454,0.057912,0.570825,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORM,l2_diff_zero_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.141900,0.034692,0.244480,OK,phase1_representative_case
+cvh_auto,full,core_mat,SUM,f32c3,phase1_public_header,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.097996,0.189517,1.933927,OK,phase1_representative_case
+cvh_auto,full,core_mat,MEAN,f32c3,phase1_public_header,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.093904,0.187304,1.994633,OK,phase1_representative_case
+cvh_auto,full,core_mat,MEAN_STD_DEV,f32c3,phase1_public_header,opencv_ui,unknown,CV_32F,3,continuous,480x640,0.410929,0.127763,0.310911,OK,phase1_representative_case
+cvh_auto,full,core_mat,COUNT_NON_ZERO,u8c1,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.008575,0.008554,0.997574,OK,phase1_representative_case
+cvh_auto,full,core_mat,HAS_NON_ZERO,u8c1,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.000008,0.000013,1.506024,OK,phase1_representative_case
+cvh_auto,full,core_mat,FIND_NON_ZERO,random_dense_u8c1,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.494279,0.193004,0.390476,OK,phase1_representative_case
+cvh_auto,full,core_mat,FIND_NON_ZERO,all_zero_u8c1,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.009000,0.073079,8.119900,OK,phase1_representative_case
+cvh_auto,full,core_mat,FIND_NON_ZERO,sparse_tail_u8c1,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.009062,0.073104,8.066659,OK,phase1_representative_case
+cvh_auto,full,core_mat,MIN_MAX_IDX,f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.044754,0.031983,0.714644,OK,phase1_representative_case
+cvh_auto,full,core_mat,MIN_MAX_LOC,f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.044812,0.031829,0.710275,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis0_sum_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.064425,0.013783,0.213943,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis0_avg_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.064329,0.013971,0.217179,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis0_max_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.037392,0.017158,0.458880,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis0_min_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.037692,0.017154,0.455119,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis0_sum2_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.065192,0.017142,0.262941,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis1_sum_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.049958,0.010112,0.202419,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis1_avg_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.049829,0.010837,0.217493,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis1_max_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.053663,0.147929,2.756659,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis1_min_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.053092,0.162600,3.062631,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE,axis1_sum2_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.065929,0.241154,3.657779,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE_ARG_MAX,axis0_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.141117,0.148438,1.051878,OK,phase1_representative_case
+cvh_auto,full,core_mat,REDUCE_ARG_MIN,axis0_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.139296,0.136946,0.983129,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORMALIZE,inf_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.072592,0.028846,0.397370,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORMALIZE,l1_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.123550,0.041896,0.339101,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORMALIZE,l2_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.107725,0.052729,0.489479,OK,phase1_representative_case
+cvh_auto,full,core_mat,NORMALIZE,minmax_f32c1,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.080075,0.055571,0.693986,OK,phase1_representative_case
+cvh_auto,full,core_mat,BORDER_INTERPOLATE,reflect101_batch4096,phase1_public_header,public_header_baseline,unknown,S32,1,continuous,micro_batch,0.006081,0.005496,0.903734,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,core_mat,COPY_TO,masked_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.022417,0.022225,0.991448,OK,phase1_representative_case
+cvh_auto,full,core_mat,EXTRACT_CHANNEL,channel1_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.015263,0.042554,2.788154,OK,phase1_representative_case
+cvh_auto,full,core_mat,INSERT_CHANNEL,channel1_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.025171,0.043246,1.718094,OK,phase1_representative_case
+cvh_auto,full,core_mat,MIX_CHANNELS,reverse_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.035912,0.129783,3.613878,OK,phase1_representative_case
+cvh_auto,full,core_mat,FLIP,horizontal_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.016454,0.016158,0.982023,OK,phase1_representative_case
+cvh_auto,full,core_mat,FLIP_ND,axis1_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.016221,0.127388,7.853294,OK,phase1_representative_case
+cvh_auto,full,core_mat,ROTATE,clockwise90_u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.251733,0.098013,0.389351,OK,phase1_representative_case
+cvh_auto,full,core_mat,REPEAT,two_by_two_u8c1,phase1_public_header,scalar,unknown,CV_8U,1,continuous,480x640,0.004662,0.004542,0.974091,OK,phase1_representative_case
+cvh_auto,full,core_mat,HCONCAT,two_halves_u8c1,phase1_public_header,scalar,unknown,CV_8U,1,continuous,480x640,0.004625,0.006142,1.327935,OK,phase1_representative_case
+cvh_auto,full,core_mat,VCONCAT,two_halves_u8c1,phase1_public_header,scalar,unknown,CV_8U,1,continuous,480x640,0.003321,0.003546,1.067755,OK,phase1_representative_case
+cvh_auto,full,core_mat,BROADCAST,row_to_image_u8c1,phase1_public_header,scalar,unknown,CV_8U,1,continuous,480x640,0.004296,0.003033,0.706092,OK,phase1_representative_case
+cvh_auto,full,core_mat,SWAP,mat_headers,phase1_public_header,public_header_baseline,unknown,CV_8U,1,continuous,micro_batch,0.000005,0.000005,1.000000,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,imgproc,GET_STRUCTURING_ELEMENT,ellipse7x7,phase1_public_header,public_header_baseline,unknown,CV_8U,1,continuous,micro_batch,0.000097,0.000075,0.772559,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,imgproc,GET_GAUSSIAN_KERNEL,ksize15_f32,phase1_public_header,public_header_baseline,unknown,CV_32F,1,continuous,micro_batch,0.000242,0.000925,3.825954,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,imgproc,GET_DERIV_KERNELS,dx1_ksize5_f32,phase1_public_header,public_header_baseline,unknown,CV_32F,1,continuous,micro_batch,0.000135,0.000087,0.645037,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,imgproc,GET_GABOR_KERNEL,15x15_f32,phase1_public_header,public_header_baseline,unknown,CV_32F,1,continuous,micro_batch,0.000960,0.000940,0.979147,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,imgproc,CREATE_HANNING_WINDOW,64x64_f32,phase1_public_header,opencv_ui,unknown,CV_32F,1,continuous,480x640,0.000592,0.001125,1.901623,OK,phase1_representative_case
+cvh_auto,full,imgproc,INTEGRAL,u8c1_to_s32,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.072842,0.040204,0.551938,OK,phase1_representative_case
+cvh_auto,full,imgproc,SCHARR,dx1_u8_to_f32,derivative3_direct,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.275283,0.107950,0.392141,OK,phase1_representative_case
+cvh_auto,full,imgproc,LAPLACIAN,ksize3_u8_to_f32,derivative3_direct,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.252846,0.110883,0.438541,OK,phase1_representative_case
+cvh_auto,full,imgproc,SPATIAL_GRADIENT,ksize3_u8_to_s16,spatial_gradient3,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.184283,0.032533,0.176540,OK,phase1_representative_case
+cvh_auto,full,imgproc,SQR_BOX_FILTER,3x3_u8_to_f32,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.116429,0.174233,1.496476,OK,phase1_representative_case
+cvh_auto,full,imgproc,MEDIAN_BLUR,ksize5_u8c1,median5_ui_overlap_tail,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.420950,0.246096,0.584620,OK,phase1_representative_case
+cvh_auto,full,imgproc,BILATERAL_FILTER,d5_u8c1,bilateral_u8_c1_padded,scalar,unknown,CV_8U,1,continuous,480x640,1.689658,0.868371,0.513933,OK,phase1_representative_case
+cvh_auto,full,imgproc,STACK_BLUR,5x5_u8c1,stack_blur_u8_k5_typed,scalar,unknown,CV_8U,1,continuous,480x640,0.090158,0.119608,1.326648,OK,phase1_representative_case
+cvh_auto,full,imgproc,ADAPTIVE_THRESHOLD,mean11_u8c1,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.316142,0.206687,0.653781,OK,phase1_representative_case
+cvh_auto,full,imgproc,THRESHOLD_WITH_MASK,binary_masked_u8c1,phase1_public_header,public_header_baseline,unknown,CV_8U,1,continuous,480x640,0.164942,0.165571,1.003815,OK,phase1_representative_case
+cvh_auto,full,imgproc,EQUALIZE_HIST,u8c1,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.082088,0.084792,1.032943,OK,phase1_representative_case
+cvh_auto,full,imgproc,APPLY_COLOR_MAP,jet_u8c1,phase1_public_header,public_header_baseline,unknown,CV_8U,1,continuous,480x640,0.657946,0.215050,0.326851,OK,phase1_representative_case
+cvh_auto,full,imgproc,ACCUMULATE,u8c1_to_f32,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.073917,0.018083,0.244645,OK,phase1_representative_case
+cvh_auto,full,imgproc,ACCUMULATE_PRODUCT,u8c1_to_f32,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.058804,0.020054,0.341034,OK,phase1_representative_case
+cvh_auto,full,imgproc,ACCUMULATE_SQUARE,u8c1_to_f32,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.057658,0.018179,0.315292,OK,phase1_representative_case
+cvh_auto,full,imgproc,ACCUMULATE_WEIGHTED,alpha0_1_u8c1,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.057704,0.020046,0.347389,OK,phase1_representative_case
+cvh_auto,full,imgproc,BLEND_LINEAR,u8c3_f32_weights,phase1_public_header,public_header_baseline,unknown,CV_8U,3,continuous,480x640,0.505671,0.204817,0.405039,OK,phase1_representative_case
+cvh_auto,full,imgproc,PYR_DOWN,u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.307517,0.058492,0.190206,OK,phase1_representative_case
+cvh_auto,full,imgproc,PYR_UP,u8c3,phase1_public_header,opencv_ui,unknown,CV_8U,3,continuous,480x640,0.207708,0.144512,0.695747,OK,phase1_representative_case
+cvh_auto,full,imgproc,BUILD_PYRAMID,levels3_u8c1,phase1_public_header,opencv_ui,unknown,CV_8U,1,continuous,480x640,0.068092,0.018467,0.271204,OK,phase1_representative_case
+cvh_auto,full,imgproc,CVT_COLOR_TWO_PLANE,nv12_to_bgr,phase1_public_header,public_header_baseline,unknown,CV_8U,1,continuous,480x640,0.313746,0.065617,0.209140,OK,phase1_representative_case
+cvh_auto,full,imgproc,DEMOSAICING,bayer_bg_to_bgr,phase1_public_header,public_header_baseline,unknown,CV_8U,1,continuous,480x640,0.457196,0.038400,0.083990,OK,phase1_representative_case
+cvh_auto,full,imgproc,CONVERT_MAPS,f32_pair_to_fixed,phase1_public_header,opencv_ui,unknown,CV_32F,2,continuous,480x640,0.099592,0.058333,0.585726,OK,phase1_representative_case
+cvh_auto,full,imgproc,GET_AFFINE_TRANSFORM,three_points,phase1_public_header,public_header_baseline,unknown,CV_32F,1,continuous,micro_batch,0.000127,0.000242,1.895373,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,imgproc,GET_PERSPECTIVE_TRANSFORM,four_points_lu,phase1_public_header,public_header_baseline,unknown,CV_32F,1,continuous,micro_batch,0.000261,0.000612,2.348273,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,imgproc,GET_ROTATION_MATRIX_2D,point_angle_scale,phase1_public_header,public_header_baseline,unknown,CV_32F,1,continuous,micro_batch,0.000076,0.000068,0.900976,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,imgproc,GET_ROTATION_MATRIX_2D_,matx23d,phase1_public_header,public_header_baseline,unknown,CV_64F,1,continuous,micro_batch,0.000004,0.000005,1.100962,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,imgproc,INVERT_AFFINE_TRANSFORM,f64_2x3,phase1_public_header,public_header_baseline,unknown,CV_64F,1,continuous,micro_batch,0.000041,0.000057,1.387950,OK,phase1_representative_case;micro_warmup=2;micro_iterations=100;micro_repeats=3
+cvh_auto,full,core_mat,RANDU,C3,header_fastpath,header_fastpath,unknown,CV_8U,3,continuous,320x240,0.333596,0.250421,0.750671,OK,phase2_p0_representative_case;correctness=upstream_pass;random_streams=independent;shape_and_range=aligned;engine=xorshift64star;distributions=hoisted;channels=unrolled;rows=typed
+cvh_auto,full,core_mat,RANDN,C3,header_fastpath,header_fastpath,unknown,CV_8U,3,continuous,320x240,1.105396,0.421662,0.381458,OK,phase2_p0_representative_case;correctness=upstream_pass;random_streams=independent;shape_and_range=aligned;engine=xorshift64star;distributions=hoisted;channels=unrolled;rows=typed
+cvh_auto,full,core_mat,RANDU,C3,header_fastpath,header_fastpath,unknown,CV_32F,3,continuous,320x240,0.313804,0.227983,0.726514,OK,phase2_p0_representative_case;correctness=upstream_pass;random_streams=independent;shape_and_range=aligned;engine=xorshift64star;distributions=hoisted;channels=unrolled;rows=typed
+cvh_auto,full,core_mat,RANDN,C3,header_fastpath,header_fastpath,unknown,CV_32F,3,continuous,320x240,1.056550,0.413992,0.391833,OK,phase2_p0_representative_case;correctness=upstream_pass;random_streams=independent;shape_and_range=aligned;engine=xorshift64star;distributions=hoisted;channels=unrolled;rows=typed
+cvh_auto,full,core_mat,RANDU,C1,header_fastpath,header_fastpath,unknown,CV_8U,1,roi,320x240,0.111025,0.025875,0.233056,OK,phase2_p0_representative_case;correctness=upstream_pass;random_streams=independent;shape_and_range=aligned;engine=xorshift64star;distributions=hoisted;channels=unrolled;rows=typed
+cvh_auto,full,core_mat,TRANSFORM,F32_C3_TO_C4,header_fastpath,header_fastpath,unknown,CV_32F,3,continuous,16384x1,0.033462,0.035829,1.070727,OK,phase2_p0_representative_case;correctness=upstream_pass;coefficients=prepacked;channels=specialized;span=continuous
+cvh_auto,full,core_mat,PERSPECTIVE_TRANSFORM,F32_C3,header_fastpath,header_fastpath,unknown,CV_32F,3,continuous,16384x1,0.029400,0.029325,0.997449,OK,phase2_p0_representative_case;correctness=upstream_pass;coefficients=prepacked;channels=specialized;span=continuous
+cvh_auto,full,imgproc,CONNECTED_COMPONENTS,SPARSE_8,public_header_scalar,public_header_scalar,unknown,CV_8U,1,continuous,320x240,0.054813,0.029738,0.542531,OK,phase2_p0_representative_case;correctness=upstream_pass;no_ui_fastpath
+cvh_auto,full,imgproc,CONNECTED_COMPONENTS_WITH_STATS,SPARSE_8,public_header_scalar,public_header_scalar,unknown,CV_8U,1,continuous,320x240,0.168108,0.123788,0.736355,OK,phase2_p0_representative_case;correctness=upstream_pass;no_ui_fastpath
+cvh_auto,full,imgproc,FIND_CONTOURS,RETR_LIST_SIMPLE,public_header_scalar,public_header_scalar,unknown,CV_8U,1,continuous,320x240,0.084967,0.060179,0.708269,OK,phase2_p0_representative_case;correctness=upstream_pass;no_ui_fastpath
+cvh_auto,full,imgproc,BOUNDING_RECT,S32_POINTS,public_header_scalar,public_header_scalar,unknown,CV_32S,2,vector,16384 points,0.001498,0.003732,2.490553,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;no_ui_fastpath
+cvh_auto,full,imgproc,CONTOUR_AREA,S32_POINTS,public_header_scalar,public_header_scalar,unknown,CV_32S,2,vector,16384 points,0.009596,0.009509,0.990882,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;no_ui_fastpath
+cvh_auto,full,imgproc,ARC_LENGTH,S32_POINTS,public_header_scalar,public_header_scalar,unknown,CV_32S,2,vector,16384 points,0.009659,0.008460,0.875809,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;no_ui_fastpath
+cvh_auto,full,imgproc,APPROX_POLY_DP,EPS_1_CLOSED,public_header_scalar,public_header_scalar,unknown,CV_32S,2,vector,16384 points,1.753823,0.961604,0.548290,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;no_ui_fastpath
+cvh_auto,full,imgproc,CONVEX_HULL,CCW_POINTS,public_header_scalar,public_header_scalar,unknown,CV_32S,2,vector,16384 points,0.083069,0.043610,0.524979,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;no_ui_fastpath
+cvh_auto,full,imgproc,IS_CONTOUR_CONVEX,S32_POINTS,public_header_scalar,public_header_scalar,unknown,CV_32S,2,vector,16384 points,0.000002,0.000008,4.009615,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;no_ui_fastpath
+cvh_auto,full,imgproc,MOMENTS,S32_POINTS,public_header_scalar,public_header_scalar,unknown,CV_32S,2,vector,16384 points,0.033848,0.033831,0.999495,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;no_ui_fastpath
+cvh_auto,full,imgproc,CALC_HIST,U8C1_256,header_fastpath,header_fastpath,unknown,CV_8U,1,continuous,320x240,0.023300,0.015071,0.646815,OK,phase2_p0_representative_case;correctness=upstream_pass;method=split;rows=typed;accumulator=local
+cvh_auto,full,imgproc,COMPARE_HIST,METHOD_0,header_fastpath,header_fastpath,unknown,CV_32F,1,continuous,256 bins,0.000138,0.000144,1.048436,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;method=split;rows=typed;accumulator=local
+cvh_auto,full,imgproc,COMPARE_HIST,METHOD_1,header_fastpath,header_fastpath,unknown,CV_32F,1,continuous,256 bins,0.000152,0.000121,0.797278,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;method=split;rows=typed;accumulator=local
+cvh_auto,full,imgproc,COMPARE_HIST,METHOD_2,header_fastpath,header_fastpath,unknown,CV_32F,1,continuous,256 bins,0.000081,0.000057,0.702523,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;method=split;rows=typed;accumulator=local
+cvh_auto,full,imgproc,COMPARE_HIST,METHOD_3,header_fastpath,header_fastpath,unknown,CV_32F,1,continuous,256 bins,0.000132,0.000118,0.893057,OK,phase2_p0_representative_case;correctness=upstream_pass;micro_warmup=2;micro_iterations=100;micro_repeats=3;method=split;rows=typed;accumulator=local
+cvh_auto,full,imgproc,MATCH_TEMPLATE,METHOD_0,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,320x240/16x16,1.421554,1.049804,0.738490,OK,phase2_p0_representative_case;correctness=upstream_pass
+cvh_auto,full,imgproc,MATCH_TEMPLATE,METHOD_1,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,320x240/16x16,1.482846,1.067492,0.719894,OK,phase2_p0_representative_case;correctness=upstream_pass
+cvh_auto,full,imgproc,MATCH_TEMPLATE,METHOD_2,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,320x240/16x16,1.278813,0.745208,0.582735,OK,phase2_p0_representative_case;correctness=upstream_pass
+cvh_auto,full,imgproc,MATCH_TEMPLATE,METHOD_3,opencv_ui,opencv_ui,unknown,CV_8U,1,continuous,320x240/16x16,1.477912,0.941792,0.637245,OK,phase2_p0_representative_case;correctness=upstream_pass

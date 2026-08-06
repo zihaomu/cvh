@@ -2,7 +2,7 @@
 
 Last updated: 2026-08-06
 
-cvh baseline: `6f7135e`
+cvh baseline: `cbd5076`
 
 ## 1. Purpose
 

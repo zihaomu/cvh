@@ -14,12 +14,12 @@ affiliated with or endorsed by the OpenCV project.
 
 Repository: [github.com/zihaomu/cvh](https://github.com/zihaomu/cvh)
 
-> **Latest performance report:** [cvh v0.1 RC vs OpenCV upstream benchmark (2026-08-04, English)](benchmark/opencv_compare/results/2026-08-04-v0.1-rc-opencv-upstream-performance.en.md)
+> **Latest performance report:** [cvh v0.1 RC product-auto vs OpenCV upstream benchmark (2026-08-06, English)](benchmark/opencv_compare/results/2026-08-06-v0.1-rc-auto-opencv-upstream-performance.en.md)
 >
 > Apple M5, single-threaded full profile: 370 cases using the single public
-> `cvh::headers` target. This immutable snapshot forced `cvh_ui`; it remains UI
-> diagnostic evidence and must not be used to infer product-auto GEMM
-> performance. New reports default to `cvh_auto`. Raw data, metadata, and
+> `cvh::headers` target with product `cvh_auto` dispatch. The report records
+> `algorithm_path -> dispatch_path -> isa_observed` for every case; all 10 GEMM
+> cases selected the direct NEON backend on this host. Raw data, metadata, and
 > immutable older snapshots are listed in the
 > [benchmark result index](benchmark/opencv_compare/results/README.md).
 

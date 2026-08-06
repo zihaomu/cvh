@@ -121,9 +121,14 @@ Current caveats:
 
 ## Dated Snapshots
 
-- [2026-08-04 v0.1 RC OpenCV upstream performance (English)](results/2026-08-04-v0.1-rc-opencv-upstream-performance.en.md):
-  clean `f94f2d8` Apple M5, single-threaded full profile; 369 valid rows,
-  overall geometric mean `0.7289` and Imgproc geometric mean `0.8366`.
+- [2026-08-06 v0.1 RC product-auto OpenCV upstream performance (English)](results/2026-08-06-v0.1-rc-auto-opencv-upstream-performance.en.md):
+  clean `cbd5076` cvh snapshot on Apple M5, single-threaded full profile; 369
+  valid rows, overall geometric mean `0.7406`, Core `0.6539`, and Imgproc
+  `0.8371`. Every case records its algorithm, dispatch, and observed ISA; all
+  10 GEMM cases selected direct NEON.
+- [2026-08-04 v0.1 RC forced-UI OpenCV upstream performance (English)](results/2026-08-04-v0.1-rc-opencv-upstream-performance.en.md):
+  clean `f94f2d8` cvh snapshot on Apple M5, single-threaded full profile; this
+  is historical diagnostic evidence that excluded direct NEON/AVX2 dispatch.
 - [2026-08-03 OpenCV upstream performance (English)](results/2026-08-03-opencv-upstream-performance.en.md):
   current Apple M5, single-threaded full profile; all CVH rows use `cvh_ui`.
 - [2026-07-25 OpenCV upstream performance (English)](results/2026-07-25-opencv-upstream-performance.en.md):

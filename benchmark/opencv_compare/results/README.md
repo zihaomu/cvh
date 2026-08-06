@@ -2,22 +2,27 @@
 
 ## Current Snapshot
 
-- [v0.1 RC English report](2026-08-04-v0.1-rc-opencv-upstream-performance.en.md)
-- [v0.1 RC raw CSV](2026-08-04-v0.1-rc-opencv-upstream-performance.csv)
-- [v0.1 RC run metadata](2026-08-04-v0.1-rc-opencv-upstream-performance.meta.json)
+- [v0.1 RC product-auto English report](2026-08-06-v0.1-rc-auto-opencv-upstream-performance.en.md)
+- [v0.1 RC product-auto raw CSV](2026-08-06-v0.1-rc-auto-opencv-upstream-performance.csv)
+- [v0.1 RC product-auto run metadata](2026-08-06-v0.1-rc-auto-opencv-upstream-performance.meta.json)
 
-This is the latest archived full comparison. It used the diagnostic `cvh_ui`
-mode and therefore excluded specialized NEON/AVX2 dispatch; it must not be used
-to infer product-auto GEMM performance. The full profile contains 370 rows
-collected on Apple M5 with one thread. Of these, 369 are valid and the one
-expected `UNSUPPORTED` row records that upstream OpenCV has no single-call
-BGR-to-NV12 encoder. The clean `f94f2d8` release-candidate snapshot records
-geometric means of `0.7289` overall and `0.8366` for Imgproc. New reports
-default to `cvh_auto`; the next reviewed full snapshot will replace this index
-entry without rewriting the immutable artifact above.
+This is the current reviewed full comparison. It used product `cvh_auto`
+dispatch on Apple M5 with one thread and contains 370 rows. Of these, 369 are
+valid and the one expected `UNSUPPORTED` row records that upstream OpenCV has
+no single-call BGR-to-NV12 encoder. The clean `cbd5076` cvh snapshot records
+geometric means of `0.7406` overall, `0.6539` for Core, and `0.8371` for
+Imgproc. Every row records `algorithm_path`, `dispatch_path`, and
+`isa_observed`; all 10 GEMM rows selected direct NEON. The upstream checkout's
+dirty marker is limited to its `.gitignore`; the compared OpenCV source commit
+is `d48bf69`.
 
 ## Historical Snapshots
 
+- [2026-08-04 v0.1 RC forced-UI English report](2026-08-04-v0.1-rc-opencv-upstream-performance.en.md),
+  [CSV](2026-08-04-v0.1-rc-opencv-upstream-performance.csv), and
+  [metadata](2026-08-04-v0.1-rc-opencv-upstream-performance.meta.json): this
+  diagnostic snapshot excluded direct NEON/AVX2 dispatch and must not be used
+  to infer product-auto GEMM performance.
 - [2026-08-04 pre-closure English report](2026-08-04-opencv-upstream-performance.en.md),
   [CSV](2026-08-04-opencv-upstream-performance.csv), and
   [metadata](2026-08-04-opencv-upstream-performance.meta.json)

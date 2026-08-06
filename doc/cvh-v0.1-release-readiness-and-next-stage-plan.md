@@ -1,8 +1,8 @@
 # cvh 0.1 Release Readiness And Next-Stage Plan
 
-Updated: 2026-08-03
+Updated: 2026-08-06
 
-Current baseline: `6f7135e` (`docs(ci): close x86 performance floor evidence`)
+Current baseline: `cbd5076` (`release: align support scope and auto dispatch reporting`)
 
 Current stage: P7.1 is complete. P7.2 user onboarding and release packaging is
 the next product milestone.
