@@ -1,7 +1,7 @@
 # cvh v0.1 高频 NEON 热点加速计划
 
 更新时间：2026-08-06  
-状态：H0–H1、H3 完成；H2 performance floor 待决；H4 进行中；H5 待执行
+状态：H0–H1、H3 完成；H2 performance floor 待决；H4 本机闭环、外部 x86 runtime gate 待执行；H5 待执行
 
 ## 1. 目的与阶段定位
 
@@ -258,7 +258,7 @@ case。若某项因 upstream 特殊 HAL 或平台库无法达到，必须保留�
 | H1 | CVTCOLOR packed/YUV U8 NEON | 完成 | color NEON header、tests、before/after |
 | H2 | Resize bilinear U8C3 NEON | floor 待决 | resize NEON header、tests、before/after |
 | H3 | Sobel/Scharr/spatialGradient shared NEON | 完成 | derivative3 NEON header、tests、before/after |
-| H4 | 全量正确性与跨平台 fallback | 进行中 | ARM runtime、x86 compile/runtime、sanitizer evidence |
+| H4 | 全量正确性与跨平台 fallback | 本机闭环，外部 gate 待执行 | ARM runtime、x86 compile/runtime、sanitizer evidence |
 | H5 | product-auto full report 与文档收口 | 待执行 | date-named Markdown/CSV/metadata、完成定义 |
 
 ### H0：Focused matrix 与 telemetry
@@ -482,6 +482,42 @@ H0 只改善观测，不修改目标 kernel 性能。
 
 ### H4：全量与跨平台
 
+#### H4 实时记录（2026-08-06）
+
+- Apple ARM64 optimization-on canonical gate 首轮中，installed-header contract
+  12/12、CTest 20/20、Core 213/213、Imgproc 203/203 均实际通过；最终 report
+  checker 因维护清单仍为 Imgproc 194 而退出 1；
+- H1–H3 共新增 9 个长期 dispatch/correctness test，已将
+  `header_gate_expectations.json` 的 arm64/x86_64 Imgproc 期望同步为 203；
+  使用首轮 XML 重新校验已通过。待所有 H4 检查完成后再从头复跑 canonical
+  gate，取得完整退出码 0 证据；
+- 当前主机为 Darwin arm64，且未安装 Rosetta、Docker/Podman 或 qemu-x86_64；
+  本机可执行 x86_64 cross-compile，但不能伪造 Linux x86_64 runtime 结果。
+  x86 runtime/ASan 证据若无法由现有 CI runner 执行，将明确保留为外部 gate，
+  不标记本机通过。
+- optimization-off 已完成全量验证：CTest 18/18、Core 200 passed + 13 个
+  UI-only case 按设计 skip、Imgproc 203/203；
+- OpenCV upstream differential 已增加实际越过 direct-kernel threshold 的热路径
+  合同，覆盖 packed/YUV、Resize U8C3、Sobel C1/C3/C4、Scharr 与
+  spatialGradient；全量结果 31/31，通过时 ARM64 eligible case 同时断言
+  `DispatchTag::NEON`；
+- Apple sanitizer build 使用 ASan+UBSan 重编译成功；Apple ASan runtime 明确
+  不支持 leak detection，因此本机使用 `detect_leaks=0`，Linux CI 继续保留
+  `detect_leaks=1`。首轮 halt-on-error 发现历史
+  `saturate_cast<unsigned>(negative floating point)` 直接转换 UB，现已按既有
+  模 2^32 合同改为先取模再转换并补边界断言；修复后 ASan+UBSan
+  halt-on-error 下 Core 213/213、Imgproc 203/203 全部通过。
+- 使用 `CMAKE_OSX_ARCHITECTURES=x86_64` 完成真实 x86_64 cross-compile：Core/
+  Imgproc 独立头 smoke、两组 ODR smoke、Core 及 Imgproc 全量测试程序共 6 个
+  target 全部链接成功，`file`/Mach header 均确认产物为 x86_64；该证据关闭
+  x86 compile 项，不替代当前主机无法执行的 Linux x86_64 runtime gate。
+- 修复后的源码已从头复跑 Apple ARM64 optimization-on canonical gate 并整体
+  退出 0：installed-header consumer 12/12、CTest 20/20、Core 213/213、
+  Imgproc 203/203，最终 report checker 使用更新后的维护计数通过；
+- optimization-off 在最终源码上再次复跑：CTest 18/18，Core 200 passed +
+  13 designed UI-only skips，Imgproc 203/203；本机 H4 可执行项至此全部关闭，
+  唯一未关闭项是当前环境没有执行能力的 Linux x86_64 runtime。
+
 - Apple ARM64：执行 Auto/NeonOnly/UIOnly/ScalarOnly targeted correctness；
 - optimization-on/off full unit tests；
 - OpenCV contract full differential；
@@ -593,14 +629,14 @@ git diff --check
 - [x] packed RGB/BGRA U8 达到 `relative >= 0.70`；
 - [x] 目标 YUV U8 路径达到 `relative >= 0.45`；
 - [ ] Resize bilinear U8C3 达到 `relative >= 0.50`；
-- [ ] Sobel/Scharr 目标路径达到 `relative >= 0.65`；
-- [ ] spatialGradient 达到 `relative >= 0.50`；
-- [ ] 所有保留的 direct NEON kernel 通过 `1.25x` candidate retention gate；
-- [ ] Auto 在 eligible Apple ARM64 case 选择 NEON；UIOnly/ScalarOnly 不执行
+- [x] Sobel/Scharr 目标路径达到 `relative >= 0.65`；
+- [x] spatialGradient 达到 `relative >= 0.50`；
+- [x] 所有保留的 direct NEON kernel 通过 `1.25x` candidate retention gate；
+- [x] Auto 在 eligible Apple ARM64 case 选择 NEON；UIOnly/ScalarOnly 不执行
       direct NEON；
-- [ ] 小图、unsupported parameter、ROI、non-contiguous、border 和 tail 均走
+- [x] 小图、unsupported parameter、ROI、non-contiguous、border 和 tail 均走
       正确 fallback；
-- [ ] optimized、optimization-off、OpenCV differential、sanitizer、header
+- [x] optimized、optimization-off、OpenCV differential、sanitizer、header
       compile、ODR 和 install consumer 全部通过；
 - [ ] Linux x86_64 编译与现有 UI/scalar runtime 无新增失败；
 - [ ] full Imgproc 与 full compare 无超过 `1%` 的稳定非目标回退；

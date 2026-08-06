@@ -108,9 +108,31 @@ template<> inline unsigned saturate_cast<unsigned>(short v)  { return (unsigned)
 template<> inline unsigned saturate_cast<unsigned>(int v)    { return (unsigned)std::max(v, (int)0); }
 template<> inline unsigned saturate_cast<unsigned>(int64 v)  { return (unsigned)((uint64)v <= (uint64)UINT_MAX ? v : v > 0 ? UINT_MAX : 0); }
 template<> inline unsigned saturate_cast<unsigned>(uint64 v) { return (unsigned)std::min(v, (uint64)UINT_MAX); }
-// we intentionally do not clip negative numbers, to make -1 become 0xffffffff etc.
-template<> inline unsigned saturate_cast<unsigned>(float v)  { return static_cast<unsigned>(std::round(v)); }
-template<> inline unsigned saturate_cast<unsigned>(double v) { return static_cast<unsigned>(std::round(v)); }
+// We intentionally do not clip negative numbers, to make -1 become 0xffffffff
+// etc.  A direct floating-point-to-unsigned conversion is undefined when the
+// rounded value is negative, so reduce it modulo 2^32 before converting.
+namespace detail
+{
+inline unsigned round_to_unsigned_modulo(double v)
+{
+    const double rounded = std::round(v);
+    if (!std::isfinite(rounded))
+        return 0u;
+    if (rounded >= static_cast<double>(INT_MIN) &&
+        rounded <= static_cast<double>(INT_MAX))
+    {
+        return static_cast<unsigned>(static_cast<int>(rounded));
+    }
+
+    constexpr double modulus = static_cast<double>(UINT_MAX) + 1.0;
+    double reduced = std::fmod(rounded, modulus);
+    if (reduced < 0.0)
+        reduced += modulus;
+    return static_cast<unsigned>(reduced);
+}
+} // namespace detail
+template<> inline unsigned saturate_cast<unsigned>(float v)  { return detail::round_to_unsigned_modulo(v); }
+template<> inline unsigned saturate_cast<unsigned>(double v) { return detail::round_to_unsigned_modulo(v); }
 
 template<> inline uint64 saturate_cast<uint64>(schar v)      { return (uint64)std::max(v, (schar)0); }
 template<> inline uint64 saturate_cast<uint64>(short v)      { return (uint64)std::max(v, (short)0); }

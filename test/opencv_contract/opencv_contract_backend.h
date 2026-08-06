@@ -93,6 +93,15 @@ enum class ImgprocGeometrySamplingOpId
     RectSubPixU8F32,
 };
 
+enum class ImgprocHotColorOpId
+{
+    BgrToRgb,
+    BgrToBgra,
+    BgraToGray,
+    BgrToYuv,
+    YuvToBgr,
+};
+
 struct CoreReductionSummary
 {
     double sums[4];
@@ -382,6 +391,22 @@ bool validate_imgproc_resize_linear_u8(int src_rows,
                                        std::uint32_t seed,
                                        const void* actual_data,
                                        std::size_t actual_bytes);
+
+bool validate_imgproc_hot_cvtcolor_u8(ImgprocHotColorOpId op,
+                                      int rows,
+                                      int cols,
+                                      std::uint32_t seed,
+                                      const void* actual_data,
+                                      std::size_t actual_bytes);
+
+bool validate_imgproc_sobel3_u8(int rows,
+                                int cols,
+                                int channels,
+                                std::uint32_t seed,
+                                int dx,
+                                int dy,
+                                const void* actual_data,
+                                std::size_t actual_bytes);
 
 bool validate_phase2_random_zero_stddev(const void* actual_data,
                                         std::size_t actual_bytes);

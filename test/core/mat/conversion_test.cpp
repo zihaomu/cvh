@@ -5,6 +5,9 @@ using namespace cvh;
 
 TEST(MatConversionTest, convert_to_uint8_preserves_shape_and_saturates)
 {
+    EXPECT_EQ(saturate_cast<unsigned>(-5.0), UINT_MAX - 4u);
+    EXPECT_EQ(saturate_cast<unsigned>(UINT_MAX + 1.0), 0u);
+
     Mat src({1, 5}, CV_32F);
     float* src_data = reinterpret_cast<float*>(src.data);
     src_data[0] = -5.1f;

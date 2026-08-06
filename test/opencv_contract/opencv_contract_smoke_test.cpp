@@ -371,6 +371,111 @@ TEST(OpenCVContractSmoke_TEST, imgproc_resize_linear_u8_matches_upstream)
         dst.total() * dst.elemSize()));
 }
 
+TEST(OpenCVContractSmoke_TEST, v01_neon_hot_paths_match_upstream)
+{
+    using cvh_test_opencv_contract::ImgprocHotColorOpId;
+    constexpr int rows = 37;
+    constexpr int cols = 67;
+    constexpr std::uint32_t seed = 0x51a7c39du;
+    const auto expect_direct_neon_on_arm = []() {
+        if (cpu::neon_runtime_available())
+        {
+            EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::NEON);
+        }
+        else
+        {
+            EXPECT_NE(cpu::last_dispatch_tag(), cpu::DispatchTag::NEON);
+        }
+    };
+
+    struct ColorCase
+    {
+        ImgprocHotColorOpId op;
+        int source_type;
+        int code;
+    };
+    for (const ColorCase color :
+         {ColorCase{ImgprocHotColorOpId::BgrToRgb, CV_8UC3, COLOR_BGR2RGB},
+          ColorCase{ImgprocHotColorOpId::BgrToBgra, CV_8UC3, COLOR_BGR2BGRA},
+          ColorCase{ImgprocHotColorOpId::BgraToGray, CV_8UC4, COLOR_BGRA2GRAY},
+          ColorCase{ImgprocHotColorOpId::BgrToYuv, CV_8UC3, COLOR_BGR2YUV},
+          ColorCase{ImgprocHotColorOpId::YuvToBgr, CV_8UC3, COLOR_YUV2BGR}})
+    {
+        Mat source({rows, cols}, color.source_type);
+        fill_u8(source, seed);
+        Mat actual;
+        cpu::reset_last_dispatch_tag();
+        cvtColor(source, actual, color.code);
+        expect_direct_neon_on_arm();
+        EXPECT_TRUE(
+            cvh_test_opencv_contract::validate_imgproc_hot_cvtcolor_u8(
+                color.op,
+                rows,
+                cols,
+                seed,
+                actual.data,
+                actual.total() * actual.elemSize()));
+    }
+
+    Mat resize_source({64, 96}, CV_8UC3);
+    fill_u8(resize_source, seed);
+    Mat resized;
+    cpu::reset_last_dispatch_tag();
+    resize(
+        resize_source, resized, Size(72, 48),
+        0.0, 0.0, INTER_LINEAR);
+    expect_direct_neon_on_arm();
+    EXPECT_TRUE(cvh_test_opencv_contract::validate_imgproc_resize_linear_u8(
+        64, 96, 48, 72, 3, seed,
+        resized.data, resized.total() * resized.elemSize()));
+
+    for (const int channels : {1, 3, 4})
+    {
+        Mat source({rows, cols}, CV_MAKETYPE(CV_8U, channels));
+        fill_u8(source, seed);
+        for (const auto order :
+             {std::pair<int, int>{1, 0}, std::pair<int, int>{0, 1}})
+        {
+            Mat actual;
+            cpu::reset_last_dispatch_tag();
+            Sobel(
+                source, actual, CV_16S,
+                order.first, order.second,
+                3, 1.0, 0.0, BORDER_REPLICATE);
+            expect_direct_neon_on_arm();
+            EXPECT_TRUE(cvh_test_opencv_contract::validate_imgproc_sobel3_u8(
+                rows, cols, channels, seed,
+                order.first, order.second,
+                actual.data, actual.total() * actual.elemSize()));
+        }
+    }
+
+    Mat derivative_source({rows, cols}, CV_8UC1);
+    fill_u8(derivative_source, seed);
+    Mat scharr;
+    Mat laplacian;
+    cpu::reset_last_dispatch_tag();
+    Scharr(derivative_source, scharr, CV_16S, 1, 0);
+    expect_direct_neon_on_arm();
+    Laplacian(derivative_source, laplacian, CV_16S, 3);
+    EXPECT_TRUE(
+        cvh_test_opencv_contract::validate_imgproc_derivative_filters_u8(
+            rows, cols, 1, seed,
+            scharr.data, scharr.total() * scharr.elemSize(),
+            laplacian.data, laplacian.total() * laplacian.elemSize()));
+
+    Mat gradient_x;
+    Mat gradient_y;
+    cpu::reset_last_dispatch_tag();
+    spatialGradient(derivative_source, gradient_x, gradient_y);
+    expect_direct_neon_on_arm();
+    EXPECT_TRUE(
+        cvh_test_opencv_contract::validate_imgproc_spatial_gradient_u8(
+            rows, cols, seed,
+            gradient_x.data, gradient_x.total() * gradient_x.elemSize(),
+            gradient_y.data, gradient_y.total() * gradient_y.elemSize()));
+}
+
 TEST(OpenCVContractSmoke_TEST, core_array_ops_match_upstream_for_standard_depths)
 {
     using cvh_test_opencv_contract::CoreArrayOpId;

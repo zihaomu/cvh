@@ -1419,6 +1419,73 @@ bool validate_imgproc_resize_linear_u8(int src_rows,
     return matches_bytes(expected, actual_data, actual_bytes, 1);
 }
 
+bool validate_imgproc_hot_cvtcolor_u8(ImgprocHotColorOpId op,
+                                      int rows,
+                                      int cols,
+                                      std::uint32_t seed,
+                                      const void* actual_data,
+                                      std::size_t actual_bytes)
+{
+    const bool input_has_alpha = op == ImgprocHotColorOpId::BgraToGray;
+    cv::Mat src(
+        rows,
+        cols,
+        input_has_alpha ? CV_8UC4 : CV_8UC3);
+    fill_u8(src, seed);
+    int code = cv::COLOR_BGR2RGB;
+    int tolerance = 0;
+    switch (op)
+    {
+        case ImgprocHotColorOpId::BgrToRgb:
+            code = cv::COLOR_BGR2RGB;
+            break;
+        case ImgprocHotColorOpId::BgrToBgra:
+            code = cv::COLOR_BGR2BGRA;
+            break;
+        case ImgprocHotColorOpId::BgraToGray:
+            code = cv::COLOR_BGRA2GRAY;
+            tolerance = 1;
+            break;
+        case ImgprocHotColorOpId::BgrToYuv:
+            code = cv::COLOR_BGR2YUV;
+            tolerance = 1;
+            break;
+        case ImgprocHotColorOpId::YuvToBgr:
+            code = cv::COLOR_YUV2BGR;
+            tolerance = 1;
+            break;
+    }
+    cv::Mat expected;
+    cv::cvtColor(src, expected, code);
+    return matches_bytes(
+        expected, actual_data, actual_bytes, tolerance);
+}
+
+bool validate_imgproc_sobel3_u8(int rows,
+                                int cols,
+                                int channels,
+                                std::uint32_t seed,
+                                int dx,
+                                int dy,
+                                const void* actual_data,
+                                std::size_t actual_bytes)
+{
+    cv::Mat src(rows, cols, CV_MAKETYPE(CV_8U, channels));
+    fill_u8(src, seed);
+    cv::Mat expected;
+    cv::Sobel(
+        src,
+        expected,
+        CV_16S,
+        dx,
+        dy,
+        3,
+        1.0,
+        0.0,
+        cv::BORDER_REPLICATE);
+    return matches_bytes(expected, actual_data, actual_bytes, 0);
+}
+
 bool validate_imgproc_geometry_matrices(const double* actual_rotation,
                                         const double* actual_affine,
                                         const double* actual_perspective,
