@@ -28,6 +28,10 @@ binary dependency of the normal cvh package.
 - [cvh-v0.1-imgproc-performance-floor-acceleration-plan.md](cvh-v0.1-imgproc-performance-floor-acceleration-plan.md):
   third-stage performance closure, quantitative floors, SIMD/UI audit, and
   live status for the existing v0.1 Imgproc hotspots.
+- [cvh-v0.1-neon-hot-kernel-acceleration-plan.md](cvh-v0.1-neon-hot-kernel-acceleration-plan.md):
+  narrowly scoped direct-NEON acceleration, dispatch observability, correctness
+  gates, and performance floors for packed/YUV color conversion, U8C3 bilinear
+  resize, and shared 3x3 derivative kernels.
 - [cvh-v0.1-release-readiness-and-next-stage-plan.md](cvh-v0.1-release-readiness-and-next-stage-plan.md):
   P7.2 onboarding, P7.3 platforms, P7.4 performance baseline, and `0.1.0`
   release gates.
@@ -47,6 +51,7 @@ binary dependency of the normal cvh package.
 | Current code/document closure work | v0.1 release closure plan |
 | Phase 2-P0 acceleration work | Phase 2-P0 operator acceleration plan |
 | v0.1 Imgproc performance-floor work | v0.1 Imgproc performance-floor acceleration plan |
+| v0.1 direct-NEON hot-kernel work | v0.1 NEON hot-kernel acceleration plan |
 | Unfinished release work | release-readiness plan |
 | Test status | test manifests and `test/failing-tests.md` |
 | Performance numbers | dated benchmark report plus CSV/metadata |
