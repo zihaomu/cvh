@@ -32,7 +32,7 @@ REPORT_SCRIPT="${COMPARE_DIR}/csv_to_markdown.py"
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--profile quick|stable|full] [--impls auto|ui|scalar|auto,ui,scalar] [--ops GEMM|PHASE2_P0|IMGPROC_FLOOR] [--warmup N] [--iters N] [--repeats N] [--output path] [--baseline]
+Usage: $(basename "$0") [--profile quick|stable|full] [--impls auto|ui|scalar|auto,ui,scalar] [--ops GEMM|PHASE2_P0|IMGPROC_FLOOR|V01_NEON_HOT] [--warmup N] [--iters N] [--repeats N] [--output path] [--baseline]
 
 Environment:
   CVH_COMPARE_PROFILE   (default: ${PROFILE})
@@ -41,7 +41,7 @@ Environment:
   CVH_COMPARE_ITERS     (profile default, quick=5 stable=20 full=10)
   CVH_COMPARE_REPEATS   (profile default, quick=1 stable=5 full=3)
   CVH_COMPARE_THREADS   (default: ${THREADS}, exports OMP_NUM_THREADS)
-  CVH_COMPARE_OPS       (optional focused operation set: GEMM, PHASE2_P0, or IMGPROC_FLOOR)
+  CVH_COMPARE_OPS       (optional focused operation set: GEMM, PHASE2_P0, IMGPROC_FLOOR, or V01_NEON_HOT)
   CVH_COMPARE_OMP_DYNAMIC (default: ${OMP_DYNAMIC_MODE})
   CVH_COMPARE_OMP_PROC_BIND (default: ${OMP_PROC_BIND_MODE})
   CVH_COMPARE_BUILD_OPENCV (default: ${BUILD_OPENCV}, values: auto|0|1)
@@ -120,8 +120,8 @@ if [[ "${PROFILE}" != "quick" && "${PROFILE}" != "stable" && "${PROFILE}" != "fu
   echo "Unsupported profile: ${PROFILE} (expected quick|stable|full)" >&2
   exit 2
 fi
-if [[ -n "${OPS}" && "${OPS}" != "GEMM" && "${OPS}" != "PHASE2_P0" && "${OPS}" != "IMGPROC_FLOOR" ]]; then
-  echo "Unsupported --ops=${OPS} (currently supported: GEMM, PHASE2_P0, IMGPROC_FLOOR)" >&2
+if [[ -n "${OPS}" && "${OPS}" != "GEMM" && "${OPS}" != "PHASE2_P0" && "${OPS}" != "IMGPROC_FLOOR" && "${OPS}" != "V01_NEON_HOT" ]]; then
+  echo "Unsupported --ops=${OPS} (currently supported: GEMM, PHASE2_P0, IMGPROC_FLOOR, V01_NEON_HOT)" >&2
   exit 2
 fi
 

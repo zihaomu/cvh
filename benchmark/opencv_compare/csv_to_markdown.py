@@ -58,6 +58,13 @@ def row_isa(row: dict) -> str:
     return (row.get("isa_observed", "") or "").strip() or "unknown"
 
 
+def row_kernel_route(row: dict) -> str:
+    return (
+        (row.get("kernel_route", "") or "").strip()
+        or row_dispatch(row)
+    )
+
+
 def geometric_mean(values) -> float:
     positive = [x for x in values if x > 0.0]
     if not positive:
@@ -227,9 +234,9 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     else:
         lines.append(f"- The report contains these CVH runtime modes: `{', '.join(implementations)}`.")
     if auto_present:
-        lines.append("- Direct architecture-specific dispatch is allowed and recorded. `CVH algorithm`, `CVH dispatch`, and `Observed ISA` remain separate fields; unavailable ISA observation is reported as `unknown` rather than inferred from the host.")
+        lines.append("- Direct architecture-specific dispatch is allowed and recorded. `CVH algorithm`, `CVH dispatch`, `Observed ISA`, and stage-level `Kernel route` remain separate fields; unavailable ISA observation is reported as `unknown` rather than inferred from the host.")
     else:
-        lines.append("- Direct architecture-specific dispatch is rejected. `CVH algorithm`, `CVH dispatch`, and `Observed ISA` are separate fields; unavailable ISA observation is reported as `unknown` rather than inferred from the host.")
+        lines.append("- Direct architecture-specific dispatch is rejected. `CVH algorithm`, `CVH dispatch`, `Observed ISA`, and stage-level `Kernel route` are separate fields; unavailable ISA observation is reported as `unknown` rather than inferred from the host.")
     lines.append("- The reference is the upstream OpenCV build recorded in the metadata, running on the same host with matching inputs and parameters.")
     lines.append("")
 
@@ -376,7 +383,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
 
     lines.append("## CVH Dispatch Route Overview")
     lines.append("")
-    lines.append("Each operator summarizes the observed route as `CVH algorithm -> CVH dispatch -> Observed ISA`. The detailed tables retain the same three fields for every concrete benchmark case.")
+    lines.append("Each operator summarizes the observed route as `CVH algorithm -> CVH dispatch -> Observed ISA`. The detailed tables also retain the stage-level `Kernel route` for every concrete benchmark case.")
     lines.append("")
     for suite in ("core_mat", "imgproc"):
         suite_rows = [r for r in supported if row_suite(r) == suite]
@@ -446,6 +453,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
                     row_algorithm(r),
                     row_dispatch(r),
                     row_isa(r),
+                    row_kernel_route(r),
                     r.get("depth", ""),
                     r.get("channels", ""),
                     r.get("layout", "continuous") or "continuous",
@@ -458,7 +466,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
             )
         lines.append(
             md_table(
-                ["Op", "Variant", "CVH algorithm", "CVH dispatch", "Observed ISA", "Depth", "Ch", "Layout", "Shape", "CVH ms", "OpenCV ms", "OpenCV/CVH", "Note"],
+                ["Op", "Variant", "CVH algorithm", "CVH dispatch", "Observed ISA", "Kernel route", "Depth", "Ch", "Layout", "Shape", "CVH ms", "OpenCV ms", "OpenCV/CVH", "Note"],
                 table_rows,
             )
         )
@@ -487,7 +495,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("- Ratios use `OpenCV time / CVH time`: values above `1` mean CVH is faster, and values below `1` mean OpenCV is faster.")
     lines.append("- Table timings use the minimum per-iteration time across repeats to reduce system-noise effects; this report is not a cross-machine ranking.")
     lines.append("- Mat cases compare matching allocation/reuse semantics; imgproc cases align input dimensions, types, kernels, borders, and primary parameters.")
-    lines.append("- Historical CSV files without `algorithm_path` or `isa_observed` remain renderable: their old dispatch label is used as the algorithm fallback and ISA is shown as `unknown`.")
+    lines.append("- Historical CSV files without `algorithm_path`, `isa_observed`, or `kernel_route` remain renderable: their old dispatch label is used as the algorithm and stage-route fallback, and ISA is shown as `unknown`.")
     lines.append("- `headers_baseline` describes a public header fallback for an operator without a UI kernel; it is not a separate target or implementation profile.")
     lines.append("- Raw CSV and metadata files are reproducible run artifacts; date-named Markdown files are milestone snapshots.")
 

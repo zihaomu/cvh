@@ -124,6 +124,7 @@ struct Phase1BenchmarkResult
     std::string variant;
     std::string algorithm_path;
     std::string dispatch_path;
+    std::string kernel_route;
     std::string depth;
     int channels = 1;
     std::string layout = "continuous";

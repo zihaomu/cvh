@@ -325,6 +325,11 @@ std::vector<Phase1BenchmarkResult> run_phase1_benchmarks(
             cvh_dispatch_tag == cvh::cpu::DispatchTag::Unknown
                 ? "public_header_baseline"
                 : cvh::cpu::dispatch_tag_name(cvh_dispatch_tag);
+        result.kernel_route = cvh::cpu::last_kernel_route();
+        if (result.kernel_route.empty() || result.kernel_route == "unknown")
+        {
+            result.kernel_route = result.dispatch_path;
+        }
         result.depth = spec.depth;
         result.channels = spec.channels;
         result.shape =

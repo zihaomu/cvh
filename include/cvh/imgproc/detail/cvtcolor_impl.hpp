@@ -8,6 +8,7 @@ namespace detail
 
 inline void cvtColor_fast_impl(const Mat& src, Mat& dst, int code)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
 #if CVH_DETAIL_HAVE_OPENCV_UI
     if (src.depth() == CV_8U && (code == COLOR_BGR2GRAY || code == COLOR_RGB2GRAY))
     {

@@ -26,6 +26,7 @@ enum class DispatchTag
 
 inline std::atomic<DispatchMode> g_dispatch_mode {DispatchMode::Auto};
 inline thread_local DispatchTag g_last_dispatch_tag = DispatchTag::Unknown;
+inline thread_local const char* g_last_kernel_route = "unknown";
 
 inline void set_dispatch_mode(DispatchMode mode)
 {
@@ -52,11 +53,22 @@ inline void set_last_dispatch_tag(DispatchTag tag)
 inline void reset_last_dispatch_tag()
 {
     g_last_dispatch_tag = DispatchTag::Unknown;
+    g_last_kernel_route = "unknown";
 }
 
 inline DispatchTag last_dispatch_tag()
 {
     return g_last_dispatch_tag;
+}
+
+inline void set_last_kernel_route(const char* route)
+{
+    g_last_kernel_route = route ? route : "unknown";
+}
+
+inline const char* last_kernel_route()
+{
+    return g_last_kernel_route;
 }
 
 inline const char* dispatch_tag_name(DispatchTag tag)

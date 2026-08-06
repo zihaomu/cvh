@@ -274,6 +274,24 @@ case。若某项因 upstream 特殊 HAL 或平台库无法达到，必须保留�
 
 H0 只改善观测，不修改目标 kernel 性能。
 
+#### H0 实时记录（2026-08-06）
+
+- `V01_NEON_HOT` 已接入 canonical runner，stable 每个 mode 生成 70 行：
+  CVTCOLOR 36、Resize 17、Sobel 9、Scharr 4、spatialGradient 4；
+- matrix 已包含 480p、720p、1080p、Phase1 240x320 对照和 odd-width ROI；
+- Auto/UI 当前各为 52 scalar + 18 UI，ScalarOnly 为 70 scalar，未观察到
+  direct ISA；这是 H1–H3 的真实 before dispatch 分布；
+- CSV/Markdown 已增加向后兼容的 `kernel_route`；旧 CSV 缺少该字段时 renderer
+  使用主 dispatch 作为 fallback；
+- quick 与 stable Auto/UI/scalar smoke 均通过，所有 row 的 stage route 非空；
+- targeted Imgproc correctness 84/84 通过；Imgproc 独立头编译与 ODR smoke
+  均通过；
+- 首次测试构建发现 compare runner 会重新配置同一 build directory 并关闭
+  `CVH_BUILD_TESTS`。因此测试与 compare 从本记录起固定使用不同 build 目录，
+  “无 target”不计为通过；
+- H0 剩余项：提交观测代码后，在 clean revision 上完成三轮 stable
+  Auto/UI/scalar baseline，并记录三轮中位数。
+
 ### H1：CVTCOLOR packed/YUV U8
 
 #### H1.1 Packed channel
@@ -361,6 +379,7 @@ H0 只改善观测，不修改目标 kernel 性能。
 CVH_COMPARE_SKIP_OPENCV_SETUP=1 \
 CVH_OPENCV_DIR=../opencv \
 CVH_OPENCV_CONFIG_DIR=../opencv/build-slim \
+CVH_COMPARE_BUILD_DIR=build-v01-neon-hot-compare \
 CVH_COMPARE_THREADS=1 \
 benchmark/opencv_compare/run_compare.sh \
   --profile stable \
@@ -374,7 +393,7 @@ benchmark/opencv_compare/run_compare.sh \
 ### 8.2 Targeted tests
 
 ```bash
-cmake -S . -B build-v01-neon-hot \
+cmake -S . -B build-v01-neon-hot-tests \
   -DCMAKE_BUILD_TYPE=Release \
   -DCVH_BUILD_TESTS=ON \
   -DCVH_BUILD_BENCHMARKS=ON \
@@ -382,12 +401,12 @@ cmake -S . -B build-v01-neon-hot \
   -DCVH_ENABLE_OPTIMIZATION=ON \
   -DOpenCV_DIR=../opencv/build-slim
 
-cmake --build build-v01-neon-hot --parallel 2
+cmake --build build-v01-neon-hot-tests --parallel 2
 
-build-v01-neon-hot/cvh_test_imgproc \
+build-v01-neon-hot-tests/cvh_test_imgproc \
   --gtest_filter='CvtColor*:Resize*:Derivatives*:MorphologyDerivativesUpstreamTest.Imgproc_Sobel*:*DispatchInternalTest*'
 
-ctest --test-dir build-v01-neon-hot --output-on-failure
+ctest --test-dir build-v01-neon-hot-tests --output-on-failure
 ```
 
 实际 GTest filter 在 H0 按新增 suite 名称收紧；不得使用不存在的 filter 结果

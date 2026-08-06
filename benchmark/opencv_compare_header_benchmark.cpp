@@ -50,6 +50,7 @@ struct CompareRow
     std::string algorithm_path;
     std::string dispatch_path;
     std::string isa_observed = "unknown";
+    std::string kernel_route = "unknown";
     std::string depth;
     int channels = 0;
     std::string layout = "continuous";
@@ -126,13 +127,23 @@ std::string observed_isa()
     return "unknown";
 }
 
+std::string observed_kernel_route()
+{
+    const char* route = cvh::cpu::last_kernel_route();
+    if (route && std::string(route) != "unknown")
+    {
+        return route;
+    }
+    return observed_dispatch_path();
+}
+
 void usage()
 {
     std::cout
         << "Usage: cvh_benchmark_opencv_compare "
         << "[--profile quick|stable|full] [--warmup N] [--iters N] [--repeats N] "
         << "[--threads N] [--impl cvh_auto|cvh_ui|cvh_scalar] "
-        << "[--ops GEMM|PHASE2_P0|IMGPROC_FLOOR] "
+        << "[--ops GEMM|PHASE2_P0|IMGPROC_FLOOR|V01_NEON_HOT] "
         << "[--output path]\n";
 }
 
@@ -219,10 +230,11 @@ Args parse_args(int argc, char** argv)
         std::exit(2);
     }
     if (!args.ops.empty() && args.ops != "GEMM" &&
-        args.ops != "PHASE2_P0" && args.ops != "IMGPROC_FLOOR")
+        args.ops != "PHASE2_P0" && args.ops != "IMGPROC_FLOOR" &&
+        args.ops != "V01_NEON_HOT")
     {
         std::cerr << "Unsupported --ops value: " << args.ops
-                  << " (currently supported: GEMM, PHASE2_P0, IMGPROC_FLOOR)\n";
+                  << " (currently supported: GEMM, PHASE2_P0, IMGPROC_FLOOR, V01_NEON_HOT)\n";
         std::exit(2);
     }
     return args;
@@ -343,6 +355,7 @@ void append_row(std::vector<CompareRow>& rows,
     row.variant = variant;
     row.algorithm_path = dispatch_path;
     row.dispatch_path = dispatch_path;
+    row.kernel_route = dispatch_path;
     if (dispatch_path == "neon" || dispatch_path == "avx2")
     {
         row.isa_observed = dispatch_path;
@@ -385,6 +398,7 @@ void append_observed_row(std::vector<CompareRow>& rows,
         note);
     rows.back().algorithm_path = algorithm_path;
     rows.back().isa_observed = observed_isa();
+    rows.back().kernel_route = observed_kernel_route();
 }
 
 void append_unsupported_row(std::vector<CompareRow>& rows,
@@ -406,6 +420,7 @@ void append_unsupported_row(std::vector<CompareRow>& rows,
     row.variant = variant;
     row.algorithm_path = "unsupported";
     row.dispatch_path = "unsupported";
+    row.kernel_route = "unsupported";
     row.depth = depth;
     row.channels = channels;
     row.layout = layout;
@@ -440,6 +455,7 @@ void append_phase1_cases(const Args& args, std::vector<CompareRow>& rows)
             result.opencv_ms,
             result.note);
         rows.back().algorithm_path = result.algorithm_path;
+        rows.back().kernel_route = result.kernel_route;
         rows.back().layout = result.layout;
     }
 }
@@ -1608,6 +1624,7 @@ void append_imgproc_resize_color_cases(const Args& args, std::vector<CompareRow>
         cvh::Mat dst;
         const int dst_rows = shape.rows * 3 / 4;
         const int dst_cols = shape.cols * 3 / 4;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() {
                 cvh::resize(
@@ -1620,7 +1637,7 @@ void append_imgproc_resize_color_cases(const Args& args, std::vector<CompareRow>
             shape.rows, shape.cols, dst_rows, dst_cols,
             resize_case.depth, resize_case.channels, resize_case.interpolation,
             args.warmup, args.iters, args.repeats, seed);
-        append_row(
+        append_observed_row(
             rows, args, "imgproc", "RESIZE", resize_case.variant,
             resize_case.dispatch_path, resize_case.depth_name, resize_case.channels,
             shape_name, cvh_ms, opencv_ms);
@@ -1657,6 +1674,7 @@ void append_imgproc_resize_color_cases(const Args& args, std::vector<CompareRow>
         cvh::Mat src({src_rows, shape.cols}, type);
         fill_by_depth(src, color_case.depth, seed);
         cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() { cvh::cvtColor(src, dst, color_case.cvh_code); },
             dst,
@@ -1664,7 +1682,7 @@ void append_imgproc_resize_color_cases(const Args& args, std::vector<CompareRow>
         const double opencv_ms = bench_opencv_cvtcolor(
             color_case.op, shape.rows, shape.cols, color_case.depth,
             args.warmup, args.iters, args.repeats, seed);
-        append_row(
+        append_observed_row(
             rows, args, "imgproc", "CVTCOLOR", color_case.variant,
             "header_fastpath", color_case.depth_name, color_case.src_channels,
             shape_name, cvh_ms, opencv_ms);
@@ -1690,6 +1708,7 @@ void append_imgproc_resize_color_cases(const Args& args, std::vector<CompareRow>
         cvh::Mat src({src_rows, shape.cols}, CV_MAKETYPE(CV_8U, color_case.src_channels));
         fill_u8(src, seed);
         cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() { cvh::cvtColor(src, dst, color_case.cvh_code); },
             dst,
@@ -1697,7 +1716,7 @@ void append_imgproc_resize_color_cases(const Args& args, std::vector<CompareRow>
         const double opencv_ms = bench_opencv_cvtcolor(
             color_case.op, shape.rows, shape.cols, DepthId::U8,
             args.warmup, args.iters, args.repeats, seed);
-        append_row(
+        append_observed_row(
             rows, args, "imgproc", "CVTCOLOR", color_case.variant,
             "header_fastpath", "CV_8U", color_case.src_channels,
             shape_name, cvh_ms, opencv_ms);
@@ -1710,9 +1729,318 @@ void append_imgproc_resize_color_cases(const Args& args, std::vector<CompareRow>
         "upstream OpenCV has NV12 decode but no single-call BGR-to-NV12 encoder");
 }
 
+void append_v01_neon_hot_extra_cases(const Args& args,
+                                      std::vector<CompareRow>& rows)
+{
+    if (args.profile == "quick")
+    {
+        return;
+    }
+
+    constexpr std::uint32_t seed = 0x4E454F4Eu;
+    const std::vector<ShapeCase> shapes = build_shapes(args.profile);
+
+    struct ResizeRatio
+    {
+        const char* variant;
+        int numerator;
+        int denominator;
+    };
+    const ResizeRatio resize_ratios[] = {
+        {"linear_0.5_u8c3", 1, 2},
+        {"linear_0.75_u8c3", 3, 4},
+        {"linear_1.5_u8c3", 3, 2},
+    };
+    for (const ShapeCase& shape : shapes)
+    {
+        for (const ResizeRatio& ratio : resize_ratios)
+        {
+            if (shape.rows == 480 && shape.cols == 640 &&
+                ratio.numerator == 3 && ratio.denominator == 4)
+            {
+                continue;
+            }
+            cvh::Mat src({shape.rows, shape.cols}, CV_8UC3);
+            fill_u8(src, seed);
+            cvh::Mat dst;
+            const int dst_rows =
+                shape.rows * ratio.numerator / ratio.denominator;
+            const int dst_cols =
+                shape.cols * ratio.numerator / ratio.denominator;
+            cvh::cpu::reset_last_dispatch_tag();
+            const double cvh_ms = measure_cvh_mat_ms(
+                [&]() {
+                    cvh::resize(
+                        src,
+                        dst,
+                        cvh::Size(dst_cols, dst_rows),
+                        0.0,
+                        0.0,
+                        cvh::INTER_LINEAR);
+                },
+                dst,
+                args);
+            const double opencv_ms = bench_opencv_resize(
+                shape.rows,
+                shape.cols,
+                dst_rows,
+                dst_cols,
+                DepthId::U8,
+                3,
+                cvh::INTER_LINEAR,
+                args.warmup,
+                args.iters,
+                args.repeats,
+                seed);
+            append_observed_row(
+                rows,
+                args,
+                "imgproc",
+                "RESIZE",
+                ratio.variant,
+                "resize_linear_u8c3",
+                "CV_8U",
+                3,
+                shape_string(shape),
+                cvh_ms,
+                opencv_ms,
+                "v01_neon_hot_focused_case");
+        }
+    }
+
+    struct ColorCase
+    {
+        const char* variant;
+        const char* layout;
+        ImgprocColorOpId op;
+        int code;
+        int channels;
+        int row_numerator;
+        int row_denominator;
+        bool extended_yuv;
+    };
+    const ColorCase color_cases[] = {
+        {"BGR2RGB_u8", "continuous", ImgprocColorOpId::Bgr2Rgb,
+         cvh::COLOR_BGR2RGB, 3, 1, 1, false},
+        {"BGR2BGRA_u8", "continuous", ImgprocColorOpId::Bgr2Bgra,
+         cvh::COLOR_BGR2BGRA, 3, 1, 1, false},
+        {"BGRA2GRAY_u8", "continuous", ImgprocColorOpId::Bgra2Gray,
+         cvh::COLOR_BGRA2GRAY, 4, 1, 1, false},
+        {"BGR2YUV_u8", "yuv444_interleaved", ImgprocColorOpId::Bgr2Yuv,
+         cvh::COLOR_BGR2YUV, 3, 1, 1, false},
+        {"YUV2BGR_u8", "yuv444_interleaved", ImgprocColorOpId::Yuv2Bgr,
+         cvh::COLOR_YUV2BGR, 3, 1, 1, false},
+        {"BGR2I420_u8", "yuv420_i420", ImgprocColorOpId::Bgr2YuvI420,
+         cvh::COLOR_BGR2YUV_I420, 3, 1, 1, true},
+        {"I420_TO_BGR_u8", "yuv420_i420", ImgprocColorOpId::YuvI420ToBgr,
+         cvh::COLOR_YUV2BGR_I420, 1, 3, 2, true},
+        {"BGR2YUY2_u8", "yuv422_yuy2", ImgprocColorOpId::Bgr2YuvYuy2,
+         cvh::COLOR_BGR2YUV_YUY2, 3, 1, 1, true},
+        {"YUY2_TO_BGR_u8", "yuv422_yuy2", ImgprocColorOpId::YuvYuy2ToBgr,
+         cvh::COLOR_YUV2BGR_YUY2, 2, 1, 1, true},
+        {"NV12_TO_BGR_u8", "yuv420_nv12", ImgprocColorOpId::YuvNv12ToBgr,
+         cvh::COLOR_YUV2BGR_NV12, 1, 3, 2, true},
+    };
+    for (const ShapeCase& shape : shapes)
+    {
+        if ((shape.rows & 1) != 0 || (shape.cols & 1) != 0)
+        {
+            continue;
+        }
+        for (const ColorCase& color_case : color_cases)
+        {
+            const bool standard_has_case =
+                shape.rows == 480 && shape.cols == 640 &&
+                (!color_case.extended_yuv || args.profile == "full");
+            if (standard_has_case)
+            {
+                continue;
+            }
+            const int src_rows =
+                shape.rows * color_case.row_numerator /
+                color_case.row_denominator;
+            cvh::Mat src(
+                {src_rows, shape.cols},
+                CV_MAKETYPE(CV_8U, color_case.channels));
+            fill_u8(src, seed);
+            cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
+            const double cvh_ms = measure_cvh_mat_ms(
+                [&]() { cvh::cvtColor(src, dst, color_case.code); },
+                dst,
+                args);
+            const double opencv_ms = bench_opencv_cvtcolor(
+                color_case.op,
+                shape.rows,
+                shape.cols,
+                DepthId::U8,
+                args.warmup,
+                args.iters,
+                args.repeats,
+                seed);
+            append_observed_row(
+                rows,
+                args,
+                "imgproc",
+                "CVTCOLOR",
+                color_case.variant,
+                "header_fastpath",
+                "CV_8U",
+                color_case.channels,
+                shape_string(shape),
+                cvh_ms,
+                opencv_ms,
+                "v01_neon_hot_focused_case");
+            rows.back().layout = color_case.layout;
+        }
+    }
+
+    for (const ShapeCase& shape : shapes)
+    {
+        if (shape.rows == 480 && shape.cols == 640)
+        {
+            continue;
+        }
+        for (const int channels : {3, 4})
+        {
+            cvh::Mat src(
+                {shape.rows, shape.cols},
+                CV_MAKETYPE(CV_8U, channels));
+            fill_u8(src, seed + static_cast<std::uint32_t>(channels));
+            cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
+            const double cvh_ms = measure_cvh_mat_ms(
+                [&]() {
+                    cvh::Sobel(
+                        src,
+                        dst,
+                        CV_32F,
+                        1,
+                        0,
+                        3,
+                        1.0,
+                        0.0,
+                        cvh::BORDER_REPLICATE);
+                },
+                dst,
+                args);
+            const double opencv_ms = bench_opencv_sobel(
+                shape.rows,
+                shape.cols,
+                channels,
+                args.warmup,
+                args.iters,
+                args.repeats,
+                seed + static_cast<std::uint32_t>(channels));
+            append_observed_row(
+                rows,
+                args,
+                "imgproc",
+                "SOBEL",
+                "dx1_ksize3_replicate_u8c" + std::to_string(channels),
+                "derivative_convolve",
+                "CV_8U",
+                channels,
+                shape_string(shape),
+                cvh_ms,
+                opencv_ms,
+                "v01_neon_hot_focused_case");
+        }
+    }
+
+    for (const ShapeCase& shape : shapes)
+    {
+        if (shape.rows == 480 && shape.cols == 640 && args.profile == "full")
+        {
+            continue;
+        }
+        cvh::Mat src({shape.rows, shape.cols}, CV_8UC1);
+        fill_u8(src, seed);
+        {
+            cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
+            const double cvh_ms = measure_cvh_mat_ms(
+                [&]() {
+                    cvh::Scharr(
+                        src,
+                        dst,
+                        CV_32F,
+                        1,
+                        0,
+                        1.0,
+                        0.0,
+                        cvh::BORDER_REFLECT_101);
+                },
+                dst,
+                args);
+            const double opencv_ms = bench_opencv_phase1(
+                Phase1OpId::Scharr,
+                shape.rows,
+                shape.cols,
+                args.warmup,
+                args.iters,
+                args.repeats,
+                seed);
+            append_observed_row(
+                rows,
+                args,
+                "imgproc",
+                "SCHARR",
+                "dx1_u8_to_f32",
+                "derivative3_direct",
+                "CV_8U",
+                1,
+                shape_string(shape),
+                cvh_ms,
+                opencv_ms,
+                "v01_neon_hot_focused_case");
+        }
+        {
+            cvh::Mat dx;
+            cvh::Mat dy;
+            cvh::cpu::reset_last_dispatch_tag();
+            const double cvh_ms = measure_cvh_ms(
+                [&]() {
+                    cvh::spatialGradient(
+                        src,
+                        dx,
+                        dy,
+                        3,
+                        cvh::BORDER_REFLECT_101);
+                },
+                [&]() {
+                    return cvh_bench::common::checksum_mat_bytes(dx) ^
+                           cvh_bench::common::checksum_mat_bytes(dy);
+                },
+                args);
+            const double opencv_ms = bench_opencv_phase1(
+                Phase1OpId::SpatialGradient,
+                shape.rows,
+                shape.cols,
+                args.warmup,
+                args.iters,
+                args.repeats,
+                seed);
+            append_observed_row(
+                rows,
+                args,
+                "imgproc",
+                "SPATIAL_GRADIENT",
+                "ksize3_u8_to_s16",
+                "spatial_gradient3",
+                "CV_8U",
+                1,
+                shape_string(shape),
+                cvh_ms,
+                opencv_ms,
+                "v01_neon_hot_focused_case");
+        }
+    }
+}
+
 void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
 {
-    if (args.profile != "full")
+    if (args.profile != "full" && args.ops != "V01_NEON_HOT")
     {
         return;
     }
@@ -1766,6 +2094,7 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
 
     {
         cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() {
                 cvh::resize(
@@ -1777,7 +2106,7 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
         const double opencv_ms = bench_opencv_imgproc_roi(
             ImgprocRoiOpId::ResizeLinear, shape.rows, shape.cols,
             args.warmup, args.iters, args.repeats, seed);
-        add_roi_row(
+        add_observed_roi_row(
             "RESIZE", "linear_0.75_u8c3_roi", "header_fastpath", "CV_8U", 3,
             cvh_ms, opencv_ms);
     }
@@ -1885,7 +2214,7 @@ void write_csv(const std::vector<CompareRow>& rows, const std::string& path)
         std::exit(2);
     }
 
-    out << "impl,profile,suite,op,variant,algorithm_path,dispatch_path,isa_observed,depth,channels,layout,shape,cvh_ms,opencv_ms,speedup,status,note\n";
+    out << "impl,profile,suite,op,variant,algorithm_path,dispatch_path,isa_observed,kernel_route,depth,channels,layout,shape,cvh_ms,opencv_ms,speedup,status,note\n";
     out << std::fixed << std::setprecision(6);
     for (const auto& row : rows)
     {
@@ -1897,6 +2226,7 @@ void write_csv(const std::vector<CompareRow>& rows, const std::string& path)
             << row.algorithm_path << ","
             << row.dispatch_path << ","
             << row.isa_observed << ","
+            << row.kernel_route << ","
             << row.depth << ","
             << row.channels << ","
             << row.layout << ","
@@ -1931,6 +2261,18 @@ bool is_imgproc_floor_op(const std::string& op)
         "MEDIAN_BLUR",
         "BILATERAL_FILTER",
         "STACK_BLUR",
+    };
+    return std::find(std::begin(names), std::end(names), op) != std::end(names);
+}
+
+bool is_v01_neon_hot_op(const std::string& op)
+{
+    static const char* const names[] = {
+        "CVTCOLOR",
+        "RESIZE",
+        "SOBEL",
+        "SCHARR",
+        "SPATIAL_GRADIENT",
     };
     return std::find(std::begin(names), std::end(names), op) != std::end(names);
 }
@@ -1971,6 +2313,23 @@ int main(int argc, char** argv)
                 rows.end(),
                 [](const cvh_bench_compare::CompareRow& row) {
                     return !cvh_bench_compare::is_imgproc_floor_op(row.op);
+                }),
+            rows.end());
+    }
+    else if (args.ops == "V01_NEON_HOT")
+    {
+        cvh_bench_compare::append_imgproc_cases(args, rows);
+        cvh_bench_compare::append_imgproc_type_channel_cases(args, rows);
+        cvh_bench_compare::append_imgproc_resize_color_cases(args, rows);
+        cvh_bench_compare::append_imgproc_roi_cases(args, rows);
+        cvh_bench_compare::append_phase1_cases(args, rows);
+        cvh_bench_compare::append_v01_neon_hot_extra_cases(args, rows);
+        rows.erase(
+            std::remove_if(
+                rows.begin(),
+                rows.end(),
+                [](const cvh_bench_compare::CompareRow& row) {
+                    return !cvh_bench_compare::is_v01_neon_hot_op(row.op);
                 }),
             rows.end());
     }

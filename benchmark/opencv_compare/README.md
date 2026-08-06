@@ -99,6 +99,7 @@ Current CSV observability fields:
 | `algorithm_path` | Operator-level algorithm or data-flow choice, such as `gauss_separable` or `morph_rect3x3`. |
 | `dispatch_path` | Actual last kernel dispatch reported by cvh, such as `scalar` or `opencv_ui`. |
 | `isa_observed` | Directly observable specialized ISA; `unknown` when the UI backend does not expose it. The host architecture is never used as a substitute. |
+| `kernel_route` | Stage-level route actually used by the case. Composite kernels use semicolon-separated stages; historical rows fall back to the main dispatch label. |
 
 Historical CSV files without the two new fields remain supported by the
 Markdown renderer.
@@ -191,6 +192,18 @@ Focused v0.1 Imgproc performance-floor matrix:
 
 `IMGPROC_FLOOR` freezes the families owned by
 [`cvh-v0.1-imgproc-performance-floor-acceleration-plan.md`](../../doc/cvh-v0.1-imgproc-performance-floor-acceleration-plan.md).
+
+Focused v0.1 direct-NEON hot-kernel matrix:
+
+```bash
+./benchmark/opencv_compare/run_compare.sh \
+  --profile stable --impls auto,ui,scalar --ops V01_NEON_HOT
+```
+
+`V01_NEON_HOT` contains only `CVTCOLOR`, `RESIZE`, `SOBEL`, `SCHARR`, and
+`SPATIAL_GRADIENT`. Stable runs add the target resolutions and odd-width ROI
+needed by
+[`cvh-v0.1-neon-hot-kernel-acceleration-plan.md`](../../doc/cvh-v0.1-neon-hot-kernel-acceleration-plan.md).
 
 Focused P2-P0 operator comparison:
 
