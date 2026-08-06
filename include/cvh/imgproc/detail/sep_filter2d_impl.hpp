@@ -4,6 +4,8 @@
 #include "fastpath_common.hpp"
 #include "filter_ui.hpp"
 
+#include <cstdint>
+
 namespace cvh
 {
 namespace detail
@@ -11,6 +13,411 @@ namespace detail
 
 namespace sep_filter2d_fastpath
 {
+inline thread_local const char* g_last_sepfilter2d_algorithm_path = "fallback";
+
+inline bool is_binomial3_kernel(const std::vector<float>& kernel)
+{
+    return kernel.size() == 3u &&
+           kernel[0] == 0.25f && kernel[1] == 0.5f &&
+           kernel[2] == 0.25f;
+}
+
+inline unsigned round_shift2_even(unsigned value)
+{
+    return (value + 1u + ((value >> 2) & 1u)) >> 2;
+}
+
+inline bool try_sep3_binomial(const Mat& src,
+                              Mat& dst,
+                              int out_depth,
+                              const std::vector<float>& kx,
+                              const std::vector<float>& ky,
+                              int anchor_x,
+                              int anchor_y,
+                              double delta,
+                              int border_type)
+{
+    if (!is_binomial3_kernel(kx) || !is_binomial3_kernel(ky) ||
+        anchor_x != 1 || anchor_y != 1 || delta != 0.0 ||
+        out_depth != src.depth() ||
+        (src.depth() != CV_8U && src.depth() != CV_32F) ||
+        !is_u8_fastpath_channels(src.channels()))
+    {
+        return false;
+    }
+
+    const int rows = src.size[0];
+    const int cols = src.size[1];
+    const int channels = src.channels();
+    if (rows <= 0 || cols <= 0)
+    {
+        return false;
+    }
+    const int row_stride = cols * channels;
+    const std::size_t src_step = src.step(0);
+    dst.create(src.shape(), src.type());
+    const std::size_t dst_step = dst.step(0);
+
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const bool use_ui = cpu::opencv_ui_allowed();
+#else
+    const bool use_ui = false;
+#endif
+
+    if (src.depth() == CV_8U)
+    {
+        std::vector<uchar> temporary(
+            static_cast<std::size_t>(rows) *
+            static_cast<std::size_t>(row_stride));
+        parallel_for_index_if(
+            should_parallelize_filter_rows(rows, cols, channels, 3),
+            rows,
+            [&](int y) {
+                const uchar* input =
+                    src.data + static_cast<std::size_t>(y) * src_step;
+                uchar* output =
+                    temporary.data() +
+                    static_cast<std::size_t>(y) *
+                        static_cast<std::size_t>(row_stride);
+                for (int c = 0; c < channels; ++c)
+                {
+                    unsigned sum = 0;
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        const int sx =
+                            border_interpolate(k - 1, cols, border_type);
+                        if (sx >= 0)
+                        {
+                            sum += static_cast<unsigned>(k == 1 ? 2 : 1) *
+                                   input[sx * channels + c];
+                        }
+                    }
+                    output[c] = static_cast<uchar>((sum + 2u) >> 2);
+                }
+
+                int offset = channels;
+                const int interior_end =
+                    std::max(channels, row_stride - channels);
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+                if (use_ui)
+                {
+                    const cv::v_uint16x8 rounding = cv::v_setall_u16(2);
+                    for (; offset + 16 <= interior_end; offset += 16)
+                    {
+                        const auto sum8 = [&](int lane) {
+                            const cv::v_uint16x8 center = cv::v_load_expand(
+                                input + offset + lane);
+                            return cv::v_add(
+                                cv::v_add(
+                                    cv::v_load_expand(
+                                        input + offset + lane - channels),
+                                    cv::v_load_expand(
+                                        input + offset + lane + channels)),
+                                cv::v_shl<1>(center));
+                        };
+                        cv::v_store(
+                            output + offset,
+                            cv::v_pack(
+                                cv::v_shr<2>(cv::v_add(sum8(0), rounding)),
+                                cv::v_shr<2>(cv::v_add(sum8(8), rounding))));
+                    }
+                    for (; offset + 8 <= interior_end; offset += 8)
+                    {
+                        const cv::v_uint16x8 center =
+                            cv::v_load_expand(input + offset);
+                        const cv::v_uint16x8 sum = cv::v_add(
+                            cv::v_add(
+                                cv::v_load_expand(
+                                    input + offset - channels),
+                                cv::v_load_expand(
+                                    input + offset + channels)),
+                            cv::v_shl<1>(center));
+                        std::uint16_t lanes[8];
+                        cv::v_store(
+                            lanes,
+                            cv::v_shr<2>(cv::v_add(sum, rounding)));
+                        for (int lane = 0; lane < 8; ++lane)
+                        {
+                            output[offset + lane] =
+                                static_cast<uchar>(lanes[lane]);
+                        }
+                    }
+                }
+#endif
+                for (; offset < interior_end; ++offset)
+                {
+                    const unsigned sum =
+                        input[offset - channels] +
+                        2u * input[offset] +
+                        input[offset + channels];
+                    output[offset] =
+                        static_cast<uchar>((sum + 2u) >> 2);
+                }
+                if (cols > 1)
+                {
+                    const int x = cols - 1;
+                    for (int c = 0; c < channels; ++c)
+                    {
+                        unsigned sum = 0;
+                        for (int k = 0; k < 3; ++k)
+                        {
+                            const int sx = border_interpolate(
+                                x + k - 1, cols, border_type);
+                            if (sx >= 0)
+                            {
+                                sum +=
+                                    static_cast<unsigned>(k == 1 ? 2 : 1) *
+                                    input[sx * channels + c];
+                            }
+                        }
+                        output[x * channels + c] =
+                            static_cast<uchar>((sum + 2u) >> 2);
+                    }
+                }
+            });
+
+        std::vector<uchar> zero_row;
+        if (border_type == BORDER_CONSTANT)
+        {
+            zero_row.resize(static_cast<std::size_t>(row_stride), 0u);
+        }
+        parallel_for_index_if(
+            should_parallelize_filter_rows(rows, cols, channels, 3),
+            rows,
+            [&](int y) {
+                const int sy0 =
+                    border_interpolate(y - 1, rows, border_type);
+                const int sy1 = y;
+                const int sy2 =
+                    border_interpolate(y + 1, rows, border_type);
+                const uchar* row0 =
+                    sy0 >= 0
+                        ? temporary.data() +
+                              static_cast<std::size_t>(sy0) * row_stride
+                        : zero_row.data();
+                const uchar* row1 =
+                    temporary.data() +
+                    static_cast<std::size_t>(sy1) * row_stride;
+                const uchar* row2 =
+                    sy2 >= 0
+                        ? temporary.data() +
+                              static_cast<std::size_t>(sy2) * row_stride
+                        : zero_row.data();
+                uchar* output =
+                    dst.data + static_cast<std::size_t>(y) * dst_step;
+                int offset = 0;
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+                if (use_ui)
+                {
+                    const cv::v_uint16x8 one = cv::v_setall_u16(1);
+                    const auto rounded8 = [&](int lane) {
+                        const cv::v_uint16x8 sum = cv::v_add(
+                            cv::v_add(
+                                cv::v_load_expand(row0 + offset + lane),
+                                cv::v_load_expand(row2 + offset + lane)),
+                            cv::v_shl<1>(
+                                cv::v_load_expand(row1 + offset + lane)));
+                        return cv::v_shr<2>(cv::v_add(
+                            cv::v_add(sum, one),
+                            cv::v_and(cv::v_shr<2>(sum), one)));
+                    };
+                    for (; offset + 16 <= row_stride; offset += 16)
+                    {
+                        cv::v_store(
+                            output + offset,
+                            cv::v_pack(rounded8(0), rounded8(8)));
+                    }
+                }
+#endif
+                for (; offset < row_stride; ++offset)
+                {
+                    const unsigned sum =
+                        row0[offset] + 2u * row1[offset] + row2[offset];
+                    output[offset] =
+                        static_cast<uchar>(round_shift2_even(sum));
+                }
+            });
+    }
+    else
+    {
+        std::vector<float> temporary(
+            static_cast<std::size_t>(rows) *
+            static_cast<std::size_t>(row_stride));
+        parallel_for_index_if(
+            should_parallelize_filter_rows(rows, cols, channels, 3),
+            rows,
+            [&](int y) {
+                const float* input = reinterpret_cast<const float*>(
+                    src.data + static_cast<std::size_t>(y) * src_step);
+                float* output =
+                    temporary.data() +
+                    static_cast<std::size_t>(y) * row_stride;
+                for (int c = 0; c < channels; ++c)
+                {
+                    float sum = 0.0f;
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        const int sx =
+                            border_interpolate(k - 1, cols, border_type);
+                        if (sx >= 0)
+                        {
+                            sum += static_cast<float>(k == 1 ? 2 : 1) *
+                                   input[sx * channels + c];
+                        }
+                    }
+                    output[c] = sum;
+                }
+                int offset = channels;
+                const int interior_end =
+                    std::max(channels, row_stride - channels);
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+                if (use_ui)
+                {
+                    for (; offset + 8 <= interior_end; offset += 8)
+                    {
+                        const auto sum4 = [&](int lane) {
+                            const cv::v_float32x4 center =
+                                cv::v_load(input + offset + lane);
+                            return cv::v_add(
+                                cv::v_add(
+                                    cv::v_load(
+                                        input + offset + lane - channels),
+                                    cv::v_load(
+                                        input + offset + lane + channels)),
+                                cv::v_add(center, center));
+                        };
+                        cv::v_store(output + offset, sum4(0));
+                        cv::v_store(output + offset + 4, sum4(4));
+                    }
+                    for (; offset + 4 <= interior_end; offset += 4)
+                    {
+                        const cv::v_float32x4 center =
+                            cv::v_load(input + offset);
+                        cv::v_store(
+                            output + offset,
+                            cv::v_add(
+                                cv::v_add(
+                                    cv::v_load(input + offset - channels),
+                                    cv::v_load(input + offset + channels)),
+                                cv::v_add(center, center)));
+                    }
+                }
+#endif
+                for (; offset < interior_end; ++offset)
+                {
+                    output[offset] = input[offset - channels] +
+                                     2.0f * input[offset] +
+                                     input[offset + channels];
+                }
+                if (cols > 1)
+                {
+                    const int x = cols - 1;
+                    for (int c = 0; c < channels; ++c)
+                    {
+                        float sum = 0.0f;
+                        for (int k = 0; k < 3; ++k)
+                        {
+                            const int sx = border_interpolate(
+                                x + k - 1, cols, border_type);
+                            if (sx >= 0)
+                            {
+                                sum += static_cast<float>(k == 1 ? 2 : 1) *
+                                       input[sx * channels + c];
+                            }
+                        }
+                        output[x * channels + c] = sum;
+                    }
+                }
+            });
+
+        std::vector<float> zero_row;
+        if (border_type == BORDER_CONSTANT)
+        {
+            zero_row.resize(static_cast<std::size_t>(row_stride), 0.0f);
+        }
+        parallel_for_index_if(
+            should_parallelize_filter_rows(rows, cols, channels, 3),
+            rows,
+            [&](int y) {
+                const int sy0 =
+                    border_interpolate(y - 1, rows, border_type);
+                const int sy2 =
+                    border_interpolate(y + 1, rows, border_type);
+                const float* row0 =
+                    sy0 >= 0
+                        ? temporary.data() +
+                              static_cast<std::size_t>(sy0) * row_stride
+                        : zero_row.data();
+                const float* row1 =
+                    temporary.data() +
+                    static_cast<std::size_t>(y) * row_stride;
+                const float* row2 =
+                    sy2 >= 0
+                        ? temporary.data() +
+                              static_cast<std::size_t>(sy2) * row_stride
+                        : zero_row.data();
+                float* output = reinterpret_cast<float*>(
+                    dst.data + static_cast<std::size_t>(y) * dst_step);
+                int offset = 0;
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+                if (use_ui)
+                {
+                    const cv::v_float32x4 scale =
+                        cv::v_setall_f32(1.0f / 16.0f);
+                    for (; offset + 8 <= row_stride; offset += 8)
+                    {
+                        const auto result4 = [&](int lane) {
+                            const cv::v_float32x4 center =
+                                cv::v_load(row1 + offset + lane);
+                            return cv::v_mul(
+                                cv::v_add(
+                                    cv::v_add(
+                                        cv::v_load(row0 + offset + lane),
+                                        cv::v_load(row2 + offset + lane)),
+                                    cv::v_add(center, center)),
+                                scale);
+                        };
+                        cv::v_store(output + offset, result4(0));
+                        cv::v_store(output + offset + 4, result4(4));
+                    }
+                    for (; offset + 4 <= row_stride; offset += 4)
+                    {
+                        const cv::v_float32x4 center =
+                            cv::v_load(row1 + offset);
+                        cv::v_store(
+                            output + offset,
+                            cv::v_mul(
+                                cv::v_add(
+                                    cv::v_add(
+                                        cv::v_load(row0 + offset),
+                                        cv::v_load(row2 + offset)),
+                                    cv::v_add(center, center)),
+                                scale));
+                    }
+                }
+#endif
+                for (; offset < row_stride; ++offset)
+                {
+                    output[offset] =
+                        (row0[offset] + 2.0f * row1[offset] +
+                         row2[offset]) *
+                        (1.0f / 16.0f);
+                }
+            });
+    }
+
+    cpu::set_last_dispatch_tag(
+        use_ui && row_stride >= (src.depth() == CV_8U ? 16 : 4)
+            ? cpu::DispatchTag::OpenCVUI
+            : cpu::DispatchTag::Scalar);
+    return true;
+}
+
 inline bool try_sep_filter2d_fastpath(const Mat& src,
                                Mat& dst,
                                int ddepth,
@@ -86,6 +493,23 @@ inline bool try_sep_filter2d_fastpath(const Mat& src,
     {
         return false;
     }
+
+    if (try_sep3_binomial(
+            *src_ref,
+            dst,
+            out_depth,
+            kx,
+            ky,
+            ax,
+            ay,
+            delta,
+            border_type))
+    {
+        g_last_sepfilter2d_algorithm_path = "binomial3_typed";
+        return true;
+    }
+
+    g_last_sepfilter2d_algorithm_path = "separable_filter2d";
 
     if (filter_ui::separable_c1(*src_ref,
                                 dst,
@@ -493,6 +917,11 @@ inline bool is_morph_rect3x3_kernel(const Mat& kernel, Point anchor)
 
 } // namespace sep_filter2d_fastpath
 
+inline const char* last_sepfilter2d_algorithm_path()
+{
+    return sep_filter2d_fastpath::g_last_sepfilter2d_algorithm_path;
+}
+
 inline void sepFilter2D_fast_impl(const Mat& src,
                                Mat& dst,
                                int ddepth,
@@ -502,6 +931,8 @@ inline void sepFilter2D_fast_impl(const Mat& src,
                                double delta,
                                int borderType)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    sep_filter2d_fastpath::g_last_sepfilter2d_algorithm_path = "fallback";
     if (sep_filter2d_fastpath::try_sep_filter2d_fastpath(
             src, dst, ddepth, kernelX, kernelY, anchor, delta, borderType))
     {

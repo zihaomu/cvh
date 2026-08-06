@@ -305,6 +305,22 @@ std::vector<Phase1BenchmarkResult> run_phase1_benchmarks(
             std::string(spec.suite) == "core" ? "core_mat" : spec.suite;
         result.op = spec.op;
         result.variant = spec.variant;
+        result.algorithm_path =
+            spec.id == Phase1OpId::BilateralFilter
+                ? cvh::bilateral_filter_detail::
+                      last_bilateral_algorithm_path()
+                : (spec.id == Phase1OpId::MedianBlur
+                       ? cvh::median_blur_detail::
+                             last_median_algorithm_path()
+                       : (spec.id == Phase1OpId::StackBlur
+                              ? cvh::stack_blur_detail::
+                                    last_stack_blur_algorithm_path()
+                              : (spec.id == Phase1OpId::Scharr ||
+                    spec.id == Phase1OpId::Laplacian
+                ? "derivative3_direct"
+                : (spec.id == Phase1OpId::SpatialGradient
+                       ? "spatial_gradient3"
+                       : "phase1_public_header"))));
         result.dispatch_path =
             cvh_dispatch_tag == cvh::cpu::DispatchTag::Unknown
                 ? "public_header_baseline"

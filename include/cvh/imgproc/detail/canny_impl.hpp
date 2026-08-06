@@ -2,6 +2,7 @@
 #define CVH_IMGPROC_DETAIL_CANNY_IMPL_HPP
 
 #include "fastpath_common.hpp"
+#include "filter_ui.hpp"
 
 namespace cvh
 {
@@ -10,6 +11,9 @@ namespace detail
 
 namespace canny_fastpath
 {
+inline thread_local const char* g_last_canny_algorithm_path =
+    "canny_fallback";
+
 inline bool try_canny_from_derivatives_fastpath_s16(const Mat& dx,
                                              const Mat& dy,
                                              Mat& edges,
@@ -49,12 +53,18 @@ inline bool try_canny_from_derivatives_fastpath_s16(const Mat& dx,
     const double tan_pi_8 = std::tan(CV_PI / 8.0);
     const double tan_3pi_8 = std::tan(CV_PI * 3.0 / 8.0);
 
-    std::vector<float> magnitude(count, 0.0f);
-    const bool do_parallel_mag = should_parallelize_filter_rows(rows, cols, 1, 1);
-    parallel_for_index_if(do_parallel_mag, rows, [&](int y) {
+    std::vector<float> magnitude_ring(
+        static_cast<std::size_t>(cols) * 3u,
+        0.0f);
+    std::vector<float> zero_magnitude(
+        static_cast<std::size_t>(cols),
+        0.0f);
+    const auto compute_magnitude_row = [&](int y) {
         const short* dx_row = reinterpret_cast<const short*>(dx.data + static_cast<std::size_t>(y) * dx_step);
         const short* dy_row = reinterpret_cast<const short*>(dy.data + static_cast<std::size_t>(y) * dy_step);
-        float* mag_row = magnitude.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(cols);
+        float* mag_row =
+            magnitude_ring.data() +
+            static_cast<std::size_t>(y % 3) * cols;
         for (int x = 0; x < cols; ++x)
         {
             const int gx = dx_row[x];
@@ -69,18 +79,41 @@ inline bool try_canny_from_derivatives_fastpath_s16(const Mat& dx,
                 mag_row[x] = static_cast<float>(std::abs(gx) + std::abs(gy));
             }
         }
-    });
+    };
+    compute_magnitude_row(0);
 
-    std::vector<float> nms = magnitude;
-    const bool do_parallel_nms = should_parallelize_filter_rows(rows, cols, 1, 3);
-    parallel_for_index_if(do_parallel_nms, rows, [&](int y) {
+    const int map_cols = cols + 2;
+    std::vector<uchar> edge_state(
+        static_cast<std::size_t>(rows + 2) *
+            static_cast<std::size_t>(map_cols),
+        static_cast<uchar>(0));
+    for (int y = 0; y < rows; ++y)
+    {
+        if (y + 1 < rows)
+        {
+            compute_magnitude_row(y + 1);
+        }
         const short* dx_row = reinterpret_cast<const short*>(dx.data + static_cast<std::size_t>(y) * dx_step);
         const short* dy_row = reinterpret_cast<const short*>(dy.data + static_cast<std::size_t>(y) * dy_step);
+        const float* previous_magnitude =
+            y > 0
+                ? magnitude_ring.data() +
+                      static_cast<std::size_t>((y - 1) % 3) * cols
+                : zero_magnitude.data();
+        const float* current_magnitude =
+            magnitude_ring.data() +
+            static_cast<std::size_t>(y % 3) * cols;
+        const float* next_magnitude =
+            y + 1 < rows
+                ? magnitude_ring.data() +
+                      static_cast<std::size_t>((y + 1) % 3) * cols
+                : zero_magnitude.data();
+        uchar* state_row =
+            edge_state.data() +
+            static_cast<std::size_t>(y + 1) * map_cols + 1u;
         for (int x = 0; x < cols; ++x)
         {
-            const std::size_t idx = static_cast<std::size_t>(y) * static_cast<std::size_t>(cols) +
-                                    static_cast<std::size_t>(x);
-            const float a = magnitude[idx];
+            const float a = current_magnitude[x];
             if (a <= low_threshold)
             {
                 continue;
@@ -88,67 +121,54 @@ inline bool try_canny_from_derivatives_fastpath_s16(const Mat& dx,
 
             const int gx = dx_row[x];
             const int gy = dy_row[x];
-            const double tg = gx ? static_cast<double>(gy) / gx : DBL_MAX * (gy >= 0 ? 1.0 : -1.0);
-
-            int x1 = 0;
-            int y1 = 0;
-            int x2 = 0;
-            int y2 = 0;
-            if (std::abs(tg) < tan_pi_8)
+            const int ax = std::abs(gx);
+            const int ay = std::abs(gy);
+            float b = 0.0f;
+            float c = 0.0f;
+            bool keep = false;
+            if (static_cast<double>(ay) < tan_pi_8 * ax)
             {
-                y1 = y;
-                y2 = y;
-                x1 = x + 1;
-                x2 = x - 1;
+                b = x + 1 < cols ? current_magnitude[x + 1] : 0.0f;
+                c = x > 0 ? current_magnitude[x - 1] : 0.0f;
+                keep = a >= b && a > c;
             }
-            else if (tan_pi_8 <= tg && tg <= tan_3pi_8)
+            else if (static_cast<double>(ay) > tan_3pi_8 * ax)
             {
-                y1 = y + 1;
-                y2 = y - 1;
-                x1 = x + 1;
-                x2 = x - 1;
+                b = next_magnitude[x];
+                c = previous_magnitude[x];
+                keep = a >= b && a > c;
             }
-            else if (-tan_3pi_8 <= tg && tg <= -tan_pi_8)
+            else if ((gx ^ gy) >= 0)
             {
-                y1 = y - 1;
-                y2 = y + 1;
-                x1 = x + 1;
-                x2 = x - 1;
+                b = x + 1 < cols ? next_magnitude[x + 1] : 0.0f;
+                c = x > 0 ? previous_magnitude[x - 1] : 0.0f;
+                keep = a > b && a > c;
             }
             else
             {
-                x1 = x;
-                x2 = x;
-                y1 = y + 1;
-                y2 = y - 1;
+                b = x + 1 < cols ? previous_magnitude[x + 1] : 0.0f;
+                c = x > 0 ? next_magnitude[x - 1] : 0.0f;
+                keep = a > b && a > c;
             }
-
-            float b = 0.0f;
-            float c = 0.0f;
-            if (static_cast<unsigned>(x1) < static_cast<unsigned>(cols) &&
-                static_cast<unsigned>(y1) < static_cast<unsigned>(rows))
+            if (keep)
             {
-                b = magnitude[static_cast<std::size_t>(y1) * static_cast<std::size_t>(cols) +
-                              static_cast<std::size_t>(x1)];
-            }
-            if (static_cast<unsigned>(x2) < static_cast<unsigned>(cols) &&
-                static_cast<unsigned>(y2) < static_cast<unsigned>(rows))
-            {
-                c = magnitude[static_cast<std::size_t>(y2) * static_cast<std::size_t>(cols) +
-                              static_cast<std::size_t>(x2)];
-            }
-
-            if (!((a > b || (a == b && ((x1 == x + 1 && y1 == y) || (x1 == x && y1 == y + 1)))) && a > c))
-            {
-                nms[idx] = -a;
+                state_row[x] =
+                    a > high_threshold ? static_cast<uchar>(2)
+                                       : static_cast<uchar>(1);
             }
         }
-    });
+    }
 
     std::vector<uchar> edge_map(count, static_cast<uchar>(0));
-    static const int kOffsets[8][2] = {
-        {1, 0}, {1, -1}, {0, -1}, {-1, -1},
-        {-1, 0}, {-1, 1}, {0, 1}, {1, 1},
+    const int neighbor_offsets[8] = {
+        1,
+        1 - map_cols,
+        -map_cols,
+        -1 - map_cols,
+        -1,
+        -1 + map_cols,
+        map_cols,
+        1 + map_cols,
     };
 
     std::vector<int> stack;
@@ -159,45 +179,31 @@ inline bool try_canny_from_derivatives_fastpath_s16(const Mat& dx,
         for (int x = 0; x < cols; ++x)
         {
             const int seed_idx = y * cols + x;
-            if (nms[static_cast<std::size_t>(seed_idx)] <= high_threshold)
-            {
-                continue;
-            }
-            if (edge_map[static_cast<std::size_t>(seed_idx)] != 0)
+            const int seed_map_idx = (y + 1) * map_cols + x + 1;
+            if (edge_state[static_cast<std::size_t>(seed_map_idx)] != 2)
             {
                 continue;
             }
 
+            edge_state[static_cast<std::size_t>(seed_map_idx)] = 0;
             edge_map[static_cast<std::size_t>(seed_idx)] = 255;
-            stack.push_back(seed_idx);
+            stack.push_back(seed_map_idx);
 
             while (!stack.empty())
             {
                 const int p = stack.back();
                 stack.pop_back();
-                const int px = p % cols;
-                const int py = p / cols;
 
                 for (int k = 0; k < 8; ++k)
                 {
-                    const int nx = px + kOffsets[k][0];
-                    const int ny = py + kOffsets[k][1];
-                    if (static_cast<unsigned>(nx) >= static_cast<unsigned>(cols) ||
-                        static_cast<unsigned>(ny) >= static_cast<unsigned>(rows))
+                    const int neighbor = p + neighbor_offsets[k];
+                    if (edge_state[static_cast<std::size_t>(neighbor)] != 0)
                     {
-                        continue;
-                    }
-
-                    const int nidx = ny * cols + nx;
-                    if (edge_map[static_cast<std::size_t>(nidx)] != 0)
-                    {
-                        continue;
-                    }
-
-                    if (nms[static_cast<std::size_t>(nidx)] > low_threshold)
-                    {
-                        edge_map[static_cast<std::size_t>(nidx)] = 255;
-                        stack.push_back(nidx);
+                        edge_state[static_cast<std::size_t>(neighbor)] = 0;
+                        const int ny = neighbor / map_cols - 1;
+                        const int nx = neighbor % map_cols - 1;
+                        edge_map[static_cast<std::size_t>(ny * cols + nx)] = 255;
+                        stack.push_back(neighbor);
                     }
                 }
             }
@@ -243,12 +249,50 @@ inline bool try_canny_image_fastpath_u8(const Mat& image,
     Mat dx;
     Mat dy;
     const int sobel_border = BORDER_REPLICATE | BORDER_ISOLATED;
-    Sobel(*src_ref, dx, CV_16S, 1, 0, apertureSize, 1.0, 0.0, sobel_border);
-    Sobel(*src_ref, dy, CV_16S, 0, 1, apertureSize, 1.0, 0.0, sobel_border);
-    return try_canny_from_derivatives_fastpath_s16(dx, dy, edges, threshold1, threshold2, L2gradient);
+    const bool fused_gradient =
+        apertureSize == 3 &&
+        filter_ui::spatial_gradient_u8_c1(
+            *src_ref, dx, dy, BORDER_REPLICATE);
+    if (!fused_gradient)
+    {
+        Sobel(
+            *src_ref,
+            dx,
+            CV_16S,
+            1,
+            0,
+            apertureSize,
+            1.0,
+            0.0,
+            sobel_border);
+        Sobel(
+            *src_ref,
+            dy,
+            CV_16S,
+            0,
+            1,
+            apertureSize,
+            1.0,
+            0.0,
+            sobel_border);
+    }
+    const bool handled = try_canny_from_derivatives_fastpath_s16(
+        dx, dy, edges, threshold1, threshold2, L2gradient);
+    if (handled)
+    {
+        g_last_canny_algorithm_path =
+            fused_gradient ? "canny_fused_gradient_ring_nms"
+                           : "canny_ring_nms";
+    }
+    return handled;
 }
 
 } // namespace canny_fastpath
+
+inline const char* last_canny_algorithm_path()
+{
+    return canny_fastpath::g_last_canny_algorithm_path;
+}
 
 inline void canny_image_fast_impl(const Mat& image,
                               Mat& edges,
@@ -257,6 +301,8 @@ inline void canny_image_fast_impl(const Mat& image,
                               int apertureSize,
                               bool L2gradient)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    canny_fastpath::g_last_canny_algorithm_path = "canny_fallback";
     if (canny_fastpath::try_canny_image_fastpath_u8(
             image, edges, threshold1, threshold2, apertureSize, L2gradient))
     {
@@ -273,9 +319,11 @@ inline void canny_deriv_fast_impl(const Mat& dx,
                                   double threshold2,
                                   bool L2gradient)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (canny_fastpath::try_canny_from_derivatives_fastpath_s16(
             dx, dy, edges, threshold1, threshold2, L2gradient))
     {
+        canny_fastpath::g_last_canny_algorithm_path = "canny_ring_nms";
         return;
     }
 

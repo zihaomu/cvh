@@ -165,6 +165,99 @@ inline void geometric_write_linear(const Mat& src,
         border_value);
 }
 
+template<int Channels>
+inline void geometric_write_linear_f32_interior(
+    const Mat& src,
+    float* destination,
+    int source_x,
+    int source_y,
+    double fraction_x,
+    double fraction_y)
+{
+    const float* row0 = reinterpret_cast<const float*>(
+        src.data + static_cast<size_t>(source_y) * src.step(0));
+    const float* row1 = reinterpret_cast<const float*>(
+        src.data + static_cast<size_t>(source_y + 1) * src.step(0));
+    const float* top_left =
+        row0 + static_cast<size_t>(source_x) * Channels;
+    const float* bottom_left =
+        row1 + static_cast<size_t>(source_x) * Channels;
+    for (int channel = 0; channel < Channels; ++channel)
+    {
+        const double top =
+            static_cast<double>(top_left[channel]) +
+            (static_cast<double>(top_left[Channels + channel]) -
+             static_cast<double>(top_left[channel])) *
+                fraction_x;
+        const double bottom =
+            static_cast<double>(bottom_left[channel]) +
+            (static_cast<double>(bottom_left[Channels + channel]) -
+             static_cast<double>(bottom_left[channel])) *
+                fraction_x;
+        destination[channel] = static_cast<float>(
+            top + (bottom - top) * fraction_y);
+    }
+}
+
+inline void geometric_write_linear_f32(
+    const Mat& src,
+    float* destination,
+    int source_x,
+    int source_y,
+    double fraction_x,
+    double fraction_y,
+    int border_type,
+    const Scalar& border_value)
+{
+    if (static_cast<unsigned>(source_y) <
+            static_cast<unsigned>(src.size[0] - 1) &&
+        static_cast<unsigned>(source_x) <
+            static_cast<unsigned>(src.size[1] - 1))
+    {
+        switch (src.channels())
+        {
+        case 1:
+            geometric_write_linear_f32_interior<1>(
+                src,
+                destination,
+                source_x,
+                source_y,
+                fraction_x,
+                fraction_y);
+            return;
+        case 3:
+            geometric_write_linear_f32_interior<3>(
+                src,
+                destination,
+                source_x,
+                source_y,
+                fraction_x,
+                fraction_y);
+            return;
+        case 4:
+            geometric_write_linear_f32_interior<4>(
+                src,
+                destination,
+                source_x,
+                source_y,
+                fraction_x,
+                fraction_y);
+            return;
+        default:
+            break;
+        }
+    }
+    geometric_write_linear(
+        src,
+        destination,
+        source_x,
+        source_y,
+        fraction_x,
+        fraction_y,
+        border_type,
+        border_value);
+}
+
 inline int geometric_resolve_index(int index,
                                    int length,
                                    int border_type)
@@ -335,6 +428,64 @@ inline void geometric_write_linear_u8_fixed(
 }
 
 template<typename CoordinateT>
+inline bool geometric_try_linear_u8_fixed_contiguous_row(
+    const Mat& src,
+    uchar* destination,
+    const CoordinateT* coordinates,
+    const ushort* fractions,
+    int count)
+{
+    const int channels = src.channels();
+    if ((channels != 1 && channels != 3 && channels != 4) || count <= 0)
+    {
+        return false;
+    }
+    const int source_x = static_cast<int>(coordinates[0]);
+    const int source_y = static_cast<int>(coordinates[1]);
+    const ushort fraction = fractions[0];
+    if (static_cast<unsigned>(source_y) >=
+            static_cast<unsigned>(src.size[0] - 1) ||
+        source_x < 0 || source_x + count >= src.size[1])
+    {
+        return false;
+    }
+    for (int index = 1; index < count; ++index)
+    {
+        if (static_cast<int>(coordinates[index * 2]) !=
+                source_x + index ||
+            static_cast<int>(coordinates[index * 2 + 1]) != source_y ||
+            fractions[index] != fraction)
+        {
+            return false;
+        }
+    }
+    const int fraction_x = fraction & (INTER_TAB_SIZE - 1);
+    const int fraction_y = fraction >> INTER_BITS;
+    const int inverse_x = INTER_TAB_SIZE - fraction_x;
+    const int inverse_y = INTER_TAB_SIZE - fraction_y;
+    const int weight00 = inverse_x * inverse_y;
+    const int weight01 = fraction_x * inverse_y;
+    const int weight10 = inverse_x * fraction_y;
+    const int weight11 = fraction_x * fraction_y;
+    const uchar* top =
+        src.data + static_cast<size_t>(source_y) * src.step(0) +
+        static_cast<size_t>(source_x) * channels;
+    const uchar* bottom = top + src.step(0);
+    const int scalar_count = count * channels;
+    for (int index = 0; index < scalar_count; ++index)
+    {
+        destination[index] = static_cast<uchar>(
+            (top[index] * weight00 +
+             top[index + channels] * weight01 +
+             bottom[index] * weight10 +
+             bottom[index + channels] * weight11 +
+             INTER_TAB_SIZE2 / 2) /
+            INTER_TAB_SIZE2);
+    }
+    return true;
+}
+
+template<typename CoordinateT>
 inline void geometric_write_linear_u8_fixed_row(
     const Mat& src,
     uchar* destination,
@@ -344,6 +495,15 @@ inline void geometric_write_linear_u8_fixed_row(
     int border_type,
     const Scalar& border_value)
 {
+    if (geometric_try_linear_u8_fixed_contiguous_row(
+            src,
+            destination,
+            coordinates,
+            fractions,
+            count))
+    {
+        return;
+    }
     const int channels = src.channels();
     for (int index = 0; index < count; ++index)
     {

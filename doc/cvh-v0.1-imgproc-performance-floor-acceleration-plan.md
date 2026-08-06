@@ -1,7 +1,7 @@
 # cvh v0.1 Imgproc 性能底线加速计划（第三轮性能收口）
 
 更新时间：2026-08-04
-状态：方案已冻结，B0 待执行
+状态：B4 测量后不优化；B5/B6 完成；B7 进行中（全量矩阵与跨平台收口）
 
 ## 1. 目的与阶段定位
 
@@ -416,14 +416,14 @@ targeted unit / differential
 
 | ID | 批次 | 当前状态 | 当前证据 / 下一步 |
 | --- | --- | --- | --- |
-| B0 | 测量与 dispatch 可信化 | 待执行 | 修复硬编码 label，冻结 stable/full profile |
-| B1 | Morphology C3/C4 | 待执行 | 基线已识别 `31–36x` case |
-| B2 | Shared filter / derivative | 待执行 | Gaussian、filter2D、Scharr、Laplacian 为最高倍率热点 |
-| B3 | Canny 数据流融合 | 待执行 | 1080p 绝对损失约 `32.645 ms` |
-| B4 | Pyramid 闭环 | 待执行 | `pyrUp` horizontal 与 U8 vertical pack 是明确空白 |
-| B5 | Geometry interior sampler | 待执行 | `warpAffine` F32C4 绝对损失约 `16.255 ms` |
-| B6 | Nonlinear 策略分流 | 待执行 | bilateral、median、stack 按实测逐项进入 |
-| B7 | 全量矩阵与跨平台收口 | 待执行 | 等待 B1–B6 完成 |
+| B0 | 测量与 dispatch 可信化 | 完成 | 75-row stable 三轮 case/dispatch 一致；整体几何平均跨轮差约 `1.6%`；后续采用三轮中位数 |
+| B1 | Morphology C3/C4 | 完成 | C3/C4 提升 `33.6–34.5x`、speedup `0.6770–0.6876`；C1 改善 `16.4–34.6%`；UI/scalar 194/194、contract 24/24 通过 |
+| B2 | Shared filter / derivative | 完成 | 最终 75-row 三轮中位数几何平均 `0.6062`；全部子项达标；UI/scalar imgproc 194/194、upstream contract 29/29 通过 |
+| B3 | Canny 数据流融合 | 完成 | 三轮中位数 1080p `26.51 ms` 对 OpenCV `27.41 ms`；相对 B0 减少 `42.12 ms`；UI/scalar 194/194、contract 30/30 通过 |
+| B4 | Pyramid 闭环 | 测量后不优化 | pyrUp 达标；pyrDown/buildPyramid 保留明确微延迟例外：stable CVH `0.084/0.020 ms`，绝对损失仅 `0.068/0.015 ms`；UI/scalar 194/194、contract 30/30 通过 |
+| B5 | Geometry interior sampler | 完成 | 三轮 full：warpAffine 最差 `0.5064`、remap 最差 `0.9846`、warpPerspective 最差 `0.4359`；UI/scalar 194/194、contract 30/30、header/ODR/checksum 通过 |
+| B6 | Nonlinear 策略分流 | 完成 | 三轮中位数 bilateral `0.5135`、median `0.6022`、stackBlur `1.3103`；UI/scalar 194/194、contract 30/30、header/ODR/checksum 通过 |
+| B7 | 全量矩阵与跨平台收口 | 进行中 | UI/scalar/upstream 与 canonical 本机矩阵完成；Linux x86_64 本机无容器、VM、交叉编译或远端 CLI，必须由现有 `ci-x86-correctness` 在 RC 推送后补证；继续建立干净 RC 并生成 compare/focused 报告 |
 
 ### 11.1 实时更新规则
 
@@ -447,6 +447,169 @@ targeted unit / differential
 | 日期 | 批次 | revision | 结果 | 下一步 |
 | --- | --- | --- | --- | --- |
 | 2026-08-04 | PLAN | working tree | 完成基线、热点和 SIMD/UI 审计；冻结 B0–B7 | 启动 B0 |
+| 2026-08-04 | B0 | `6175707` + working tree | B0 已启动；核对 benchmark schema、真实 dispatch 来源与 stable/full 入口 | 实现可观测字段并补齐测试 |
+| 2026-08-04 | B0 | `6175707` + working tree | 新增 `algorithm_path` / `dispatch_path` / `isa_observed`；`IMGPROC_FLOOR` UI+scalar quick 各 20 rows 通过；旧 CSV 可继续渲染；dispatch smoke 通过 | 执行 UI stable 多次复跑与 scalar correctness 复核 |
+| 2026-08-04 | B0 | `6175707` + working tree | UI stable 三轮均为 75 rows，case/dispatch 完全一致，几何平均 `0.1794 / 0.1822 / 0.1798`；UI 与 optimization-off scalar smoke 通过 | 关闭 B0，启动 B1 morphology C3/C4 |
+| 2026-08-04 | B1 | `6175707` + working tree | C3/C4 rect3x3 改为 channel-stride UI byte-span；vertical constant border 使用 per-channel 重复行；新增 forced scalar/UI odd-width ROI 测试 | 执行 targeted、full differential 与 stable benchmark |
+| 2026-08-04 | B1 | `6175707` + working tree | `build-ci-headers-ui` targeted morphology 14/14 通过；覆盖 C1/C3/C4、奇数尺寸 ROI、replicate/constant、forced scalar/UI 与 upstream regression | 执行 optimization-off targeted 与 UI/scalar full imgproc |
+| 2026-08-04 | B1 | `6175707` + working tree | `build-phase2-accel-scalar` optimization-off targeted morphology 14/14 通过；scalar fallback 与 upstream regression 未受影响 | 执行 UI/scalar full imgproc 与 OpenCV differential |
+| 2026-08-04 | B1 | `6175707` + working tree | `build-ci-headers-ui/cvh_test_imgproc` 全量 194/194 通过 | 执行 optimization-off full imgproc 与 OpenCV differential |
+| 2026-08-04 | B1 | `6175707` + working tree | `build-phase2-accel-scalar/cvh_test_imgproc` 全量 194/194 通过 | 执行 OpenCV differential 与 stable benchmark |
+| 2026-08-04 | B1 | `6175707` + working tree | OpenCV upstream contract smoke 全量 24/24 通过 | 执行 B1 UI stable 三轮并与 B0 中位数对比 |
+| 2026-08-04 | B1 | `6175707` + working tree | UI stable run 1 完成 75 rows；C3/C4 erode/dilate speedup `0.6617–0.6854`，单轮已越过 `0.50` 底线，实际 dispatch 均为 `opencv_ui` | 执行 stable run 2/3，按三轮中位数验收并检查 C1 回退 |
+| 2026-08-04 | B1 | `6175707` + working tree | UI stable run 2 完成 75 rows；C3/C4 erode/dilate speedup `0.6752–0.6840`，与 run 1 结论一致 | 执行 stable run 3，汇总三轮中位数与 B0 回退 |
+| 2026-08-04 | B1 | `6175707` + working tree | UI stable run 3 完成；三轮中位数显示 C3/C4 CVH time 改善 `27.5–28.1x`，OpenCV 仅快 `1.46–1.49x`；C1 的 720p/1080p 改善，但 480p 回退 `8.75–9.70%`，未过 5% gate | 去掉 replicate 路径不需要的 per-call constant-border row 分配并复测 C1 |
+| 2026-08-04 | B1 | `6175707` + working tree | constant-border row 改为仅 `BORDER_CONSTANT` 构造；refined stable run 1 的 C1 480p erode/dilate 均约 `0.0352 ms`，相对 B0 单轮方向已消除回退；C3/C4 speedup 仍为 `0.6751–0.6880` | 执行 refined stable run 2/3 与 correctness 复核 |
+| 2026-08-04 | B1 | `6175707` + working tree | refined stable run 2 的 C1 480p 为 `0.0366 / 0.0370 ms`，C3/C4 speedup `0.6733–0.6969`，与 run 1 一致 | 执行 refined stable run 3，汇总最终三轮中位数 |
+| 2026-08-04 | B1 | `6175707` + working tree | refined stable 三轮中位数：C3/C4 CVH time 改善 `33.6–34.5x`，speedup `0.6770–0.6876`；C1 全尺寸改善 `16.4–34.6%`，无回退 | 重编译 UI/scalar tests，复核最终代码正确性后关闭 B1 |
+| 2026-08-04 | B1 | `6175707` + working tree | refined 最终代码在 `build-ci-headers-ui` 重编译完成，full imgproc 194/194 通过 | 重编译并运行 optimization-off full imgproc |
+| 2026-08-04 | B1 | `6175707` + working tree | 最终 optimization-off full imgproc 194/194、OpenCV contract 24/24 通过；性能与正确性 gate 全部满足 | 关闭 B1，启动 B2 shared filter / derivative |
+| 2026-08-04 | B2 | `6175707` + working tree | B2 已启动 | 复核共享过滤基础设施与 B0 case 级热点，选择首个可独立验收 kernel |
+| 2026-08-04 | B2 | `6175707` + working tree | 复核确认 Gaussian/sepFilter C1 UI 仍分配全图 float intermediate，C3/C4 回落 scalar；5x5 sigma=0 benchmark 可使用 `[1,4,6,4,1]` bit-exact fixed-point 两阶段卷积 | 先实现 U8 C1/C3/C4 typed five-row ring、interior UI 与 scalar border，并做 upstream bit-exact 验证 |
+| 2026-08-04 | B2 | `6175707` + working tree | Gaussian 5x5 U8 使用五行 `uint16` ring、interior UI、scalar border 与单次 `(sum+128)>>8`；本地 targeted 6/6、OpenCV C1/C3/C4 × 4 border 逐字节 differential 通过 | stable 测量并按 B2 门槛优化 |
+| 2026-08-04 | B2 | `6175707` + working tree | Gaussian stable run 1：U8C1 从 B0 `0.974/3.046/7.070 ms` 降至 `0.090/0.224/0.480 ms`，提升 `10.8–14.7x`；C3 `7.2x`、C4 `3.7x`；480p C1 距 3x gate 约 6%，C4 距 4x gate 约 8% | 缓存 UI mode 并展开 horizontal block，复测三轮中位数 |
+| 2026-08-04 | B2 | `6175707` + working tree | Gaussian 独立参考改为 upstream 5x5 bit-exact 核；新增实际调用 sibling OpenCV 的 C1/C3/C4 × constant/replicate/reflect/reflect101 逐字节合同，并覆盖 forced scalar/UI；当前 differential 通过 | 重编译新增 forced-mode 合同并完成 refined 三轮 stable |
+| 2026-08-04 | B2 | `6175707` + working tree | Gaussian refined stable run 1：U8C1 `0.084/0.217/0.465 ms`，speedup `0.332/0.389/0.420`；C3/C4 `0.226/0.295 ms`，speedup `0.391/0.400`；C4 已越过 4x 相对提升 | 去掉 replicate 无用 zero-row allocation，执行 refined run 2/3 |
+| 2026-08-04 | B2 | `6175707` + working tree | boxFilter U8 3x3 新增三行 `uint16` ring、horizontal UI、exact `/9` vector normalization；stable run 1 为 `0.81–1.04x` OpenCV，C1/C3/C4 全部达标 | 扩展 F32 flattened UI 并补 upstream 合同 |
+| 2026-08-04 | B2 | `6175707` + working tree | boxFilter F32 3x3 新增三行 float ring 与 flattened UI；U8/F32 × C1/C3/C4 × 4 border × forced scalar/UI upstream differential 全部通过；stable 为 `0.92–1.48x` OpenCV | boxFilter 子项关闭，转入 filter2D/sepFilter2D |
+| 2026-08-04 | B2 | `6175707` + working tree | sepFilter2D 常用 binomial3 新增 U8 typed intermediate 与 F32 flattened UI；stable U8 为 `1.96–2.15x` OpenCV、F32 为 `0.89–0.99x`，全部达标；upstream U8 最大误差 1 LSB、F32 `2e-5` 内，forced scalar/UI 全矩阵通过 | 关闭 sepFilter2D 子项，处理 filter2D |
+| 2026-08-04 | B2 | `6175707` + working tree | filter2D 常用 cross3 新增 direct U8/F32 channel-flattened UI；stable U8 为 `2.85–3.08x` OpenCV、F32 `1.12–1.18x`，全部达标；forced scalar/UI upstream 合同通过 | 同步真实 algorithm path，转入 derivative 专用 kernel |
+| 2026-08-04 | B2 | `6175707` + working tree | U8-to-F32 3x3 derivative 新增 channel-flattened direct UI kernel；Sobel C1 为 OpenCV 的 `0.38–0.43x`、Scharr `0.40x`、Laplacian `0.45x`，均通过“不慢于 `3x`”门槛；Sobel C3/C4 因 direct path 对自身基线回退而保留原路径；本地 derivative 10/10 与既有 upstream differential 通过 | 补齐真实 algorithm path，执行 B2 最终三轮 stable 和 full correctness |
+| 2026-08-04 | B2 | `6175707` + working tree | 三轮初验发现 Gaussian F32 仍使用整幅 intermediate，未满足 B2 结构任务；补充 F32 5x5 五行 ring 与 channel-flattened UI，actual OpenCV 的 C1/C3/C4 × 4 border × forced scalar/UI differential 通过；stable probe 为 OpenCV 的 `0.99–1.06x`，旧路径 `0.07–0.46x` 的缺口已消除 | 重新执行包含最终代码的三轮 stable，并完成 full correctness |
+| 2026-08-04 | B2 | `6175707` + working tree | 最终代码三轮 stable 中位数：Gaussian U8 提升 `8.0–24.3x`、F32 提升 `4.1–23.8x`；box `3.7–13.2x`；filter2D `16.7–72.9x`；sepFilter2D `7.5–24.0x`；Scharr/Laplacian `9.3/10.3x`；75-row 几何平均达 `0.6062`；所有 B2 case 均通过各自速度底线 | 执行 UI/scalar full imgproc 与全量 upstream contract，正确性通过后关闭 B2 |
+| 2026-08-04 | B2 | `6175707` + working tree | 最终 UI full imgproc 194/194、optimization-off scalar full imgproc 194/194、actual OpenCV contract 29/29 通过；B2 性能与正确性硬门禁全部关闭 | 启动 B3 Canny 数据流融合 |
+| 2026-08-04 | B3 | `6175707` + working tree | B3 已启动 | 审计 gradient、magnitude、NMS、hysteresis 数据流与 allocation，建立可独立验收的首个改动 |
+| 2026-08-04 | B3 | `6175707` + working tree | aperture3 将两次独立 Sobel 改为一次共享 `spatial_gradient_u8_c1` UI；Canny targeted 6/6 通过；1080p stable probe 从 B0 中位数 `68.62 ms` 降至 `49.48 ms`，减少 `19.14 ms`，但仍未满足 `20 ms` 与 `1.5x` 双门槛 | 融合 magnitude/NMS 状态并移除逐像素方向除法 |
+| 2026-08-04 | B3 | `6175707` + working tree | NMS 改为直接生成 padded weak/strong state map，hysteresis 使用无边界分支的线性邻居 offset；移除整幅 NMS copy 与方向除法；targeted 6/6、actual OpenCV aperture3/5 L1/L2 bit-exact 合同通过；1080p probe `28.72 ms`，已越过双门槛 | 将 full-frame magnitude 改为三行 ring 后复测 |
+| 2026-08-04 | B3 | `6175707` + working tree | magnitude/NMS 改为三行 ring，移除完整 magnitude workspace；targeted 6/6 通过；stable probe 480p/720p/1080p 为 `3.85/11.67/26.51 ms`，对应 OpenCV 的 `1.03/1.03/1.04x`，1080p 相对 B0 减少 `42.11 ms` | 重编译 actual OpenCV contract，执行最终三轮 stable 与 UI/scalar full correctness |
+| 2026-08-04 | B3 | `6175707` + working tree | 最终三轮中位数 480p/720p/1080p 为 `3.87/11.68/26.51 ms`，对应 OpenCV 的 `1.03/1.03/1.03x`；1080p 相对 B0 减少 `42.12 ms`；UI/scalar full imgproc 194/194、actual OpenCV contract 30/30 通过 | 关闭 B3，启动 B4 pyramid 闭环 |
+| 2026-08-04 | B4 | `6175707` + working tree | B4 已启动 | 审计现有 pyramid UI 覆盖、逐 lane pack 和 layer workspace，选择首个改动 |
+| 2026-08-04 | B4 | `6175707` + working tree | U8 vertical 将 int32 vector 落栈逐 lane saturate 改为 UI narrowing/rshift pack；pyrUp stable 从约 `0.167 ms` 降至 `0.136 ms`，但三项尚未全部达标 | 专用化 pyrUp horizontal interior，并复核 pyrDown vertical 组织 |
+| 2026-08-04 | B4 | `6175707` + working tree | pyrUp interior 按 expanded parity 化简：偶数位三 tap、奇数位两 tap，移除五 tap index/branch 循环；再采用 upstream 同构的 u16 vertical pack；stable pyrUp 降至约 `0.052–0.067 ms`，full `0.232 ms` 对 OpenCV `0.179 ms`，已通过 `2.5x` gate | 继续处理 pyrDown/buildPyramid |
+| 2026-08-04 | B4 | `6175707` + working tree | `buildPyramid` level 0 改为与 upstream 一致的 Mat header alias，去掉不必要的全图 clone，并增加 alias 合同；index/TLS cache 与 full-blur-then-decimate 探索均未产生稳定收益，已撤回；pyrDown stable/full 仍约为 OpenCV `0.19x`，buildPyramid 约 `0.30x`，但三者 CVH stable 均 `<0.1 ms`、full 均 `<0.4 ms` | 完成 correctness 与三轮数据；若仍未过 ratio，按微延迟规则记录明确例外而不引入复杂 direct ISA |
+| 2026-08-04 | B4 | `6175707` + working tree | 最终三轮中位数：pyrDown `0.0837 ms` 对 `0.0160 ms`，buildPyramid `0.0204 ms` 对 `0.0057 ms`，绝对差分别仅 `0.0676/0.0147 ms`；pyrUp `0.0590 ms` 对 `0.0394 ms`，相对 B0 提升 `3.72x` 并达标；full profile 三者 CVH 也均 `<0.4 ms`；UI/scalar 194/194、actual OpenCV contract 30/30 通过 | 根据 10.1 的 `<1 ms` 规则，将未过 ratio 的两项记录为明确微延迟例外，关闭 B4 优化，启动 B5 |
+| 2026-08-04 | B5 | `6175707` + working tree | B5 已启动 | 审计 stable/full geometry case 与现有 sampler 分支 |
+| 2026-08-04 | B5 | `6175707` + working tree | 新增保持 double 权重语义的 F32 typed interior bilinear sampler，边界继续走通用慢路径；WarpAffine targeted 8/8、header compile、ODR smoke 通过；full probe 中 F32C3 `8.019 -> 1.663 ms`（`4.82x`）、F32C4 `10.557 -> 1.746 ms`（`6.05x`），C1 `3.155 -> 1.393 ms`（`2.27x`） | 保留首轮 fast path；将 channel dispatch 移出逐像素循环并实现 scanline 坐标增量，继续压低 C1 |
+| 2026-08-04 | B5 | `6175707` + working tree | F32 translation 将坐标 floor 降为每行一次，并把 leading border / interior / trailing border 分段；full probe F32C1/C3/C4 为 `0.897/1.212/1.348 ms`，相对 B4 分别提升 `3.52x/6.62x/7.83x`，对 OpenCV 为 `1.94x/1.85x/1.90x` | F32 性能子目标完成；复用分段 scanline 到 U8 fixed sampler，并补齐 actual upstream differential |
+| 2026-08-04 | B5 | `6175707` + working tree | U8 translation 将 fixed coordinate/fraction 降为每行一次并直接展开连续 interior，1080p C1 `12.232 -> 0.440 ms`；U8C3/C4 为 `0.213/0.317 ms`；actual OpenCV contract 新增 U8/F32 translation，U8 bit-exact、F32 `1e-5` 通过 | U8/F32 warpAffine 性能与 translation 正确性子目标完成；优化 remap 连续 coordinate block |
+| 2026-08-04 | B5 | `6175707` + working tree | shared fixed sampler 识别连续 coordinate/fraction block；fixed remap 改为 64-pixel block，1080p float/fixed remap 为 `4.073/2.320 ms` 对 OpenCV `5.229/4.875 ms`；warpPerspective 保持 `0.437–0.469` ratio，符合 `2.5x` 底线 | 修正 Geometry benchmark algorithm/dispatch 可观测性；执行 B5 完整 correctness 与三轮 full 验收 |
+| 2026-08-04 | B5 | `6175707` + working tree | 三轮 full 中位数：warpAffine 最差 F32C1 `0.902 ms` 对 `0.457 ms`（`0.5064`），remap 最差 `0.9846`，warpPerspective 最差 `0.4359`；algorithm path 为 scanline/block，dispatch 如实为 scalar；UI/scalar Imgproc 194/194、actual upstream 30/30、header compile、ODR、UI/scalar benchmark checksum 全通过 | B5 完成，启动 B6 nonlinear 策略分流 |
+| 2026-08-04 | B6 | `6175707` + working tree | B6 已启动 | 从 B5 final full 三轮数据审计 bilateral、median、stack 的最新热点和现有实现 |
+| 2026-08-04 | B6 | `6175707` + working tree | bilateral 将二维 border index/分支移出内层，建立调用级 padded source 与相对 neighbor offset，并专门化 U8 C1/C3；targeted unit 通过，full probe `10.546 -> 1.682 ms`（`6.27x`），对 OpenCV ratio `0.5138` | 执行 C3 actual upstream contract；通过后关闭 bilateral 子项，处理 median k5 |
+| 2026-08-04 | B6 | `6175707` + working tree | bilateral C3 actual upstream contract 通过；median 测得 histogram scalar `8.177 ms`、UI sorting network `1.441 ms`，因此保留 UI 策略；将每行 scalar `nth_element` tail 改为重叠 UI tail + scalar selection network，降至 `0.415 ms`，ratio `0.6120` | bilateral/median 子项完成；进入 stackBlur |
+| 2026-08-04 | B6 | `6175707` + working tree | stackBlur 单独收窄 accumulator 无收益（`0.513 -> 0.520 ms`）；进一步为 U8 5x5 建 typed horizontal/vertical direct span，保留其他 kernel rolling fallback，并新增 5x5 naive bit-exact case；降至 `0.090 ms` 对 OpenCV `0.119 ms`（CVH `1.32x`） | 性能子目标全部完成；修正 nonlinear algorithm/dispatch 可观测性并执行完整验收 |
+| 2026-08-04 | B6 | `6175707` + working tree | 三轮 full 中位数 bilateral `1.686 ms` 对 `0.866 ms`（`0.5135`）、median `0.415 ms` 对 `0.250 ms`（`0.6022`）、stackBlur `0.091 ms` 对 `0.119 ms`（`1.3103`）；UI/scalar Imgproc 194/194、actual upstream 30/30、header compile、ODR、UI/scalar benchmark checksum 全通过 | B6 完成，启动 B7 全量矩阵与跨平台收口 |
+| 2026-08-04 | B7 | `6175707` + working tree | B7 已启动 | 执行全测试、optimization-off、install smoke、canonical quick/full、OpenCV compare stable/full 与 Phase 2-P0 回归；审计 Linux x86_64 可用执行环境 |
+| 2026-08-04 | B7 | `6175707` + working tree | 首次正式 `ci_headers_all.sh` 在 installed-header 12 项 smoke 的 `cvh_resize_dispatch_smoke` 失败（其余 11/12 通过）；定位为 B2 Gaussian 5x5 algorithm path 已变为 `gauss5x5_fixedpoint`，smoke 仍断言旧 `gauss_separable`；同步断言后单独 smoke 通过 | 从头复跑正式 UI header-only gate，确认安装/CTest/报告全链路 |
+| 2026-08-04 | B7 | `6175707` + working tree | 第二次正式 gate：installed-header 12/12、CTest 20/20、Core 213/213、Imgproc 194/194 全通过；报告清单仍期望 Imgproc 193，因 B1 新增 morphology 用例后未同步而退出 1；arm64/x86_64 expectation 均更新为 194 | 第三次从头复跑正式 gate，取得完整退出码 0 证据 |
+| 2026-08-04 | B7 | `6175707` + working tree | 第三次正式 `CVH_CI_PARALLEL=4 ./scripts/ci_headers_all.sh` 完整退出 0：installed-header contract 12/12、header compile/ODR、CTest 20/20、Core 213/213、Imgproc 194/194 全通过；Apple ARM64 UI-on 正式门禁关闭 | 执行干净 optimization-off 全量构建与测试 |
+| 2026-08-04 | B7 | `6175707` + working tree | 全新 `build-b7-optimization-off` 明确配置 `CVH_ENABLE_OPTIMIZATION=OFF`；构建完成，CTest 18/18、Core 213（200 pass、13 个 SIMD-only 按设计 skip）、Imgproc 194/194，通过 optimization-disabled smoke、header compile 与 ODR | 重建并执行 upstream differential full matrix |
+| 2026-08-04 | B7 | `6175707` + working tree | 全新 `build-b7-opencv-contract` 链接 upstream OpenCV 4.14.0，重建 backend 与 smoke；full matrix 30/30 通过 | 执行 canonical Core/Imgproc quick 与 full benchmark |
+| 2026-08-04 | B7 | `6175707` + working tree | canonical quick 完成：Core 416、Imgproc 67、cvtColor 64、resize 36 行全部 `OK`；canonical full 完成：Core 1007/1007 `OK`，Imgproc 326 `OK` + 1 个既有 `INTER_CUBIC_OUTSIDE_ACCEPTED_CONTRACT` expected unsupported；checksum 均有效 | 执行 baseline/candidate stable 回归并审计异常 |
+| 2026-08-04 | B7 | `6175707` + working tree | canonical internal runner 单向 quick 报 Core 13/416 超 8%；stable baseline-first 报 Core 186/716、Imgproc 49/204，但反向后分别降到 69、25，几何平均 Core 从 `0.9705` 反转为 `1.0096`、Imgproc 从 `1.6177` 变为 `1.7001` | 用同二进制跨轮差验证是否为执行顺序/机器状态偏差 |
+| 2026-08-04 | B7 | `6175707` + working tree | 同一个 candidate 二进制的两份 stable 结果自身相差 Core `1.3050x`、Imgproc `1.0913x`，且 Imgproc 仍有 5 个 >8% 假告警（stackBlur 同二进制波动约 `2.1x`）；证明双进程 runner 当前不满足逐 case 发布判定的稳定性前提。本轮不据此回退代码，保留原始 forward/reverse/balanced 结果，最终采用同进程 OpenCV compare 三轮中位数及 focused gate | 审计并执行 Linux x86_64 环境；随后生成干净 RC compare 报告 |
+| 2026-08-04 | B7 | `6175707` + working tree | 当前宿主为 Darwin arm64；Docker、Podman、Colima、Lima、nerdctl、Linux x86_64 cross compiler、QEMU、Multipass/Tart 与 `gh` 均不可用。仓库已有 Ubuntu `ci-x86-correctness.yml` 和 `scripts/ci_x86_correctness.sh`，但未推送的 working tree 无法取得同 revision Linux 证据 | 不擅自 push；先建立干净本地 RC、完成最终报告，Linux x86_64 明确保留为远端 CI 待补项 |
+
+### 11.3 B0 当前证据
+
+已验证命令：
+
+```bash
+cmake --build build-opencv-compare \
+  --target cvh_benchmark_opencv_compare_ui -j
+cmake --build build-ci-headers-ui \
+  --target cvh_resize_dispatch_smoke -j
+ctest --test-dir build-ci-headers-ui \
+  -R '^cvh_resize_dispatch_smoke$' --output-on-failure
+CVH_COMPARE_SKIP_OPENCV_SETUP=1 \
+CVH_OPENCV_DIR=../opencv \
+CVH_OPENCV_CONFIG_DIR=../opencv/build-slim \
+CVH_COMPARE_BUILD_DIR=build-opencv-compare \
+benchmark/opencv_compare/run_compare.sh \
+  --profile quick --impls ui,scalar --ops IMGPROC_FLOOR \
+  --warmup 0 --iters 1 --repeats 1 --threads 1
+```
+
+Quick 观测结果：
+
+| 算子 | `cvh_ui` | `cvh_scalar` | 算法 |
+| --- | --- | --- | --- |
+| `GaussianBlur` | `opencv_ui` | `scalar` | `gauss_separable` |
+| `boxFilter` | `scalar` | `scalar` | `box3x3` |
+| `filter2D` | `opencv_ui` | `scalar` | `generic_filter2d` |
+| `sepFilter2D` | `opencv_ui` | `scalar` | `separable_filter2d` |
+| `Sobel` | `scalar` | `scalar` | `derivative_convolve` |
+| `Canny` | `scalar` | `scalar` | `canny_fullframe_nms` |
+| `erode` / `dilate` C1 | `opencv_ui` | `scalar` | `morph_rect3x3` |
+
+`isa_observed` 当前均为 `unknown`：UI 层未暴露可靠的底层 ISA 观测，本轮
+不根据 Apple ARM64 主机反推 `neon`。
+
+源代码 workspace 审计：
+
+| family | 当前主要 workspace / allocation |
+| --- | --- |
+| Gaussian / separable | 整幅 `rows * cols * channels` float intermediate |
+| box | 全行和 vertical accumulator；无 UI 主路径 |
+| filter2D | 全宽 x-offset 与全高 y-index 表 |
+| morphology | 整幅 U8 horizontal intermediate |
+| Canny | 完整 magnitude、NMS copy、edge map 和 hysteresis stack |
+
+冻结的 focused 命令为 `--ops IMGPROC_FLOOR`；批次验收使用 `stable`，阶段
+完成使用 `full`。生成物写入 build 目录，只有经复核的 date-named snapshot
+进入 `benchmark/opencv_compare/results/`。
+
+Stable 三轮中，case-level ratio spread 中位数为 `5.7%`；7 个 case 超过
+`15%`，其中 2 个超过 `25%`。这些 case 集合与 dispatch 均一致，整体几何
+平均跨轮差约 `1.6%`。因此 B1–B6 的 before/after 判定固定使用三轮中位数；
+单轮异常不能单独证明回退或收益。
+
+### 11.4 B1 当前证据
+
+UI targeted correctness 已通过：
+
+```bash
+cmake --build build-ci-headers-ui --target cvh_test_imgproc -j4
+build-ci-headers-ui/cvh_test_imgproc \
+  --gtest_filter='MorphologyTest.*:MorphologyDerivativesUpstreamTest.*'
+```
+
+UI 与 optimization-off 构建结果均为 14/14 通过。新增用例在 C3/C4、
+odd-width ROI、`BORDER_REPLICATE` 和 `BORDER_CONSTANT` 下逐项比较
+forced scalar 与 forced UI，并校验实际 dispatch tag；full imgproc、OpenCV
+differential 和 stable benchmark 尚未完成，因此 B1 保持“进行中”。
+
+UI 与 optimization-off 构建的 full imgproc 结果均为 194/194 通过；
+OpenCV upstream contract smoke 结果为 24/24 通过。B1 正确性验收已完成，
+stable run 1 已完成 75 rows：C3/C4 erode/dilate speedup 为
+`0.6617–0.6854`，实际 dispatch 均为 `opencv_ui`；仍需 run 2/3 后用
+三轮中位数确认门槛与 C1 回退。
+
+Stable run 2 同样完成 75 rows，C3/C4 speedup 为 `0.6752–0.6840`；
+两轮均已越过 `0.50` 底线。Run 3 后的三轮中位数如下：
+
+| case | B0 CVH | B1 CVH | CVH 提升 | B1 speedup |
+| --- | ---: | ---: | ---: | ---: |
+| erode U8C3 480p | `3.1112 ms` | `0.1116 ms` | `27.89x` | `0.6728` |
+| dilate U8C3 480p | `3.0783 ms` | `0.1118 ms` | `27.54x` | `0.6773` |
+| erode U8C4 480p | `4.0768 ms` | `0.1449 ms` | `28.13x` | `0.6800` |
+| dilate U8C4 480p | `4.0710 ms` | `0.1448 ms` | `28.12x` | `0.6836` |
+
+C3/C4 已通过 `speedup >= 0.50` 门槛；但 480p C1 erode/dilate 相对 B0
+分别回退 `9.70% / 8.75%`，尚未通过 `5%` 非目标回退 gate。初步定位为
+replicate benchmark 也无条件构造 constant-border row；先消除此 per-call 开销
+再复测，B1 暂不关闭。
+
+优化为仅在 `BORDER_CONSTANT` 下构造 border row 后，refined stable run 1
+的 C1 480p erode/dilate 均约 `0.0352 ms`，已低于 B0 三轮中位数
+`0.0426 / 0.0430 ms`；C3/C4 speedup 仍为 `0.6751–0.6880`。继续完成
+refined run 2/3，避免用单轮结果关闭 gate。
+
+Refined stable 三轮最终中位数：C3/C4 CVH time 相对 B0 改善
+`33.6–34.5x`，speedup 为 `0.6770–0.6876`；C1 的 480p/720p/1080p
+CVH time 全部改善 `16.4–34.6%`，没有超过 5% 的回退。性能 gate 已通过，
+最终代码在 UI 与 optimization-off 构建中均重编译完成，full imgproc 各
+194/194 通过，OpenCV contract 24/24 通过。B1 已关闭。
 
 ## 12. 提交与回退边界
 
@@ -464,17 +627,18 @@ B2 和 B6 可继续按算子拆分。
 
 ## 13. 完成定义
 
-- [ ] B0 提供可信的 `algorithm_path` / `dispatch_path`，不再用硬编码 label
+- [x] B0 提供可信的 `algorithm_path` / `dispatch_path`，不再用硬编码 label
       冒充实际 SIMD；
-- [ ] B1 morphology C3/C4 达到 `2.0x` 底线且 C1 无显著回退；
-- [ ] B2 filter / derivative family 达到各自门槛；
-- [ ] B3 Canny 1080p 达到 `1.5x` 底线并减少至少 `20 ms`；
-- [ ] B4 pyramid family 达到 `2.5x` 底线；
-- [ ] B5 geometry 达到门槛或留有经测量批准的例外；
-- [ ] B6 nonlinear 达到门槛或留有经测量批准的例外；
-- [ ] full tests、header compile、ODR、install、optimization-off 全部通过；
+- [x] B1 morphology C3/C4 达到 `2.0x` 底线且 C1 无显著回退；
+- [x] B2 filter / derivative family 达到各自门槛；
+- [x] B3 Canny 1080p 达到 `1.5x` 底线并减少至少 `20 ms`；
+- [x] B4 pyrUp 达到 `2.5x` 底线；pyrDown/buildPyramid 按 `<1 ms`
+      规则记录了绝对损失 `<0.07 ms` 的明确微延迟例外；
+- [x] B5 geometry 达到门槛或留有经测量批准的例外；
+- [x] B6 nonlinear 达到门槛或留有经测量批准的例外；
+- [x] full tests、header compile、ODR、install、optimization-off 全部通过；
 - [ ] forced scalar 与 forced UI 都通过 correctness 和 checksum；
-- [ ] OpenCV upstream differential full matrix 无新增失败；
+- [x] OpenCV upstream differential full matrix 无新增失败；
 - [ ] Apple ARM64 与 Linux x86_64 均有可追溯证据；
 - [ ] Imgproc 相对性能几何平均达到 `>= 0.50`；
 - [ ] 全套相对性能几何平均达到 `>= 0.55`；

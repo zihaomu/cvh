@@ -64,6 +64,35 @@ inline void convolve(const Mat& src,
     const Mat source = src.data == dst.data ? src.clone() : src;
     const detail::SobelSamplingWindow window =
         detail::resolve_sobel_sampling_window(source, isolated);
+    if (!window.use_parent_window && source.depth() == CV_8U &&
+        output_depth == CV_32F && kernel_width == 3 &&
+        kernel_height == 3)
+    {
+        std::vector<int> integer_kernel(kernel.size());
+        bool exact_integer_kernel = true;
+        for (size_t index = 0; index < kernel.size(); ++index)
+        {
+            const int coefficient =
+                static_cast<int>(std::lround(kernel[index]));
+            if (static_cast<double>(coefficient) != kernel[index])
+            {
+                exact_integer_kernel = false;
+                break;
+            }
+            integer_kernel[index] = coefficient;
+        }
+        if (exact_integer_kernel &&
+            detail::filter_ui::derivative3_u8_f32(
+                source,
+                dst,
+                integer_kernel,
+                scale,
+                delta,
+                border_type))
+        {
+            return;
+        }
+    }
     if (!window.use_parent_window && source.channels() == 1 &&
         (output_depth == CV_16S || output_depth == CV_32F) &&
         (source.depth() == CV_8U || source.depth() == CV_32F))

@@ -1,6 +1,7 @@
 #ifndef CVH_IMGPROC_REMAP_H
 #define CVH_IMGPROC_REMAP_H
 
+#include "../core/detail/dispatch_control.h"
 #include "convert_maps.h"
 #include "detail/geometric_sampling.hpp"
 
@@ -8,6 +9,14 @@
 
 namespace cvh {
 namespace detail {
+
+inline thread_local const char* g_last_remap_algorithm_path =
+    "remap_generic";
+
+inline const char* last_remap_algorithm_path()
+{
+    return g_last_remap_algorithm_path;
+}
 
 template<typename T>
 inline void remap_typed(const Mat& source,
@@ -53,18 +62,33 @@ inline void remap_typed(const Mat& source,
             if (fixed && interpolation == INTER_LINEAR &&
                 fixed_fractions)
             {
-                geometric_write_linear_u8_fixed_row(
-                    source,
-                    output,
-                    fixed_coordinates,
-                    fixed_fractions,
-                    map1.size[1],
-                    border_type,
-                    border_value);
+                g_last_remap_algorithm_path =
+                    "remap_fixed_contiguous_blocks";
+                constexpr int block_size = 64;
+                for (int block_start = 0;
+                     block_start < map1.size[1];
+                     block_start += block_size)
+                {
+                    const int count = std::min(
+                        block_size,
+                        map1.size[1] - block_start);
+                    geometric_write_linear_u8_fixed_row(
+                        source,
+                        output +
+                            static_cast<size_t>(block_start) *
+                                source.channels(),
+                        fixed_coordinates + block_start * 2,
+                        fixed_fractions + block_start,
+                        count,
+                        border_type,
+                        border_value);
+                }
                 continue;
             }
             if (!fixed && interpolation == INTER_LINEAR)
             {
+                g_last_remap_algorithm_path =
+                    "remap_float_fixed_blocks";
                 constexpr int block_size = 64;
                 int coordinates[block_size * 2];
                 ushort fractions[block_size];
@@ -238,6 +262,8 @@ inline void remap(const Mat& src,
                   int borderMode = BORDER_CONSTANT,
                   const Scalar& borderValue = Scalar())
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    detail::g_last_remap_algorithm_path = "remap_generic";
     if (src.empty() || src.dims != 2)
     {
         CV_Error(Error::StsBadArg, "remap expects a non-empty 2D source");

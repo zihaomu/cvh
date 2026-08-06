@@ -1,6 +1,7 @@
 #include "cvh.h"
 #include "gtest/gtest.h"
 #include "opencv_contract_backend.h"
+#include "../support/dispatch_mode_guard.hpp"
 
 #include <cmath>
 #include <cstdint>
@@ -944,6 +945,383 @@ TEST(OpenCVContractSmoke_TEST, imgproc_phase1_kernels_match_upstream)
     }
 }
 
+TEST(OpenCVContractSmoke_TEST, imgproc_gaussian5x5_u8_matches_upstream_bits)
+{
+    constexpr std::uint32_t seed = 0x5A5511u;
+    for (const int channels : {1, 3, 4})
+    {
+        for (const int border_type :
+             {BORDER_CONSTANT, BORDER_REPLICATE, BORDER_REFLECT,
+              BORDER_REFLECT_101})
+        {
+            for (const cpu::DispatchMode mode :
+                 {cpu::DispatchMode::ScalarOnly,
+                  cpu::DispatchMode::OpenCVUIOnly})
+            {
+                SCOPED_TRACE(
+                    std::string("channels=") + std::to_string(channels) +
+                    ", border=" + std::to_string(border_type) +
+                    ", mode=" + std::to_string(static_cast<int>(mode)));
+                Mat src({17, 23}, CV_MAKETYPE(CV_8U, channels));
+                fill_u8(src, seed + static_cast<std::uint32_t>(channels));
+                Mat dst;
+                {
+                    cvh::test::DispatchModeGuard guard(mode);
+                    GaussianBlur(
+                        src,
+                        dst,
+                        Size(5, 5),
+                        0.0,
+                        0.0,
+                        border_type);
+                    EXPECT_EQ(
+                        cpu::last_dispatch_tag(),
+                        mode == cpu::DispatchMode::ScalarOnly
+                            ? cpu::DispatchTag::Scalar
+                            : cvh::test::expected_fixed_width_dispatch_tag());
+                }
+                EXPECT_TRUE(
+                    cvh_test_opencv_contract::validate_imgproc_gaussian_blur_u8(
+                        17,
+                        23,
+                        channels,
+                        border_type,
+                        seed + static_cast<std::uint32_t>(channels),
+                        dst.data,
+                        dst.total() * dst.elemSize()));
+            }
+        }
+    }
+}
+
+TEST(OpenCVContractSmoke_TEST, imgproc_gaussian5x5_f32_matches_upstream)
+{
+    constexpr std::uint32_t seed = 0x5A5522u;
+    for (const int channels : {1, 3, 4})
+    {
+        for (const int border_type :
+             {BORDER_CONSTANT, BORDER_REPLICATE, BORDER_REFLECT,
+              BORDER_REFLECT_101})
+        {
+            for (const cpu::DispatchMode mode :
+                 {cpu::DispatchMode::ScalarOnly,
+                  cpu::DispatchMode::OpenCVUIOnly})
+            {
+                SCOPED_TRACE(
+                    std::string("channels=") + std::to_string(channels) +
+                    ", border=" + std::to_string(border_type) +
+                    ", mode=" + std::to_string(static_cast<int>(mode)));
+                Mat src({17, 23}, CV_MAKETYPE(CV_32F, channels));
+                fill_f32(src, seed + static_cast<std::uint32_t>(channels));
+                Mat dst;
+                {
+                    cvh::test::DispatchModeGuard guard(mode);
+                    GaussianBlur(
+                        src,
+                        dst,
+                        Size(5, 5),
+                        0.0,
+                        0.0,
+                        border_type);
+                    EXPECT_EQ(
+                        cpu::last_dispatch_tag(),
+                        mode == cpu::DispatchMode::ScalarOnly
+                            ? cpu::DispatchTag::Scalar
+                            : cvh::test::expected_fixed_width_dispatch_tag());
+                }
+                EXPECT_TRUE(
+                    cvh_test_opencv_contract::validate_imgproc_gaussian_blur_f32(
+                        17,
+                        23,
+                        channels,
+                        border_type,
+                        seed + static_cast<std::uint32_t>(channels),
+                        dst.data,
+                        dst.total() * dst.elemSize()));
+            }
+        }
+    }
+}
+
+TEST(OpenCVContractSmoke_TEST, imgproc_canny_matches_upstream_bits)
+{
+    struct Case
+    {
+        int rows;
+        int cols;
+        double threshold1;
+        double threshold2;
+        int aperture;
+        bool l2;
+    };
+    constexpr std::uint32_t seed = 0xCA7711u;
+    const Case cases[] = {
+        {31, 37, 50.0, 130.0, 3, false},
+        {31, 37, 40.0, 110.0, 3, true},
+        {31, 37, 120.0, 340.0, 5, false},
+        {3, 7, 130.0, 50.0, 3, false},
+        {2, 9, 0.0, 1.0, 3, true},
+    };
+    for (const Case& current : cases)
+    {
+        for (const cpu::DispatchMode mode :
+             {cpu::DispatchMode::ScalarOnly,
+              cpu::DispatchMode::OpenCVUIOnly})
+        {
+            SCOPED_TRACE(
+                std::string("aperture=") +
+                    std::to_string(current.aperture) +
+                ", l2=" + std::to_string(current.l2) +
+                ", mode=" + std::to_string(static_cast<int>(mode)));
+            Mat src({current.rows, current.cols}, CV_8UC1);
+            fill_u8(src, seed + static_cast<std::uint32_t>(current.aperture));
+            Mat dst;
+            {
+                cvh::test::DispatchModeGuard guard(mode);
+                Canny(
+                    src,
+                    dst,
+                    current.threshold1,
+                    current.threshold2,
+                    current.aperture,
+                    current.l2);
+            }
+            EXPECT_TRUE(cvh_test_opencv_contract::validate_imgproc_canny(
+                current.rows,
+                current.cols,
+                current.threshold1,
+                current.threshold2,
+                current.aperture,
+                current.l2,
+                seed + static_cast<std::uint32_t>(current.aperture),
+                dst.data,
+                dst.total() * dst.elemSize()));
+        }
+    }
+}
+
+TEST(OpenCVContractSmoke_TEST, imgproc_box3x3_matches_upstream)
+{
+    using cvh_test_opencv_contract::CoreDepthId;
+    constexpr std::uint32_t seed = 0xB03311u;
+    for (const CoreDepthId depth : {CoreDepthId::U8, CoreDepthId::F32})
+    {
+        const int cvh_type =
+            depth == CoreDepthId::U8 ? CV_8U : CV_32F;
+        for (const int channels : {1, 3, 4})
+        {
+            for (const int border_type :
+                 {BORDER_CONSTANT, BORDER_REPLICATE, BORDER_REFLECT,
+                  BORDER_REFLECT_101})
+            {
+                for (const cpu::DispatchMode mode :
+                     {cpu::DispatchMode::ScalarOnly,
+                      cpu::DispatchMode::OpenCVUIOnly})
+                {
+                    SCOPED_TRACE(
+                        std::string("depth=") +
+                        std::to_string(static_cast<int>(depth)) +
+                        ", channels=" + std::to_string(channels) +
+                        ", border=" + std::to_string(border_type) +
+                        ", mode=" +
+                        std::to_string(static_cast<int>(mode)));
+                    Mat src(
+                        {17, 23},
+                        CV_MAKETYPE(cvh_type, channels));
+                    if (depth == CoreDepthId::U8)
+                    {
+                        fill_u8(src, seed + channels);
+                    }
+                    else
+                    {
+                        fill_f32(src, seed + channels);
+                    }
+                    Mat dst;
+                    {
+                        cvh::test::DispatchModeGuard guard(mode);
+                        boxFilter(
+                            src,
+                            dst,
+                            -1,
+                            Size(3, 3),
+                            Point(-1, -1),
+                            true,
+                            border_type);
+                        EXPECT_EQ(
+                            cpu::last_dispatch_tag(),
+                            mode == cpu::DispatchMode::ScalarOnly
+                                ? cpu::DispatchTag::Scalar
+                                : cvh::test::expected_fixed_width_dispatch_tag());
+                    }
+                    EXPECT_TRUE(
+                        cvh_test_opencv_contract::validate_imgproc_box_filter(
+                            17,
+                            23,
+                            channels,
+                            depth,
+                            border_type,
+                            seed + channels,
+                            dst.data,
+                            dst.total() * dst.elemSize()));
+                }
+            }
+        }
+    }
+}
+
+TEST(OpenCVContractSmoke_TEST, imgproc_sep_filter3_matches_upstream)
+{
+    using cvh_test_opencv_contract::CoreDepthId;
+    constexpr std::uint32_t seed = 0x5E9311u;
+    Mat kernel({3, 1}, CV_32FC1);
+    float* values = reinterpret_cast<float*>(kernel.data);
+    values[0] = 0.25f;
+    values[1] = 0.5f;
+    values[2] = 0.25f;
+    for (const CoreDepthId depth : {CoreDepthId::U8, CoreDepthId::F32})
+    {
+        const int cvh_type =
+            depth == CoreDepthId::U8 ? CV_8U : CV_32F;
+        for (const int channels : {1, 3, 4})
+        {
+            for (const int border_type :
+                 {BORDER_CONSTANT, BORDER_REPLICATE, BORDER_REFLECT,
+                  BORDER_REFLECT_101})
+            {
+                for (const cpu::DispatchMode mode :
+                     {cpu::DispatchMode::ScalarOnly,
+                      cpu::DispatchMode::OpenCVUIOnly})
+                {
+                    SCOPED_TRACE(
+                        std::string("depth=") +
+                        std::to_string(static_cast<int>(depth)) +
+                        ", channels=" + std::to_string(channels) +
+                        ", border=" + std::to_string(border_type) +
+                        ", mode=" +
+                        std::to_string(static_cast<int>(mode)));
+                    Mat src(
+                        {17, 23},
+                        CV_MAKETYPE(cvh_type, channels));
+                    if (depth == CoreDepthId::U8)
+                    {
+                        fill_u8(src, seed + channels);
+                    }
+                    else
+                    {
+                        fill_f32(src, seed + channels);
+                    }
+                    Mat dst;
+                    {
+                        cvh::test::DispatchModeGuard guard(mode);
+                        sepFilter2D(
+                            src,
+                            dst,
+                            -1,
+                            kernel,
+                            kernel,
+                            Point(-1, -1),
+                            0.0,
+                            border_type);
+                        EXPECT_EQ(
+                            cpu::last_dispatch_tag(),
+                            mode == cpu::DispatchMode::ScalarOnly
+                                ? cpu::DispatchTag::Scalar
+                                : cvh::test::expected_fixed_width_dispatch_tag());
+                    }
+                    EXPECT_TRUE(
+                        cvh_test_opencv_contract::validate_imgproc_sep_filter3(
+                            17,
+                            23,
+                            channels,
+                            depth,
+                            border_type,
+                            seed + channels,
+                            dst.data,
+                            dst.total() * dst.elemSize()));
+                }
+            }
+        }
+    }
+}
+
+TEST(OpenCVContractSmoke_TEST, imgproc_filter2d_cross3_matches_upstream)
+{
+    using cvh_test_opencv_contract::CoreDepthId;
+    constexpr std::uint32_t seed = 0xF11311u;
+    Mat kernel({3, 3}, CV_32FC1);
+    const float kernel_values[] = {
+        0.0f, 0.25f, 0.0f,
+        0.25f, 0.0f, 0.25f,
+        0.0f, 0.25f, 0.0f};
+    std::copy(
+        kernel_values,
+        kernel_values + 9,
+        reinterpret_cast<float*>(kernel.data));
+    for (const CoreDepthId depth : {CoreDepthId::U8, CoreDepthId::F32})
+    {
+        const int cvh_type =
+            depth == CoreDepthId::U8 ? CV_8U : CV_32F;
+        for (const int channels : {1, 3, 4})
+        {
+            for (const int border_type :
+                 {BORDER_CONSTANT, BORDER_REPLICATE, BORDER_REFLECT,
+                  BORDER_REFLECT_101})
+            {
+                for (const cpu::DispatchMode mode :
+                     {cpu::DispatchMode::ScalarOnly,
+                      cpu::DispatchMode::OpenCVUIOnly})
+                {
+                    SCOPED_TRACE(
+                        std::string("depth=") +
+                        std::to_string(static_cast<int>(depth)) +
+                        ", channels=" + std::to_string(channels) +
+                        ", border=" + std::to_string(border_type) +
+                        ", mode=" +
+                        std::to_string(static_cast<int>(mode)));
+                    Mat src(
+                        {17, 23},
+                        CV_MAKETYPE(cvh_type, channels));
+                    if (depth == CoreDepthId::U8)
+                    {
+                        fill_u8(src, seed + channels);
+                    }
+                    else
+                    {
+                        fill_f32(src, seed + channels);
+                    }
+                    Mat dst;
+                    {
+                        cvh::test::DispatchModeGuard guard(mode);
+                        filter2D(
+                            src,
+                            dst,
+                            -1,
+                            kernel,
+                            Point(-1, -1),
+                            0.0,
+                            border_type);
+                        EXPECT_EQ(
+                            cpu::last_dispatch_tag(),
+                            mode == cpu::DispatchMode::ScalarOnly
+                                ? cpu::DispatchTag::Scalar
+                                : cvh::test::expected_fixed_width_dispatch_tag());
+                    }
+                    EXPECT_TRUE(
+                        cvh_test_opencv_contract::validate_imgproc_filter2d_cross3(
+                            17,
+                            23,
+                            channels,
+                            depth,
+                            border_type,
+                            seed + channels,
+                            dst.data,
+                            dst.total() * dst.elemSize()));
+                }
+            }
+        }
+    }
+}
+
 TEST(OpenCVContractSmoke_TEST, imgproc_phase1_integral_derivatives_and_square_box_match_upstream)
 {
     using cvh_test_opencv_contract::CoreDepthId;
@@ -1362,6 +1740,35 @@ TEST(OpenCVContractSmoke_TEST, imgproc_geometry_sampling_matches_upstream)
         INTER_LINEAR,
         BORDER_REFLECT_101);
     validate(ImgprocGeometrySamplingOpId::RemapFixedU8, actual);
+
+    Mat affine({2, 3}, CV_32FC1);
+    const float affine_values[] = {
+        1.0f, 0.0f, -1.25f,
+        0.0f, 1.0f, 0.75f};
+    std::memcpy(affine.data, affine_values, sizeof(affine_values));
+    warpAffine(
+        source,
+        actual,
+        affine,
+        Size(9, 7),
+        INTER_LINEAR | WARP_INVERSE_MAP,
+        BORDER_REPLICATE);
+    validate(
+        ImgprocGeometrySamplingOpId::WarpAffineTranslationU8,
+        actual);
+
+    Mat source_f32({9, 11}, CV_32FC4);
+    fill_f32(source_f32, seed + 4u);
+    warpAffine(
+        source_f32,
+        actual,
+        affine,
+        Size(9, 7),
+        INTER_LINEAR | WARP_INVERSE_MAP,
+        BORDER_REPLICATE);
+    validate(
+        ImgprocGeometrySamplingOpId::WarpAffineTranslationF32,
+        actual);
 
     Mat perspective({3, 3}, CV_64FC1);
     perspective.setTo(Scalar::all(0.0));

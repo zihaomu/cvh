@@ -12,6 +12,7 @@ Intrinsics dispatch policy at runtime:
 | Implementation | Meaning |
 |---|---|
 | `cvh_ui` | Current `cvh::headers` with `OpenCVUIOnly` forced; specialized NEON/AVX2 dispatch is rejected. |
+| `cvh_scalar` | The same public headers with `ScalarOnly` forced, used to verify fallback correctness and dispatch observability. |
 | `opencv` | Official OpenCV `core` / `imgproc` built on the same machine. |
 
 The compare report is for visibility and prioritization. It is log-only by
@@ -84,11 +85,23 @@ Existing files:
 - `opencv_compare_phase2_opencv_backend.cpp`: matching upstream OpenCV P2-P0
   kernels, compiled without `cvh::headers` include paths.
 
+Current CSV observability fields:
+
+| Field | Meaning |
+|---|---|
+| `algorithm_path` | Operator-level algorithm or data-flow choice, such as `gauss_separable` or `morph_rect3x3`. |
+| `dispatch_path` | Actual last kernel dispatch reported by cvh, such as `scalar` or `opencv_ui`. |
+| `isa_observed` | Directly observable specialized ISA; `unknown` when the UI backend does not expose it. The host architecture is never used as a substitute. |
+
+Historical CSV files without the two new fields remain supported by the
+Markdown renderer.
+
 Current caveats:
 
-- Mode B has one CVH implementation: `cvh_ui`. The benchmark links
-  `cvh::headers`, sets `OpenCVUIOnly`, and fails if a specialized ISA tag is
-  observed or an explicitly UI-required case does not report `opencv_ui`.
+- Mode B has one product target with two forced runtime observations:
+  `cvh_ui` (`OpenCVUIOnly`) and `cvh_scalar` (`ScalarOnly`). The benchmark
+  fails if a direct specialized ISA tag is observed, if an explicitly
+  UI-required case misses UI in `cvh_ui`, or if `cvh_scalar` reports UI.
 - Rolling `current_*` reports are generated artifacts. A reviewed date-named
   snapshot may commit its English Markdown, raw CSV, and metadata together
   under `benchmark/opencv_compare/results/`.
@@ -146,6 +159,23 @@ Explicit implementation:
 ```
 
 `cvh_ui` is accepted as an alias for `ui`.
+
+Forced scalar dispatch verification:
+
+```bash
+./benchmark/opencv_compare/run_compare.sh \
+  --profile quick --impls scalar --ops IMGPROC_FLOOR
+```
+
+Focused v0.1 Imgproc performance-floor matrix:
+
+```bash
+./benchmark/opencv_compare/run_compare.sh \
+  --profile stable --impls ui --ops IMGPROC_FLOOR
+```
+
+`IMGPROC_FLOOR` freezes the families owned by
+[`cvh-v0.1-imgproc-performance-floor-acceleration-plan.md`](../../doc/cvh-v0.1-imgproc-performance-floor-acceleration-plan.md).
 
 Focused P2-P0 operator comparison:
 

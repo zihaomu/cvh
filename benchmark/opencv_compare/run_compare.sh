@@ -32,16 +32,16 @@ REPORT_SCRIPT="${COMPARE_DIR}/csv_to_markdown.py"
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--profile quick|stable|full] [--impls ui] [--ops GEMM] [--warmup N] [--iters N] [--repeats N] [--output path] [--baseline]
+Usage: $(basename "$0") [--profile quick|stable|full] [--impls ui|scalar|ui,scalar] [--ops GEMM|PHASE2_P0|IMGPROC_FLOOR] [--warmup N] [--iters N] [--repeats N] [--output path] [--baseline]
 
 Environment:
   CVH_COMPARE_PROFILE   (default: ${PROFILE})
-  CVH_COMPARE_IMPLS     (default: ${IMPLS}, value: ui; cvh_ui is accepted as an alias)
+  CVH_COMPARE_IMPLS     (default: ${IMPLS}; ui/scalar and cvh_ui/cvh_scalar aliases)
   CVH_COMPARE_WARMUP    (profile default, quick=1 stable=2 full=1)
   CVH_COMPARE_ITERS     (profile default, quick=5 stable=20 full=10)
   CVH_COMPARE_REPEATS   (profile default, quick=1 stable=5 full=3)
   CVH_COMPARE_THREADS   (default: ${THREADS}, exports OMP_NUM_THREADS)
-  CVH_COMPARE_OPS       (optional focused operation set: GEMM or PHASE2_P0)
+  CVH_COMPARE_OPS       (optional focused operation set: GEMM, PHASE2_P0, or IMGPROC_FLOOR)
   CVH_COMPARE_OMP_DYNAMIC (default: ${OMP_DYNAMIC_MODE})
   CVH_COMPARE_OMP_PROC_BIND (default: ${OMP_PROC_BIND_MODE})
   CVH_COMPARE_BUILD_OPENCV (default: ${BUILD_OPENCV}, values: auto|0|1)
@@ -120,8 +120,8 @@ if [[ "${PROFILE}" != "quick" && "${PROFILE}" != "stable" && "${PROFILE}" != "fu
   echo "Unsupported profile: ${PROFILE} (expected quick|stable|full)" >&2
   exit 2
 fi
-if [[ -n "${OPS}" && "${OPS}" != "GEMM" && "${OPS}" != "PHASE2_P0" ]]; then
-  echo "Unsupported --ops=${OPS} (currently supported: GEMM, PHASE2_P0)" >&2
+if [[ -n "${OPS}" && "${OPS}" != "GEMM" && "${OPS}" != "PHASE2_P0" && "${OPS}" != "IMGPROC_FLOOR" ]]; then
+  echo "Unsupported --ops=${OPS} (currently supported: GEMM, PHASE2_P0, IMGPROC_FLOOR)" >&2
   exit 2
 fi
 
@@ -135,10 +135,12 @@ for raw_impl in "${RAW_IMPLS[@]}"; do
 
   if [[ "${impl}" == "cvh_ui" ]]; then
     impl="ui"
+  elif [[ "${impl}" == "cvh_scalar" ]]; then
+    impl="scalar"
   fi
 
-  if [[ "${impl}" != "ui" ]]; then
-    echo "Unsupported impl: ${impl} (Mode B only compares ui against upstream OpenCV)" >&2
+  if [[ "${impl}" != "ui" && "${impl}" != "scalar" ]]; then
+    echo "Unsupported impl: ${impl} (expected ui or scalar)" >&2
     exit 2
   fi
 
@@ -155,11 +157,18 @@ for raw_impl in "${RAW_IMPLS[@]}"; do
 done
 
 if [[ "${#REQUESTED_IMPLS[@]}" -eq 0 ]]; then
-  echo "No valid impl selected. Use --impls ui" >&2
+  echo "No valid impl selected. Use --impls ui or --impls scalar" >&2
   exit 2
 fi
 
-IMPLS_NORMALIZED="cvh_ui"
+IMPLS_NORMALIZED=""
+for impl in "${REQUESTED_IMPLS[@]}"; do
+  normalized_impl="cvh_${impl}"
+  if [[ -n "${IMPLS_NORMALIZED}" ]]; then
+    IMPLS_NORMALIZED+=","
+  fi
+  IMPLS_NORMALIZED+="${normalized_impl}"
+done
 
 case "${PROFILE}" in
   quick)
@@ -426,30 +435,26 @@ cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
   -DCVH_ENABLE_OPENCV_COMPARE=ON \
   -DOpenCV_DIR="${OPENCV_CONFIG_DIR}"
 
-BENCH_TARGETS=()
-for impl in "${REQUESTED_IMPLS[@]-}"; do
-  BENCH_TARGETS+=("cvh_benchmark_opencv_compare_ui")
-done
-
-cmake --build "${BUILD_DIR}" --target "${BENCH_TARGETS[@]}" -j
+cmake --build "${BUILD_DIR}" --target cvh_benchmark_opencv_compare_ui -j
 
 TMP_OUTPUT_CSVS=()
 for impl in "${REQUESTED_IMPLS[@]-}"; do
   BENCH_BIN="${BUILD_DIR}/cvh_benchmark_opencv_compare_ui"
+  IMPL_NAME="cvh_${impl}"
 
   if [[ ! -x "${BENCH_BIN}" ]]; then
     echo "Missing benchmark binary for impl=${impl}: ${BENCH_BIN}" >&2
     exit 2
   fi
 
-  IMPL_OUTPUT_CSV="${OUTPUT_CSV}.cvh_ui.tmp.csv"
+  IMPL_OUTPUT_CSV="${OUTPUT_CSV}.${IMPL_NAME}.tmp.csv"
   TMP_OUTPUT_CSVS+=("${IMPL_OUTPUT_CSV}")
 
-  echo "opencv_compare: running benchmark (impl=cvh_ui, profile=${PROFILE}, ops=${OPS:-all}, opencv_variant=${OPENCV_VARIANT}, warmup=${WARMUP}, iters=${ITERS}, repeats=${REPEATS}, threads=${THREADS}, omp_dynamic=${OMP_DYNAMIC_MODE}, omp_proc_bind=${OMP_PROC_BIND_MODE})"
+  echo "opencv_compare: running benchmark (impl=${IMPL_NAME}, profile=${PROFILE}, ops=${OPS:-all}, opencv_variant=${OPENCV_VARIANT}, warmup=${WARMUP}, iters=${ITERS}, repeats=${REPEATS}, threads=${THREADS}, omp_dynamic=${OMP_DYNAMIC_MODE}, omp_proc_bind=${OMP_PROC_BIND_MODE})"
   echo "opencv_compare: benchmark stage can take several minutes for quick profile with large kernels."
   BENCH_ARGS=(
     --profile "${PROFILE}"
-    --impl "cvh_ui"
+    --impl "${IMPL_NAME}"
     --threads "${THREADS}"
     --warmup "${WARMUP}"
     --iters "${ITERS}"

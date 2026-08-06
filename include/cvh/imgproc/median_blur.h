@@ -14,6 +14,14 @@ namespace cvh
 namespace median_blur_detail
 {
 
+inline thread_local const char* g_last_median_algorithm_path =
+    "median_generic";
+
+inline const char* last_median_algorithm_path()
+{
+    return g_last_median_algorithm_path;
+}
+
 template<typename Value, typename Compare>
 inline void median3_network(Value* values, Compare&& compare)
 {
@@ -91,9 +99,19 @@ inline uchar scalar_median_at(const Mat& src,
                       static_cast<size_t>(channel)];
         }
     }
-    auto middle = values.begin() + count / 2;
-    std::nth_element(values.begin(), middle, values.begin() + count);
-    return *middle;
+    auto compare = [](uchar& first, uchar& second) {
+        if (first > second)
+        {
+            std::swap(first, second);
+        }
+    };
+    if (ksize == 3)
+    {
+        median3_network(values.data(), compare);
+        return values[4];
+    }
+    median5_network(values.data(), compare);
+    return values[12];
 }
 
 inline bool run_u8_sorting_network(const Mat& src,
@@ -148,6 +166,7 @@ inline bool run_u8_sorting_network(const Mat& src,
                 index % channels,
                 ksize);
         }
+        int last_vector_start = -1;
         for (; index <= vector_end - lanes; index += lanes)
         {
             if (ksize == 3)
@@ -182,6 +201,47 @@ inline bool run_u8_sorting_network(const Mat& src,
                 median5_network(values, compare);
                 cv::vx_store(output + index, values[12]);
             }
+            last_vector_start = index;
+        }
+        if (index < vector_end)
+        {
+            const int tail_start = vector_end - lanes;
+            if (tail_start != last_vector_start)
+            {
+                if (ksize == 3)
+                {
+                    cv::v_uint8 values[9];
+                    int value_index = 0;
+                    for (int ky = 0; ky < 3; ++ky)
+                    {
+                        for (int kx = -1; kx <= 1; ++kx)
+                        {
+                            values[value_index++] = cv::vx_load(
+                                source_rows[ky] + tail_start +
+                                kx * channels);
+                        }
+                    }
+                    median3_network(values, compare);
+                    cv::vx_store(output + tail_start, values[4]);
+                }
+                else
+                {
+                    cv::v_uint8 values[25];
+                    int value_index = 0;
+                    for (int ky = 0; ky < 5; ++ky)
+                    {
+                        for (int kx = -2; kx <= 2; ++kx)
+                        {
+                            values[value_index++] = cv::vx_load(
+                                source_rows[ky] + tail_start +
+                                kx * channels);
+                        }
+                    }
+                    median5_network(values, compare);
+                    cv::vx_store(output + tail_start, values[12]);
+                }
+            }
+            index = vector_end;
         }
         for (; index < row_width; ++index)
         {
@@ -352,19 +412,29 @@ inline void medianBlur(const Mat& src, Mat& dst, int ksize)
         median_blur_detail::run_u8_sorting_network(
             source, dst, ksize))
     {
+        median_blur_detail::g_last_median_algorithm_path =
+            ksize == 3
+                ? "median3_ui_sorting_network"
+                : "median5_ui_overlap_tail";
         return;
     }
     if (source.type() == CV_8UC1)
     {
+        median_blur_detail::g_last_median_algorithm_path =
+            "median_u8_c1_histogram";
         median_blur_detail::run_u8_c1_histogram(
             source, dst, ksize);
     }
     else if (source.depth() == CV_8U)
     {
+        median_blur_detail::g_last_median_algorithm_path =
+            "median_u8_generic";
         median_blur_detail::run<uchar>(source, dst, ksize);
     }
     else
     {
+        median_blur_detail::g_last_median_algorithm_path =
+            "median_f32_generic";
         median_blur_detail::run<float>(source, dst, ksize);
     }
 }

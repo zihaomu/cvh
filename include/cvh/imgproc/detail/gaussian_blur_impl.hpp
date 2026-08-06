@@ -4,6 +4,10 @@
 #include "fastpath_common.hpp"
 #include "filter_ui.hpp"
 
+#include <array>
+#include <cstdint>
+#include <limits>
+
 namespace cvh
 {
 namespace detail
@@ -16,6 +20,499 @@ inline thread_local const char* g_last_gaussianblur_dispatch_path = "fallback";
 inline void set_last_gaussianblur_dispatch_path(const char* path)
 {
     g_last_gaussianblur_dispatch_path = path ? path : "fallback";
+}
+
+inline bool try_gaussian5x5_fixed_u8(const Mat& src,
+                                     Mat& dst,
+                                     int border_type)
+{
+    if (src.depth() != CV_8U || src.dims != 2 ||
+        !is_u8_fastpath_channels(src.channels()))
+    {
+        return false;
+    }
+
+    const int rows = src.size[0];
+    const int cols = src.size[1];
+    const int channels = src.channels();
+    if (rows <= 0 || cols <= 0)
+    {
+        return false;
+    }
+
+    const int row_stride = cols * channels;
+    const std::size_t src_step = src.step(0);
+    dst.create(src.shape(), src.type());
+    const std::size_t dst_step = dst.step(0);
+
+    std::vector<std::uint16_t> row_ring(
+        static_cast<std::size_t>(row_stride) * 5u);
+    std::vector<std::uint16_t> zero_row;
+    if (border_type == BORDER_CONSTANT)
+    {
+        zero_row.resize(static_cast<std::size_t>(row_stride), 0u);
+    }
+    std::array<int, 5> ring_keys;
+    ring_keys.fill(std::numeric_limits<int>::min());
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const bool use_ui = cpu::opencv_ui_allowed();
+#else
+    const bool use_ui = false;
+#endif
+
+    const auto horizontal = [&](int sy, std::uint16_t* output) {
+        const uchar* input =
+            src.data + static_cast<std::size_t>(sy) * src_step;
+        const int interior_begin = std::min(2, cols);
+        const int interior_end = std::max(interior_begin, cols - 2);
+
+        for (int x = 0; x < interior_begin; ++x)
+        {
+            for (int c = 0; c < channels; ++c)
+            {
+                unsigned sum = 0;
+                constexpr unsigned weights[5] = {1, 4, 6, 4, 1};
+                for (int k = 0; k < 5; ++k)
+                {
+                    const int sx = border_interpolate(
+                        x + k - 2, cols, border_type);
+                    if (sx >= 0)
+                    {
+                        sum += weights[k] * input[sx * channels + c];
+                    }
+                }
+                output[x * channels + c] =
+                    static_cast<std::uint16_t>(sum);
+            }
+        }
+
+        int offset = interior_begin * channels;
+        const int byte_end = interior_end * channels;
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+        if (use_ui)
+        {
+            const auto accumulate = [&](int lane_offset) {
+                const int source_offset = offset + lane_offset;
+                const cv::v_uint16x8 first = cv::v_load_expand(
+                    input + source_offset - 2 * channels);
+                const cv::v_uint16x8 second = cv::v_load_expand(
+                    input + source_offset - channels);
+                const cv::v_uint16x8 center =
+                    cv::v_load_expand(input + source_offset);
+                const cv::v_uint16x8 fourth = cv::v_load_expand(
+                    input + source_offset + channels);
+                const cv::v_uint16x8 fifth = cv::v_load_expand(
+                    input + source_offset + 2 * channels);
+                return cv::v_add(
+                    cv::v_add(first, fifth),
+                    cv::v_add(
+                        cv::v_shl<2>(cv::v_add(second, fourth)),
+                        cv::v_add(
+                            cv::v_shl<2>(center),
+                            cv::v_shl<1>(center))));
+            };
+            for (; offset + 16 <= byte_end; offset += 16)
+            {
+                cv::v_store(output + offset, accumulate(0));
+                cv::v_store(output + offset + 8, accumulate(8));
+            }
+            for (; offset + 8 <= byte_end; offset += 8)
+            {
+                cv::v_store(output + offset, accumulate(0));
+            }
+        }
+#endif
+        for (; offset < byte_end; ++offset)
+        {
+            output[offset] = static_cast<std::uint16_t>(
+                input[offset - 2 * channels] +
+                4u * input[offset - channels] +
+                6u * input[offset] +
+                4u * input[offset + channels] +
+                input[offset + 2 * channels]);
+        }
+
+        for (int x = interior_end; x < cols; ++x)
+        {
+            for (int c = 0; c < channels; ++c)
+            {
+                unsigned sum = 0;
+                constexpr unsigned weights[5] = {1, 4, 6, 4, 1};
+                for (int k = 0; k < 5; ++k)
+                {
+                    const int sx = border_interpolate(
+                        x + k - 2, cols, border_type);
+                    if (sx >= 0)
+                    {
+                        sum += weights[k] * input[sx * channels + c];
+                    }
+                }
+                output[x * channels + c] =
+                    static_cast<std::uint16_t>(sum);
+            }
+        }
+    };
+
+    for (int y = 0; y < rows; ++y)
+    {
+        std::array<int, 5> requested;
+        for (int k = 0; k < 5; ++k)
+        {
+            requested[static_cast<std::size_t>(k)] =
+                border_interpolate(y + k - 2, rows, border_type);
+        }
+
+        for (const int sy : requested)
+        {
+            if (sy < 0 ||
+                std::find(ring_keys.begin(), ring_keys.end(), sy) !=
+                    ring_keys.end())
+            {
+                continue;
+            }
+
+            int slot = -1;
+            for (int candidate = 0; candidate < 5; ++candidate)
+            {
+                if (std::find(
+                        requested.begin(),
+                        requested.end(),
+                        ring_keys[static_cast<std::size_t>(candidate)]) ==
+                    requested.end())
+                {
+                    slot = candidate;
+                    break;
+                }
+            }
+            CV_Assert(slot >= 0);
+            horizontal(
+                sy,
+                row_ring.data() +
+                    static_cast<std::size_t>(slot) *
+                        static_cast<std::size_t>(row_stride));
+            ring_keys[static_cast<std::size_t>(slot)] = sy;
+        }
+
+        std::array<const std::uint16_t*, 5> source_rows;
+        for (int k = 0; k < 5; ++k)
+        {
+            const int sy = requested[static_cast<std::size_t>(k)];
+            if (sy < 0)
+            {
+                source_rows[static_cast<std::size_t>(k)] =
+                    zero_row.data();
+                continue;
+            }
+            const auto it =
+                std::find(ring_keys.begin(), ring_keys.end(), sy);
+            CV_Assert(it != ring_keys.end());
+            const int slot = static_cast<int>(it - ring_keys.begin());
+            source_rows[static_cast<std::size_t>(k)] =
+                row_ring.data() +
+                static_cast<std::size_t>(slot) *
+                    static_cast<std::size_t>(row_stride);
+        }
+
+        uchar* output =
+            dst.data + static_cast<std::size_t>(y) * dst_step;
+        int offset = 0;
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+        if (use_ui)
+        {
+            const cv::v_uint16x8 rounding = cv::v_setall_u16(128);
+            for (; offset + 16 <= row_stride; offset += 16)
+            {
+                const auto accumulate = [&](int lane_offset) {
+                    const cv::v_uint16x8 first = cv::v_load(
+                        source_rows[0] + offset + lane_offset);
+                    const cv::v_uint16x8 second = cv::v_load(
+                        source_rows[1] + offset + lane_offset);
+                    const cv::v_uint16x8 center = cv::v_load(
+                        source_rows[2] + offset + lane_offset);
+                    const cv::v_uint16x8 fourth = cv::v_load(
+                        source_rows[3] + offset + lane_offset);
+                    const cv::v_uint16x8 fifth = cv::v_load(
+                        source_rows[4] + offset + lane_offset);
+                    return cv::v_shr<8>(cv::v_add(
+                        cv::v_add(
+                            cv::v_add(first, fifth),
+                            cv::v_add(
+                                cv::v_shl<2>(
+                                    cv::v_add(second, fourth)),
+                                cv::v_add(
+                                    cv::v_shl<2>(center),
+                                    cv::v_shl<1>(center)))),
+                        rounding));
+                };
+                cv::v_store(
+                    output + offset,
+                    cv::v_pack(accumulate(0), accumulate(8)));
+            }
+        }
+#endif
+        for (; offset < row_stride; ++offset)
+        {
+            const unsigned sum =
+                source_rows[0][offset] +
+                4u * source_rows[1][offset] +
+                6u * source_rows[2][offset] +
+                4u * source_rows[3][offset] +
+                source_rows[4][offset];
+            output[offset] = static_cast<uchar>((sum + 128u) >> 8);
+        }
+    }
+
+    cpu::set_last_dispatch_tag(
+        use_ui && row_stride >= 16
+            ? cpu::DispatchTag::OpenCVUI
+            : cpu::DispatchTag::Scalar);
+    return true;
+}
+
+inline bool try_gaussian5x5_fixed_f32(const Mat& src,
+                                      Mat& dst,
+                                      int border_type)
+{
+    if (src.depth() != CV_32F || src.dims != 2 ||
+        !is_u8_fastpath_channels(src.channels()))
+    {
+        return false;
+    }
+
+    const int rows = src.size[0];
+    const int cols = src.size[1];
+    const int channels = src.channels();
+    if (rows <= 0 || cols <= 0)
+    {
+        return false;
+    }
+
+    const int row_stride = cols * channels;
+    const std::size_t src_step = src.step(0);
+    dst.create(src.shape(), src.type());
+    const std::size_t dst_step = dst.step(0);
+    std::vector<float> row_ring(
+        static_cast<std::size_t>(row_stride) * 5u);
+    std::vector<float> zero_row;
+    if (border_type == BORDER_CONSTANT)
+    {
+        zero_row.resize(static_cast<std::size_t>(row_stride), 0.0f);
+    }
+    std::array<int, 5> ring_keys;
+    ring_keys.fill(std::numeric_limits<int>::min());
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const bool use_ui = cpu::opencv_ui_allowed();
+#else
+    const bool use_ui = false;
+#endif
+
+    const auto horizontal = [&](int sy, float* output) {
+        const float* input = reinterpret_cast<const float*>(
+            src.data + static_cast<std::size_t>(sy) * src_step);
+        const int interior_begin = std::min(2, cols);
+        const int interior_end = std::max(interior_begin, cols - 2);
+        constexpr float weights[5] = {1.0f, 4.0f, 6.0f, 4.0f, 1.0f};
+
+        for (int x = 0; x < interior_begin; ++x)
+        {
+            for (int c = 0; c < channels; ++c)
+            {
+                float sum = 0.0f;
+                for (int k = 0; k < 5; ++k)
+                {
+                    const int sx = border_interpolate(
+                        x + k - 2, cols, border_type);
+                    if (sx >= 0)
+                    {
+                        sum += weights[k] * input[sx * channels + c];
+                    }
+                }
+                output[x * channels + c] = sum * (1.0f / 16.0f);
+            }
+        }
+
+        int offset = interior_begin * channels;
+        const int element_end = interior_end * channels;
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+        if (use_ui)
+        {
+            const cv::v_float32x4 scale = cv::v_setall_f32(1.0f / 16.0f);
+            const auto accumulate = [&](int lane) {
+                const int source_offset = offset + lane;
+                const cv::v_float32x4 center =
+                    cv::v_load(input + source_offset);
+                return cv::v_mul(
+                    cv::v_add(
+                        cv::v_add(
+                            cv::v_load(
+                                input + source_offset - 2 * channels),
+                            cv::v_load(
+                                input + source_offset + 2 * channels)),
+                        cv::v_add(
+                            cv::v_mul(
+                                cv::v_add(
+                                    cv::v_load(
+                                        input + source_offset - channels),
+                                    cv::v_load(
+                                        input + source_offset + channels)),
+                                cv::v_setall_f32(4.0f)),
+                            cv::v_mul(center, cv::v_setall_f32(6.0f)))),
+                    scale);
+            };
+            for (; offset + 8 <= element_end; offset += 8)
+            {
+                cv::v_store(output + offset, accumulate(0));
+                cv::v_store(output + offset + 4, accumulate(4));
+            }
+            for (; offset + 4 <= element_end; offset += 4)
+            {
+                cv::v_store(output + offset, accumulate(0));
+            }
+        }
+#endif
+        for (; offset < element_end; ++offset)
+        {
+            output[offset] =
+                (input[offset - 2 * channels] +
+                 4.0f * input[offset - channels] +
+                 6.0f * input[offset] +
+                 4.0f * input[offset + channels] +
+                 input[offset + 2 * channels]) *
+                (1.0f / 16.0f);
+        }
+
+        for (int x = interior_end; x < cols; ++x)
+        {
+            for (int c = 0; c < channels; ++c)
+            {
+                float sum = 0.0f;
+                for (int k = 0; k < 5; ++k)
+                {
+                    const int sx = border_interpolate(
+                        x + k - 2, cols, border_type);
+                    if (sx >= 0)
+                    {
+                        sum += weights[k] * input[sx * channels + c];
+                    }
+                }
+                output[x * channels + c] = sum * (1.0f / 16.0f);
+            }
+        }
+    };
+
+    for (int y = 0; y < rows; ++y)
+    {
+        std::array<int, 5> requested;
+        for (int k = 0; k < 5; ++k)
+        {
+            requested[static_cast<std::size_t>(k)] =
+                border_interpolate(y + k - 2, rows, border_type);
+        }
+        for (const int sy : requested)
+        {
+            if (sy < 0 ||
+                std::find(ring_keys.begin(), ring_keys.end(), sy) !=
+                    ring_keys.end())
+            {
+                continue;
+            }
+            int slot = -1;
+            for (int candidate = 0; candidate < 5; ++candidate)
+            {
+                if (std::find(
+                        requested.begin(),
+                        requested.end(),
+                        ring_keys[static_cast<std::size_t>(candidate)]) ==
+                    requested.end())
+                {
+                    slot = candidate;
+                    break;
+                }
+            }
+            CV_Assert(slot >= 0);
+            horizontal(
+                sy,
+                row_ring.data() +
+                    static_cast<std::size_t>(slot) * row_stride);
+            ring_keys[static_cast<std::size_t>(slot)] = sy;
+        }
+
+        std::array<const float*, 5> source_rows;
+        for (int k = 0; k < 5; ++k)
+        {
+            const int sy = requested[static_cast<std::size_t>(k)];
+            if (sy < 0)
+            {
+                source_rows[static_cast<std::size_t>(k)] = zero_row.data();
+                continue;
+            }
+            const auto it = std::find(ring_keys.begin(), ring_keys.end(), sy);
+            CV_Assert(it != ring_keys.end());
+            source_rows[static_cast<std::size_t>(k)] =
+                row_ring.data() +
+                static_cast<std::size_t>(it - ring_keys.begin()) * row_stride;
+        }
+
+        float* output = reinterpret_cast<float*>(
+            dst.data + static_cast<std::size_t>(y) * dst_step);
+        int offset = 0;
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+        if (use_ui)
+        {
+            const cv::v_float32x4 scale = cv::v_setall_f32(1.0f / 16.0f);
+            const auto accumulate = [&](int lane) {
+                const cv::v_float32x4 center =
+                    cv::v_load(source_rows[2] + offset + lane);
+                return cv::v_mul(
+                    cv::v_add(
+                        cv::v_add(
+                            cv::v_load(source_rows[0] + offset + lane),
+                            cv::v_load(source_rows[4] + offset + lane)),
+                        cv::v_add(
+                            cv::v_mul(
+                                cv::v_add(
+                                    cv::v_load(
+                                        source_rows[1] + offset + lane),
+                                    cv::v_load(
+                                        source_rows[3] + offset + lane)),
+                                cv::v_setall_f32(4.0f)),
+                            cv::v_mul(center, cv::v_setall_f32(6.0f)))),
+                    scale);
+            };
+            for (; offset + 8 <= row_stride; offset += 8)
+            {
+                cv::v_store(output + offset, accumulate(0));
+                cv::v_store(output + offset + 4, accumulate(4));
+            }
+            for (; offset + 4 <= row_stride; offset += 4)
+            {
+                cv::v_store(output + offset, accumulate(0));
+            }
+        }
+#endif
+        for (; offset < row_stride; ++offset)
+        {
+            output[offset] =
+                (source_rows[0][offset] +
+                 4.0f * source_rows[1][offset] +
+                 6.0f * source_rows[2][offset] +
+                 4.0f * source_rows[3][offset] +
+                 source_rows[4][offset]) *
+                (1.0f / 16.0f);
+        }
+    }
+
+    cpu::set_last_dispatch_tag(
+        use_ui && row_stride >= 4
+            ? cpu::DispatchTag::OpenCVUI
+            : cpu::DispatchTag::Scalar);
+    return true;
 }
 
 inline bool try_gaussian_blur_fastpath_u8(const Mat& src, Mat& dst, Size ksize, double sigmaX, double sigmaY, int borderType)
@@ -55,6 +552,9 @@ inline bool try_gaussian_blur_fastpath_u8(const Mat& src, Mat& dst, Size ksize, 
         return false;
     }
 
+    const bool fixed5x5 =
+        kx == 5 && ky == 5 && sigmaX <= 0.0 && sigmaY <= 0.0;
+
     if (sigmaX <= 0.0)
     {
         sigmaX = default_gaussian_sigma_for_ksize(kx);
@@ -90,6 +590,12 @@ inline bool try_gaussian_blur_fastpath_u8(const Mat& src, Mat& dst, Size ksize, 
 
     dst.create(std::vector<int>{rows, cols}, src_ref->type());
     const std::size_t dst_step = dst.step(0);
+
+    if (fixed5x5 &&
+        try_gaussian5x5_fixed_u8(*src_ref, dst, border_type))
+    {
+        return true;
+    }
 
     const std::vector<float> kernel_x = build_gaussian_kernel_1d(kx, sigmaX);
     const std::vector<float> kernel_y = build_gaussian_kernel_1d(ky, sigmaY);
@@ -430,6 +936,9 @@ inline bool try_gaussian_blur_fastpath_f32(const Mat& src, Mat& dst, Size ksize,
         return false;
     }
 
+    const bool fixed5x5 =
+        kx == 5 && ky == 5 && sigmaX <= 0.0 && sigmaY <= 0.0;
+
     if (sigmaX <= 0.0)
     {
         sigmaX = default_gaussian_sigma_for_ksize(kx);
@@ -465,6 +974,12 @@ inline bool try_gaussian_blur_fastpath_f32(const Mat& src, Mat& dst, Size ksize,
 
     dst.create(std::vector<int>{rows, cols}, src_ref->type());
     const std::size_t dst_step = dst.step(0);
+
+    if (fixed5x5 &&
+        try_gaussian5x5_fixed_f32(*src_ref, dst, border_type))
+    {
+        return true;
+    }
 
     const std::vector<float> kernel_x = build_gaussian_kernel_1d(kx, sigmaX);
     const std::vector<float> kernel_y = build_gaussian_kernel_1d(ky, sigmaY);
@@ -779,6 +1294,7 @@ inline const char* last_gaussianblur_dispatch_path()
 inline void gaussianBlur_fast_impl(const Mat& src, Mat& dst, Size ksize, double sigmaX, double sigmaY, int borderType)
 {
     using namespace gaussian_blur_fastpath;
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     set_last_gaussianblur_dispatch_path("fallback");
 
     if (try_gaussian_blur_fastpath_u8(src, dst, ksize, sigmaX, sigmaY, borderType))
@@ -788,6 +1304,10 @@ inline void gaussianBlur_fast_impl(const Mat& src, Mat& dst, Size ksize, double 
         if (resolve_gaussian_kernel_size(ksize, sigmaX, sigmaY, kx, ky) && kx == 3 && ky == 3)
         {
             set_last_gaussianblur_dispatch_path("gauss3x3");
+        }
+        else if (kx == 5 && ky == 5 && sigmaX <= 0.0 && sigmaY <= 0.0)
+        {
+            set_last_gaussianblur_dispatch_path("gauss5x5_fixedpoint");
         }
         else
         {
@@ -803,6 +1323,10 @@ inline void gaussianBlur_fast_impl(const Mat& src, Mat& dst, Size ksize, double 
         if (resolve_gaussian_kernel_size(ksize, sigmaX, sigmaY, kx, ky) && kx == 3 && ky == 3)
         {
             set_last_gaussianblur_dispatch_path("gauss3x3");
+        }
+        else if (kx == 5 && ky == 5 && sigmaX <= 0.0 && sigmaY <= 0.0)
+        {
+            set_last_gaussianblur_dispatch_path("gauss5x5_ring_f32");
         }
         else
         {

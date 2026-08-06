@@ -1,4 +1,7 @@
 #include "test/imgproc/support/morphology_derivatives_test_utils.hpp"
+#include "test/support/dispatch_mode_guard.hpp"
+
+#include <string>
 
 TEST(MorphologyTest, erode_dilate_u8_c1_matches_reference)
 {
@@ -33,6 +36,94 @@ TEST(MorphologyTest, erode_dilate_u8_c3_roi_matches_reference)
 
     EXPECT_EQ(max_abs_diff_u8(erode_actual, erode_expected), 0);
     EXPECT_EQ(max_abs_diff_u8(dilate_actual, dilate_expected), 0);
+}
+
+TEST(MorphologyTest, rect3x3_c3_c4_odd_roi_matches_in_forced_scalar_and_ui)
+{
+    const Scalar border_value(17.0, 53.0, 101.0, 211.0);
+    for (const int channels : {3, 4})
+    {
+        Mat parent({23, 45}, CV_MAKETYPE(CV_8U, channels));
+        fill_u8_pattern(parent);
+        const Mat roi = parent(Range(1, 22), Range(2, 41));
+
+        for (const int border_type : {BORDER_REPLICATE, BORDER_CONSTANT})
+        {
+            SCOPED_TRACE(
+                std::string("channels=") + std::to_string(channels) +
+                ", border=" + std::to_string(border_type));
+            for (const bool is_erode : {true, false})
+            {
+                SCOPED_TRACE(is_erode ? "erode" : "dilate");
+                const Mat expected = morph_reference_u8(
+                    roi, is_erode, border_type, border_value);
+                Mat scalar_actual;
+                {
+                    cvh::test::DispatchModeGuard guard(
+                        cpu::DispatchMode::ScalarOnly);
+                    if (is_erode)
+                    {
+                        erode(
+                            roi,
+                            scalar_actual,
+                            Mat(),
+                            Point(-1, -1),
+                            1,
+                            border_type,
+                            border_value);
+                    }
+                    else
+                    {
+                        dilate(
+                            roi,
+                            scalar_actual,
+                            Mat(),
+                            Point(-1, -1),
+                            1,
+                            border_type,
+                            border_value);
+                    }
+                    EXPECT_EQ(
+                        cpu::last_dispatch_tag(),
+                        cpu::DispatchTag::Scalar);
+                }
+
+                Mat ui_actual;
+                {
+                    cvh::test::DispatchModeGuard guard(
+                        cpu::DispatchMode::OpenCVUIOnly);
+                    if (is_erode)
+                    {
+                        erode(
+                            roi,
+                            ui_actual,
+                            Mat(),
+                            Point(-1, -1),
+                            1,
+                            border_type,
+                            border_value);
+                    }
+                    else
+                    {
+                        dilate(
+                            roi,
+                            ui_actual,
+                            Mat(),
+                            Point(-1, -1),
+                            1,
+                            border_type,
+                            border_value);
+                    }
+                    EXPECT_EQ(
+                        cpu::last_dispatch_tag(),
+                        cvh::test::expected_fixed_width_dispatch_tag());
+                }
+
+                EXPECT_EQ(max_abs_diff_u8(scalar_actual, expected), 0);
+                EXPECT_EQ(max_abs_diff_u8(ui_actual, expected), 0);
+            }
+        }
+    }
 }
 
 TEST(MorphologyTest, morphologyEx_open_close_gradient_match_reference)

@@ -3,6 +3,10 @@
 
 #include "fastpath_common.hpp"
 
+#include <array>
+#include <cstdint>
+#include <limits>
+
 namespace cvh
 {
 namespace detail
@@ -15,6 +19,454 @@ inline thread_local const char* g_last_boxfilter_dispatch_path = "fallback";
 inline void set_last_boxfilter_dispatch_path(const char* path)
 {
     g_last_boxfilter_dispatch_path = path ? path : "fallback";
+}
+
+inline bool try_box3x3_u8(const Mat& src,
+                          Mat& dst,
+                          int border_type)
+{
+    const int rows = src.size[0];
+    const int cols = src.size[1];
+    const int channels = src.channels();
+    if (rows <= 0 || cols <= 0)
+    {
+        return false;
+    }
+
+    const int row_stride = cols * channels;
+    const std::size_t src_step = src.step(0);
+    dst.create(src.shape(), src.type());
+    const std::size_t dst_step = dst.step(0);
+
+    std::vector<std::uint16_t> row_ring(
+        static_cast<std::size_t>(row_stride) * 3u);
+    std::vector<std::uint16_t> zero_row;
+    if (border_type == BORDER_CONSTANT)
+    {
+        zero_row.resize(static_cast<std::size_t>(row_stride), 0u);
+    }
+    std::array<int, 3> ring_keys;
+    ring_keys.fill(std::numeric_limits<int>::min());
+
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const bool use_ui = cpu::opencv_ui_allowed();
+#else
+    const bool use_ui = false;
+#endif
+
+    const auto horizontal = [&](int sy, std::uint16_t* output) {
+        const uchar* input =
+            src.data + static_cast<std::size_t>(sy) * src_step;
+        for (int c = 0; c < channels; ++c)
+        {
+            unsigned sum = 0;
+            for (int k = 0; k < 3; ++k)
+            {
+                const int sx = border_interpolate(k - 1, cols, border_type);
+                if (sx >= 0)
+                {
+                    sum += input[sx * channels + c];
+                }
+            }
+            output[c] = static_cast<std::uint16_t>(sum);
+        }
+
+        int offset = channels;
+        const int byte_end = std::max(channels, row_stride - channels);
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+        if (use_ui)
+        {
+            for (; offset + 16 <= byte_end; offset += 16)
+            {
+                cv::v_store(
+                    output + offset,
+                    cv::v_add(
+                        cv::v_add(
+                            cv::v_load_expand(input + offset - channels),
+                            cv::v_load_expand(input + offset)),
+                        cv::v_load_expand(input + offset + channels)));
+                cv::v_store(
+                    output + offset + 8,
+                    cv::v_add(
+                        cv::v_add(
+                            cv::v_load_expand(
+                                input + offset + 8 - channels),
+                            cv::v_load_expand(input + offset + 8)),
+                        cv::v_load_expand(
+                            input + offset + 8 + channels)));
+            }
+            for (; offset + 8 <= byte_end; offset += 8)
+            {
+                cv::v_store(
+                    output + offset,
+                    cv::v_add(
+                        cv::v_add(
+                            cv::v_load_expand(input + offset - channels),
+                            cv::v_load_expand(input + offset)),
+                        cv::v_load_expand(input + offset + channels)));
+            }
+        }
+#endif
+        for (; offset < byte_end; ++offset)
+        {
+            output[offset] = static_cast<std::uint16_t>(
+                input[offset - channels] + input[offset] +
+                input[offset + channels]);
+        }
+
+        if (cols > 1)
+        {
+            const int x = cols - 1;
+            for (int c = 0; c < channels; ++c)
+            {
+                unsigned sum = 0;
+                for (int k = 0; k < 3; ++k)
+                {
+                    const int sx = border_interpolate(
+                        x + k - 1, cols, border_type);
+                    if (sx >= 0)
+                    {
+                        sum += input[sx * channels + c];
+                    }
+                }
+                output[x * channels + c] =
+                    static_cast<std::uint16_t>(sum);
+            }
+        }
+    };
+
+    for (int y = 0; y < rows; ++y)
+    {
+        std::array<int, 3> requested;
+        for (int k = 0; k < 3; ++k)
+        {
+            requested[static_cast<std::size_t>(k)] =
+                border_interpolate(y + k - 1, rows, border_type);
+        }
+        for (const int sy : requested)
+        {
+            if (sy < 0 ||
+                std::find(ring_keys.begin(), ring_keys.end(), sy) !=
+                    ring_keys.end())
+            {
+                continue;
+            }
+            int slot = -1;
+            for (int candidate = 0; candidate < 3; ++candidate)
+            {
+                if (std::find(
+                        requested.begin(),
+                        requested.end(),
+                        ring_keys[static_cast<std::size_t>(candidate)]) ==
+                    requested.end())
+                {
+                    slot = candidate;
+                    break;
+                }
+            }
+            CV_Assert(slot >= 0);
+            horizontal(
+                sy,
+                row_ring.data() +
+                    static_cast<std::size_t>(slot) *
+                        static_cast<std::size_t>(row_stride));
+            ring_keys[static_cast<std::size_t>(slot)] = sy;
+        }
+
+        std::array<const std::uint16_t*, 3> source_rows;
+        for (int k = 0; k < 3; ++k)
+        {
+            const int sy = requested[static_cast<std::size_t>(k)];
+            if (sy < 0)
+            {
+                source_rows[static_cast<std::size_t>(k)] = zero_row.data();
+                continue;
+            }
+            const auto it =
+                std::find(ring_keys.begin(), ring_keys.end(), sy);
+            CV_Assert(it != ring_keys.end());
+            const int slot = static_cast<int>(it - ring_keys.begin());
+            source_rows[static_cast<std::size_t>(k)] =
+                row_ring.data() +
+                static_cast<std::size_t>(slot) *
+                    static_cast<std::size_t>(row_stride);
+        }
+
+        uchar* output =
+            dst.data + static_cast<std::size_t>(y) * dst_step;
+        int offset = 0;
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+        if (use_ui)
+        {
+            const cv::v_uint16x8 rounding = cv::v_setall_u16(4);
+            const cv::v_uint32x4 reciprocal = cv::v_setall_u32(7282u);
+            const auto normalize_sum = [&](int lane_offset) {
+                const cv::v_uint16x8 sum = cv::v_add(
+                    cv::v_add(
+                        cv::v_load(source_rows[0] + offset + lane_offset),
+                        cv::v_load(source_rows[1] + offset + lane_offset)),
+                    cv::v_load(source_rows[2] + offset + lane_offset));
+                cv::v_uint32x4 low;
+                cv::v_uint32x4 high;
+                cv::v_expand(cv::v_add(sum, rounding), low, high);
+                return cv::v_pack(
+                    cv::v_shr<16>(cv::v_mul(low, reciprocal)),
+                    cv::v_shr<16>(cv::v_mul(high, reciprocal)));
+            };
+            for (; offset + 16 <= row_stride; offset += 16)
+            {
+                cv::v_store(
+                    output + offset,
+                    cv::v_pack(normalize_sum(0), normalize_sum(8)));
+            }
+        }
+#endif
+        for (; offset < row_stride; ++offset)
+        {
+            const unsigned sum =
+                source_rows[0][offset] + source_rows[1][offset] +
+                source_rows[2][offset];
+            output[offset] = static_cast<uchar>((sum + 4u) / 9u);
+        }
+    }
+
+    cpu::set_last_dispatch_tag(
+        use_ui && row_stride >= 16
+            ? cpu::DispatchTag::OpenCVUI
+            : cpu::DispatchTag::Scalar);
+    return true;
+}
+
+inline bool try_box3x3_f32(const Mat& src,
+                           Mat& dst,
+                           int border_type)
+{
+    const int rows = src.size[0];
+    const int cols = src.size[1];
+    const int channels = src.channels();
+    if (rows <= 0 || cols <= 0)
+    {
+        return false;
+    }
+
+    const int row_stride = cols * channels;
+    const std::size_t src_step = src.step(0);
+    dst.create(src.shape(), src.type());
+    const std::size_t dst_step = dst.step(0);
+
+    std::vector<float> row_ring(
+        static_cast<std::size_t>(row_stride) * 3u);
+    std::vector<float> zero_row;
+    if (border_type == BORDER_CONSTANT)
+    {
+        zero_row.resize(static_cast<std::size_t>(row_stride), 0.0f);
+    }
+    std::array<int, 3> ring_keys;
+    ring_keys.fill(std::numeric_limits<int>::min());
+
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+    const bool use_ui = cpu::opencv_ui_allowed();
+#else
+    const bool use_ui = false;
+#endif
+
+    const auto horizontal = [&](int sy, float* output) {
+        const float* input = reinterpret_cast<const float*>(
+            src.data + static_cast<std::size_t>(sy) * src_step);
+        for (int c = 0; c < channels; ++c)
+        {
+            float sum = 0.0f;
+            for (int k = 0; k < 3; ++k)
+            {
+                const int sx = border_interpolate(k - 1, cols, border_type);
+                if (sx >= 0)
+                {
+                    sum += input[sx * channels + c];
+                }
+            }
+            output[c] = sum;
+        }
+
+        int offset = channels;
+        const int scalar_end = std::max(channels, row_stride - channels);
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+        if (use_ui)
+        {
+            for (; offset + 8 <= scalar_end; offset += 8)
+            {
+                cv::v_store(
+                    output + offset,
+                    cv::v_add(
+                        cv::v_add(
+                            cv::v_load(input + offset - channels),
+                            cv::v_load(input + offset)),
+                        cv::v_load(input + offset + channels)));
+                cv::v_store(
+                    output + offset + 4,
+                    cv::v_add(
+                        cv::v_add(
+                            cv::v_load(input + offset + 4 - channels),
+                            cv::v_load(input + offset + 4)),
+                        cv::v_load(input + offset + 4 + channels)));
+            }
+            for (; offset + 4 <= scalar_end; offset += 4)
+            {
+                cv::v_store(
+                    output + offset,
+                    cv::v_add(
+                        cv::v_add(
+                            cv::v_load(input + offset - channels),
+                            cv::v_load(input + offset)),
+                        cv::v_load(input + offset + channels)));
+            }
+        }
+#endif
+        for (; offset < scalar_end; ++offset)
+        {
+            output[offset] = input[offset - channels] + input[offset] +
+                             input[offset + channels];
+        }
+
+        if (cols > 1)
+        {
+            const int x = cols - 1;
+            for (int c = 0; c < channels; ++c)
+            {
+                float sum = 0.0f;
+                for (int k = 0; k < 3; ++k)
+                {
+                    const int sx = border_interpolate(
+                        x + k - 1, cols, border_type);
+                    if (sx >= 0)
+                    {
+                        sum += input[sx * channels + c];
+                    }
+                }
+                output[x * channels + c] = sum;
+            }
+        }
+    };
+
+    for (int y = 0; y < rows; ++y)
+    {
+        std::array<int, 3> requested;
+        for (int k = 0; k < 3; ++k)
+        {
+            requested[static_cast<std::size_t>(k)] =
+                border_interpolate(y + k - 1, rows, border_type);
+        }
+        for (const int sy : requested)
+        {
+            if (sy < 0 ||
+                std::find(ring_keys.begin(), ring_keys.end(), sy) !=
+                    ring_keys.end())
+            {
+                continue;
+            }
+            int slot = -1;
+            for (int candidate = 0; candidate < 3; ++candidate)
+            {
+                if (std::find(
+                        requested.begin(),
+                        requested.end(),
+                        ring_keys[static_cast<std::size_t>(candidate)]) ==
+                    requested.end())
+                {
+                    slot = candidate;
+                    break;
+                }
+            }
+            CV_Assert(slot >= 0);
+            horizontal(
+                sy,
+                row_ring.data() +
+                    static_cast<std::size_t>(slot) *
+                        static_cast<std::size_t>(row_stride));
+            ring_keys[static_cast<std::size_t>(slot)] = sy;
+        }
+
+        std::array<const float*, 3> source_rows;
+        for (int k = 0; k < 3; ++k)
+        {
+            const int sy = requested[static_cast<std::size_t>(k)];
+            if (sy < 0)
+            {
+                source_rows[static_cast<std::size_t>(k)] = zero_row.data();
+                continue;
+            }
+            const auto it =
+                std::find(ring_keys.begin(), ring_keys.end(), sy);
+            CV_Assert(it != ring_keys.end());
+            const int slot = static_cast<int>(it - ring_keys.begin());
+            source_rows[static_cast<std::size_t>(k)] =
+                row_ring.data() +
+                static_cast<std::size_t>(slot) *
+                    static_cast<std::size_t>(row_stride);
+        }
+
+        float* output = reinterpret_cast<float*>(
+            dst.data + static_cast<std::size_t>(y) * dst_step);
+        int offset = 0;
+#if CVH_DETAIL_HAVE_OPENCV_UI && CV_SIMD128 && \
+    (CV_NEON || CV_SSE2 || CV_AVX2 || CV_AVX512_SKX)
+        if (use_ui)
+        {
+            const cv::v_float32x4 scale =
+                cv::v_setall_f32(1.0f / 9.0f);
+            for (; offset + 8 <= row_stride; offset += 8)
+            {
+                cv::v_store(
+                    output + offset,
+                    cv::v_mul(
+                        cv::v_add(
+                            cv::v_add(
+                                cv::v_load(source_rows[0] + offset),
+                                cv::v_load(source_rows[1] + offset)),
+                            cv::v_load(source_rows[2] + offset)),
+                        scale));
+                cv::v_store(
+                    output + offset + 4,
+                    cv::v_mul(
+                        cv::v_add(
+                            cv::v_add(
+                                cv::v_load(source_rows[0] + offset + 4),
+                                cv::v_load(source_rows[1] + offset + 4)),
+                            cv::v_load(source_rows[2] + offset + 4)),
+                        scale));
+            }
+            for (; offset + 4 <= row_stride; offset += 4)
+            {
+                cv::v_store(
+                    output + offset,
+                    cv::v_mul(
+                        cv::v_add(
+                            cv::v_add(
+                                cv::v_load(source_rows[0] + offset),
+                                cv::v_load(source_rows[1] + offset)),
+                            cv::v_load(source_rows[2] + offset)),
+                        scale));
+            }
+        }
+#endif
+        for (; offset < row_stride; ++offset)
+        {
+            output[offset] =
+                (source_rows[0][offset] + source_rows[1][offset] +
+                 source_rows[2][offset]) *
+                (1.0f / 9.0f);
+        }
+    }
+
+    cpu::set_last_dispatch_tag(
+        use_ui && row_stride >= 4
+            ? cpu::DispatchTag::OpenCVUI
+            : cpu::DispatchTag::Scalar);
+    return true;
 }
 
 inline bool try_boxfilter_fastpath_u8(const Mat& src,
@@ -80,6 +532,13 @@ inline bool try_boxfilter_fastpath_u8(const Mat& src,
     const int ky = ksize.height;
     const int kernel_area = kx * ky;
     const float inv_kernel_area = kernel_area > 0 ? (1.0f / static_cast<float>(kernel_area)) : 0.0f;
+
+    if (normalize && kx == 3 && ky == 3 &&
+        anchor_x == 1 && anchor_y == 1 &&
+        try_box3x3_u8(*src_ref, dst, border_type))
+    {
+        return true;
+    }
 
     const int right = kx - anchor_x - 1;
     const int bottom = ky - anchor_y - 1;
@@ -403,6 +862,13 @@ inline bool try_boxfilter_fastpath_f32(const Mat& src,
     const int kernel_area = kx * ky;
     const float inv_kernel_area = kernel_area > 0 ? (1.0f / static_cast<float>(kernel_area)) : 0.0f;
 
+    if (normalize && kx == 3 && ky == 3 &&
+        anchor_x == 1 && anchor_y == 1 &&
+        try_box3x3_f32(*src_ref, dst, border_type))
+    {
+        return true;
+    }
+
     const int right = kx - anchor_x - 1;
     const int bottom = ky - anchor_y - 1;
     const std::vector<int> x_map = build_extended_index_map(cols, anchor_x, right, border_type);
@@ -626,6 +1092,7 @@ inline void boxFilter_fast_impl(const Mat& src,
                             int borderType)
 {
     using namespace box_filter_fastpath;
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     set_last_boxfilter_dispatch_path("fallback");
 
     if (try_boxfilter_fastpath_u8(src, dst, ddepth, ksize, anchor, normalize, borderType))

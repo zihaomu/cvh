@@ -2,6 +2,7 @@
 #define CVH_IMGPROC_DETAIL_SOBEL_IMPL_HPP
 
 #include "fastpath_common.hpp"
+#include "filter_ui.hpp"
 
 namespace cvh
 {
@@ -71,6 +72,25 @@ inline bool try_sobel_fastpath_u8(const Mat& src,
     if (rows <= 0 || cols <= 0 || channels <= 0)
     {
         return false;
+    }
+
+    if (ksize == 3 && out_depth == CV_32F && channels == 1 &&
+        !sample_window.use_parent_window)
+    {
+        const std::vector<int> kernel =
+            dx == 1
+                ? std::vector<int>{-1, 0, 1, -2, 0, 2, -1, 0, 1}
+                : std::vector<int>{-1, -2, -1, 0, 0, 0, 1, 2, 1};
+        if (filter_ui::derivative3_u8_f32(
+                *src_ref,
+                dst,
+                kernel,
+                scale,
+                delta,
+                border_type))
+        {
+            return true;
+        }
     }
 
     if (ksize == 5)
@@ -336,6 +356,7 @@ inline void sobel_fast_impl(const Mat& src,
                         double delta,
                         int borderType)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (sobel_fastpath::try_sobel_fastpath_u8(
             src, dst, ddepth, dx, dy, ksize, scale, delta, borderType))
     {

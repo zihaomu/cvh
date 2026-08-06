@@ -86,6 +86,8 @@ enum class ImgprocGeometrySamplingOpId
 {
     RemapFloatU8,
     RemapFixedU8,
+    WarpAffineTranslationU8,
+    WarpAffineTranslationF32,
     WarpPerspectiveU8,
     RectSubPixU8,
     RectSubPixU8F32,
@@ -239,6 +241,59 @@ bool validate_imgproc_gaussian_kernel(int ksize,
                                       CoreDepthId depth,
                                       const void* actual_data,
                                       std::size_t actual_bytes);
+
+bool validate_imgproc_gaussian_blur_u8(int rows,
+                                       int cols,
+                                       int channels,
+                                       int border_type,
+                                       std::uint32_t seed,
+                                       const void* actual_data,
+                                       std::size_t actual_bytes);
+
+bool validate_imgproc_gaussian_blur_f32(int rows,
+                                        int cols,
+                                        int channels,
+                                        int border_type,
+                                        std::uint32_t seed,
+                                        const void* actual_data,
+                                        std::size_t actual_bytes);
+
+bool validate_imgproc_box_filter(int rows,
+                                 int cols,
+                                 int channels,
+                                 CoreDepthId depth,
+                                 int border_type,
+                                 std::uint32_t seed,
+                                 const void* actual_data,
+                                 std::size_t actual_bytes);
+
+bool validate_imgproc_sep_filter3(int rows,
+                                  int cols,
+                                  int channels,
+                                  CoreDepthId depth,
+                                  int border_type,
+                                  std::uint32_t seed,
+                                  const void* actual_data,
+                                  std::size_t actual_bytes);
+
+bool validate_imgproc_filter2d_cross3(int rows,
+                                      int cols,
+                                      int channels,
+                                      CoreDepthId depth,
+                                      int border_type,
+                                      std::uint32_t seed,
+                                      const void* actual_data,
+                                      std::size_t actual_bytes);
+
+bool validate_imgproc_canny(int rows,
+                            int cols,
+                            double threshold1,
+                            double threshold2,
+                            int aperture_size,
+                            bool l2_gradient,
+                            std::uint32_t seed,
+                            const void* actual_data,
+                            std::size_t actual_bytes);
 
 bool validate_imgproc_deriv_kernels(int dx,
                                     int dy,

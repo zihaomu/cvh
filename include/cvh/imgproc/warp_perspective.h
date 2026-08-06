@@ -1,6 +1,7 @@
 #ifndef CVH_IMGPROC_WARP_PERSPECTIVE_H
 #define CVH_IMGPROC_WARP_PERSPECTIVE_H
 
+#include "../core/detail/dispatch_control.h"
 #include "detail/geometric_sampling.hpp"
 
 #include <algorithm>
@@ -225,6 +226,7 @@ inline void warpPerspective(const Mat& src,
                             int borderMode = BORDER_CONSTANT,
                             const Scalar& borderValue = Scalar())
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     if (src.empty() || src.dims != 2)
     {
         CV_Error(

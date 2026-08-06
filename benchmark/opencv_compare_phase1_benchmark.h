@@ -122,6 +122,7 @@ struct Phase1BenchmarkResult
     std::string suite;
     std::string op;
     std::string variant;
+    std::string algorithm_path;
     std::string dispatch_path;
     std::string depth;
     int channels = 1;

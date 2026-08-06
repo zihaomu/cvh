@@ -1,4 +1,5 @@
 #include "cvh/cvh.h"
+#include "cvh/core/detail/dispatch_control.h"
 
 #include <cstring>
 
@@ -81,6 +82,10 @@ int main()
 
     cvh::Mat blur_dst;
     cvh::blur(src_gray, blur_dst, cvh::Size(3, 3), cvh::Point(-1, -1), cvh::BORDER_REPLICATE);
+    if (cvh::cpu::last_dispatch_tag() != cvh::cpu::DispatchTag::Scalar)
+    {
+        return 60;
+    }
     const char* expected_box_path = "box3x3";
     if (std::strcmp(cvh::detail::last_boxfilter_dispatch_path(), expected_box_path) != 0)
     {
@@ -97,7 +102,11 @@ int main()
 
     cvh::Mat gauss_dst;
     cvh::GaussianBlur(src_gray, gauss_dst, cvh::Size(5, 5), 0.0, 0.0, cvh::BORDER_REPLICATE);
-    const char* expected_gauss_path = "gauss_separable";
+    if (cvh::cpu::last_dispatch_tag() != cvh::cpu::DispatchTag::Scalar)
+    {
+        return 61;
+    }
+    const char* expected_gauss_path = "gauss5x5_fixedpoint";
     if (std::strcmp(cvh::detail::last_gaussianblur_dispatch_path(), expected_gauss_path) != 0)
     {
         return 15;
@@ -113,6 +122,10 @@ int main()
 
     cvh::Mat sobel_dst;
     cvh::Sobel(src_gray, sobel_dst, CV_32F, 1, 0, 3, 1.0, 0.0, cvh::BORDER_REPLICATE);
+    if (cvh::cpu::last_dispatch_tag() != cvh::cpu::DispatchTag::Scalar)
+    {
+        return 62;
+    }
     if (sobel_dst.empty() || sobel_dst.type() != CV_32FC1 || sobel_dst.size[0] != 2 || sobel_dst.size[1] != 2)
     {
         return 23;
@@ -120,6 +133,10 @@ int main()
 
     cvh::Mat erode_dst;
     cvh::erode(src_gray, erode_dst, cvh::Mat(), cvh::Point(-1, -1), 1, cvh::BORDER_REPLICATE);
+    if (cvh::cpu::last_dispatch_tag() != cvh::cpu::DispatchTag::Scalar)
+    {
+        return 63;
+    }
     if (erode_dst.empty() || erode_dst.type() != CV_8UC1 || erode_dst.at<uchar>(0, 0) != 1 ||
         erode_dst.at<uchar>(0, 1) != 1 || erode_dst.at<uchar>(1, 0) != 1 || erode_dst.at<uchar>(1, 1) != 1)
     {
@@ -128,6 +145,10 @@ int main()
 
     cvh::Mat dilate_dst;
     cvh::dilate(src_gray, dilate_dst, cvh::Mat(), cvh::Point(-1, -1), 1, cvh::BORDER_REPLICATE);
+    if (cvh::cpu::last_dispatch_tag() != cvh::cpu::DispatchTag::Scalar)
+    {
+        return 64;
+    }
     if (dilate_dst.empty() || dilate_dst.type() != CV_8UC1 || dilate_dst.at<uchar>(0, 0) != 4 ||
         dilate_dst.at<uchar>(0, 1) != 4 || dilate_dst.at<uchar>(1, 0) != 4 || dilate_dst.at<uchar>(1, 1) != 4)
     {
@@ -136,6 +157,10 @@ int main()
 
     cvh::Mat canny_dst;
     cvh::Canny(src_gray, canny_dst, 5.0, 10.0, 3, false);
+    if (cvh::cpu::last_dispatch_tag() != cvh::cpu::DispatchTag::Scalar)
+    {
+        return 65;
+    }
     if (canny_dst.empty() || canny_dst.type() != CV_8UC1 || canny_dst.size[0] != 2 || canny_dst.size[1] != 2)
     {
         return 28;
@@ -178,6 +203,10 @@ int main()
 
     cvh::Mat filter_dst;
     cvh::filter2D(src_gray, filter_dst, -1, kernel, cvh::Point(-1, -1), 0.0, cvh::BORDER_REPLICATE);
+    if (cvh::cpu::last_dispatch_tag() != cvh::cpu::DispatchTag::Scalar)
+    {
+        return 66;
+    }
     if (filter_dst.empty() || filter_dst.type() != CV_8UC1 || filter_dst.size[0] != 2 || filter_dst.size[1] != 2)
     {
         return 43;
@@ -197,6 +226,10 @@ int main()
 
     cvh::Mat sep_dst;
     cvh::sepFilter2D(src_gray, sep_dst, -1, kernel_x, kernel_y, cvh::Point(-1, -1), 0.0, cvh::BORDER_REPLICATE);
+    if (cvh::cpu::last_dispatch_tag() != cvh::cpu::DispatchTag::Scalar)
+    {
+        return 67;
+    }
     if (sep_dst.empty() || sep_dst.type() != CV_8UC1 || sep_dst.size[0] != 2 || sep_dst.size[1] != 2)
     {
         return 47;

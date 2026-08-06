@@ -611,37 +611,57 @@ inline int vertical_pyramid_row_ui(
     int x = 0;
     if constexpr (std::is_same<T, uchar>::value)
     {
-        alignas(64) int values[cv::VTraits<cv::v_int32>::max_nlanes];
-        const cv::v_int32 rounding =
-            cv::vx_setall_s32(1 << (shift - 1));
-        for (; x <= width - lanes; x += lanes)
-        {
-            cv::v_int32 sum = rounding;
-            for (int tap = 0; tap < 5; ++tap)
+        const int byte_lanes = cv::VTraits<cv::v_uint8>::vlanes();
+        const int half_lanes = cv::VTraits<cv::v_uint16>::vlanes();
+        const int int_lanes = cv::VTraits<cv::v_int32>::vlanes();
+        const auto packed_row = [&](int tap, int offset) {
+            if (rows[tap] == nullptr)
             {
-                if (rows[tap] != nullptr)
-                {
-                    sum = cv::v_add(
-                        sum,
-                        cv::v_mul(
-                            cv::vx_load(rows[tap] + x),
-                            cv::vx_setall_s32(weights[tap])));
-                }
+                return cv::vx_setzero_u16();
             }
+            return cv::v_reinterpret_as_u16(
+                cv::v_pack(
+                    cv::vx_load(rows[tap] + offset),
+                    cv::vx_load(rows[tap] + offset + int_lanes)));
+        };
+        const auto accumulate = [&](int offset) {
+            const cv::v_uint16 row0 = packed_row(0, offset);
+            const cv::v_uint16 row1 = packed_row(1, offset);
+            const cv::v_uint16 row2 = packed_row(2, offset);
+            const cv::v_uint16 row3 = packed_row(3, offset);
+            const cv::v_uint16 row4 = packed_row(4, offset);
+            return cv::v_add(
+                cv::v_add(
+                    cv::v_add(row0, row4),
+                    cv::v_add(row2, row2)),
+                cv::v_shl<2>(
+                    cv::v_add(cv::v_add(row1, row3), row2)));
+        };
+        for (; x <= width - byte_lanes; x += byte_lanes)
+        {
+            const cv::v_uint16 first = accumulate(x);
+            const cv::v_uint16 second = accumulate(x + half_lanes);
             if (shift == 8)
             {
-                sum = cv::v_shr<8>(sum);
+                cv::vx_store(output + x, cv::v_rshr_pack<8>(first, second));
             }
             else
             {
-                sum = cv::v_shr<6>(sum);
+                cv::vx_store(output + x, cv::v_rshr_pack<6>(first, second));
             }
-            cv::vx_store(values, sum);
-            for (int lane = 0; lane < lanes; ++lane)
+        }
+        if (x <= width - half_lanes)
+        {
+            const cv::v_uint16 values = accumulate(x);
+            if (shift == 8)
             {
-                output[x + lane] =
-                    saturate_cast<uchar>(values[lane]);
+                cv::v_rshr_pack_store<8>(output + x, values);
             }
+            else
+            {
+                cv::v_rshr_pack_store<6>(output + x, values);
+            }
+            x += half_lanes;
         }
     }
     else
@@ -816,8 +836,7 @@ inline void horizontal_upsample_row(
     using WorkType = PyramidWorkType<T>;
     const T* input = reinterpret_cast<const T*>(
         src.data + static_cast<size_t>(source_y) * src.step(0));
-    for (int x = 0; x < output_cols; ++x)
-    {
+    const auto compute_scalar = [&](int x) {
         const int* indices =
             table.x.data() + static_cast<size_t>(x) * 5u;
         for (int ch = 0; ch < channels; ++ch)
@@ -840,6 +859,38 @@ inline void horizontal_upsample_row(
                     static_cast<size_t>(channels) +
                 static_cast<size_t>(ch)] = sum;
         }
+    };
+
+    int x = 0;
+    for (; x < std::min(2, output_cols); ++x)
+    {
+        compute_scalar(x);
+    }
+    const int interior_end = std::max(
+        x,
+        std::min(output_cols - 2, 2 * (src.size.p[1] - 1)));
+    for (; x + 1 < interior_end; x += 2)
+    {
+        const int source_x = x / 2;
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            const size_t center =
+                static_cast<size_t>(source_x) * channels + ch;
+            const WorkType previous = static_cast<WorkType>(
+                input[center - static_cast<size_t>(channels)]);
+            const WorkType current =
+                static_cast<WorkType>(input[center]);
+            const WorkType next = static_cast<WorkType>(
+                input[center + static_cast<size_t>(channels)]);
+            output[static_cast<size_t>(x) * channels + ch] =
+                previous + static_cast<WorkType>(6) * current + next;
+            output[static_cast<size_t>(x + 1) * channels + ch] =
+                static_cast<WorkType>(4) * (current + next);
+        }
+    }
+    for (; x < output_cols; ++x)
+    {
+        compute_scalar(x);
     }
 }
 
@@ -1024,7 +1075,10 @@ inline void buildPyramid(const Mat& src,
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
     dst.clear();
     dst.reserve(static_cast<size_t>(maxlevel + 1));
-    dst.push_back(src.clone());
+    // OpenCV keeps level zero as a Mat header over the input; the generated
+    // levels own their storage. Preserve that aliasing contract and avoid an
+    // unnecessary full-image copy.
+    dst.push_back(src);
     const int border_type =
         pyramid_detail::pyramid_border(borderType, false);
     if (src.depth() == CV_8U)

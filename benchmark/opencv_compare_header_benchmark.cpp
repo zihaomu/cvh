@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -46,7 +47,9 @@ struct CompareRow
     std::string suite;
     std::string op;
     std::string variant;
+    std::string algorithm_path;
     std::string dispatch_path;
+    std::string isa_observed = "unknown";
     std::string depth;
     int channels = 0;
     std::string layout = "continuous";
@@ -68,6 +71,10 @@ volatile std::uint64_t g_sink = 0;
 
 void require_opencv_ui_dispatch(const char* op, const char* variant)
 {
+    if (cvh::cpu::dispatch_mode() != cvh::cpu::DispatchMode::OpenCVUIOnly)
+    {
+        return;
+    }
     const cvh::cpu::DispatchTag tag = cvh::cpu::last_dispatch_tag();
     if (tag != cvh::cpu::DispatchTag::OpenCVUI)
     {
@@ -88,7 +95,32 @@ void validate_ui_only_rows(const std::vector<CompareRow>& rows)
                 "UI-only compare observed specialized ISA dispatch for " +
                 row.op + "/" + row.variant + ": " + row.dispatch_path);
         }
+        if (row.impl == "cvh_scalar" && row.dispatch_path == "opencv_ui")
+        {
+            throw std::runtime_error(
+                "Scalar-only compare observed opencv_ui dispatch for " +
+                row.op + "/" + row.variant);
+        }
     }
+}
+
+std::string observed_dispatch_path()
+{
+    return cvh::cpu::dispatch_tag_name(cvh::cpu::last_dispatch_tag());
+}
+
+std::string observed_isa()
+{
+    const cvh::cpu::DispatchTag tag = cvh::cpu::last_dispatch_tag();
+    if (tag == cvh::cpu::DispatchTag::NEON)
+    {
+        return "neon";
+    }
+    if (tag == cvh::cpu::DispatchTag::AVX2)
+    {
+        return "avx2";
+    }
+    return "unknown";
 }
 
 void usage()
@@ -96,7 +128,8 @@ void usage()
     std::cout
         << "Usage: cvh_benchmark_opencv_compare_ui "
         << "[--profile quick|stable|full] [--warmup N] [--iters N] [--repeats N] "
-        << "[--threads N] [--impl name] [--ops GEMM|PHASE2_P0] "
+        << "[--threads N] [--impl cvh_ui|cvh_scalar] "
+        << "[--ops GEMM|PHASE2_P0|IMGPROC_FLOOR] "
         << "[--output path]\n";
 }
 
@@ -167,17 +200,21 @@ Args parse_args(int argc, char** argv)
     {
         args.impl = "cvh_ui";
     }
-    if (args.impl != "cvh_ui")
+    else if (args.impl == "scalar")
+    {
+        args.impl = "cvh_scalar";
+    }
+    if (args.impl != "cvh_ui" && args.impl != "cvh_scalar")
     {
         std::cerr << "Unsupported impl: " << args.impl
-                  << " (Mode B only compares cvh_ui against upstream OpenCV)\n";
+                  << " (expected cvh_ui or cvh_scalar)\n";
         std::exit(2);
     }
     if (!args.ops.empty() && args.ops != "GEMM" &&
-        args.ops != "PHASE2_P0")
+        args.ops != "PHASE2_P0" && args.ops != "IMGPROC_FLOOR")
     {
         std::cerr << "Unsupported --ops value: " << args.ops
-                  << " (currently supported: GEMM, PHASE2_P0)\n";
+                  << " (currently supported: GEMM, PHASE2_P0, IMGPROC_FLOOR)\n";
         std::exit(2);
     }
     return args;
@@ -296,7 +333,12 @@ void append_row(std::vector<CompareRow>& rows,
     row.suite = suite;
     row.op = op;
     row.variant = variant;
+    row.algorithm_path = dispatch_path;
     row.dispatch_path = dispatch_path;
+    if (dispatch_path == "neon" || dispatch_path == "avx2")
+    {
+        row.isa_observed = dispatch_path;
+    }
     row.depth = depth;
     row.channels = channels;
     row.shape = shape;
@@ -305,6 +347,36 @@ void append_row(std::vector<CompareRow>& rows,
     row.speedup = safe_speedup(cvh_ms, opencv_ms);
     row.note = note;
     rows.push_back(row);
+}
+
+void append_observed_row(std::vector<CompareRow>& rows,
+                         const Args& args,
+                         const std::string& suite,
+                         const std::string& op,
+                         const std::string& variant,
+                         const std::string& algorithm_path,
+                         const std::string& depth,
+                         int channels,
+                         const std::string& shape,
+                         double cvh_ms,
+                         double opencv_ms,
+                         const std::string& note = "")
+{
+    append_row(
+        rows,
+        args,
+        suite,
+        op,
+        variant,
+        observed_dispatch_path(),
+        depth,
+        channels,
+        shape,
+        cvh_ms,
+        opencv_ms,
+        note);
+    rows.back().algorithm_path = algorithm_path;
+    rows.back().isa_observed = observed_isa();
 }
 
 void append_unsupported_row(std::vector<CompareRow>& rows,
@@ -324,6 +396,7 @@ void append_unsupported_row(std::vector<CompareRow>& rows,
     row.suite = suite;
     row.op = op;
     row.variant = variant;
+    row.algorithm_path = "unsupported";
     row.dispatch_path = "unsupported";
     row.depth = depth;
     row.channels = channels;
@@ -358,6 +431,7 @@ void append_phase1_cases(const Args& args, std::vector<CompareRow>& rows)
             result.cvh_ms,
             result.opencv_ms,
             result.note);
+        rows.back().algorithm_path = result.algorithm_path;
         rows.back().layout = result.layout;
     }
 }
@@ -872,7 +946,7 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
             require_opencv_ui_dispatch("RESIZE", "linear_half_u8c1");
             const double opencv_ms = bench_opencv_resize_linear_half(
                 shape.rows, shape.cols, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "RESIZE", "linear_half_u8c1", "opencv_ui", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "RESIZE", "linear_half_u8c1", "resize_linear", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
         }
 
         {
@@ -887,13 +961,14 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
             require_opencv_ui_dispatch("CVTCOLOR", "BGR2GRAY_u8");
             const double opencv_ms = bench_opencv_cvtcolor_bgr2gray(
                 shape.rows, shape.cols, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "CVTCOLOR", "BGR2GRAY_u8", "opencv_ui", "CV_8U", 3, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "CVTCOLOR", "BGR2GRAY_u8", "cvtcolor_bgr2gray", "CV_8U", 3, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat src({shape.rows, shape.cols}, CV_8UC1);
             cvh::Mat dst;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::threshold(src, dst, 127.0, 255.0, cvh::THRESH_BINARY); },
                 dst,
@@ -907,24 +982,26 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
             cvh::Mat src({shape.rows, shape.cols}, CV_8UC1);
             cvh::Mat dst;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::GaussianBlur(src, dst, cvh::Size(5, 5), 0.0, 0.0, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_gaussian(shape.rows, shape.cols, DepthId::U8, 1, 5, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "GAUSSIAN", "5x5_replicate", "header_fastpath", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "GAUSSIAN", "5x5_replicate", cvh::detail::last_gaussianblur_dispatch_path(), "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat src({shape.rows, shape.cols}, CV_8UC1);
             cvh::Mat dst;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::boxFilter(src, dst, -1, cvh::Size(3, 3), cvh::Point(-1, -1), true, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_box(shape.rows, shape.cols, DepthId::U8, 1, 3, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "BOX_FILTER", "3x3_replicate", "header_fastpath", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "BOX_FILTER", "3x3_replicate", cvh::detail::last_boxfilter_dispatch_path(), "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
         }
 
         {
@@ -961,13 +1038,14 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
             const float kernel_values[9] = {0.0f, 0.25f, 0.0f, 0.25f, 0.0f, 0.25f, 0.0f, 0.25f, 0.0f};
             std::copy(kernel_values, kernel_values + 9, values);
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::filter2D(src, dst, -1, kernel, cvh::Point(-1, -1), 0.0, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_filter2d(
                 shape.rows, shape.cols, DepthId::U8, 1, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "FILTER2D", "3x3_replicate", "header_fastpath", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "FILTER2D", "3x3_replicate", cvh::detail::last_filter2d_algorithm_path(), "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
         }
 
         {
@@ -984,58 +1062,63 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
             ky[1] = 0.5f;
             ky[2] = 0.25f;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::sepFilter2D(src, dst, -1, kernel_x, kernel_y, cvh::Point(-1, -1), 0.0, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_sep_filter2d(
                 shape.rows, shape.cols, DepthId::U8, 1, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "SEP_FILTER2D", "3x3_replicate", "header_fastpath", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "SEP_FILTER2D", "3x3_replicate", cvh::detail::last_sepfilter2d_algorithm_path(), "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat src({shape.rows, shape.cols}, CV_8UC1);
             cvh::Mat dst;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::Sobel(src, dst, CV_32F, 1, 0, 3, 1.0, 0.0, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_sobel(shape.rows, shape.cols, 1, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "SOBEL", "dx1_ksize3_replicate", "header_fastpath", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "SOBEL", "dx1_ksize3_replicate", "derivative_convolve", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat src({shape.rows, shape.cols}, CV_8UC1);
             cvh::Mat dst;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms([&]() { cvh::Canny(src, dst, 50.0, 130.0, 3, false); }, dst, args);
             const double opencv_ms = bench_opencv_canny(shape.rows, shape.cols, args.warmup, args.iters, args.repeats, seed, 50.0, 130.0, 3, false);
-            append_row(rows, args, "imgproc", "CANNY", "aperture3_l1", "header_fastpath", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "CANNY", "aperture3_l1", cvh::detail::last_canny_algorithm_path(), "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat src({shape.rows, shape.cols}, CV_8UC1);
             cvh::Mat dst;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::erode(src, dst, cvh::Mat(), cvh::Point(-1, -1), 1, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_erode(shape.rows, shape.cols, 1, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "ERODE", "3x3_replicate", "header_fastpath", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "ERODE", "3x3_replicate", "morph_rect3x3", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat src({shape.rows, shape.cols}, CV_8UC1);
             cvh::Mat dst;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::dilate(src, dst, cvh::Mat(), cvh::Point(-1, -1), 1, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_dilate(shape.rows, shape.cols, 1, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "DILATE", "3x3_replicate", "header_fastpath", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "DILATE", "3x3_replicate", "morph_rect3x3", "CV_8U", 1, shape_name, cvh_ms, opencv_ms);
         }
 
         {
@@ -1050,6 +1133,7 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
             m[4] = 1.0f;
             m[5] = 0.75f;
             fill_u8(src, seed);
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() {
                     cvh::warpAffine(
@@ -1065,13 +1149,13 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
                 args);
             const double opencv_ms = bench_opencv_warp_affine(
                 shape.rows, shape.cols, DepthId::U8, 1, args.warmup, args.iters, args.repeats, seed);
-            append_row(
+            append_observed_row(
                 rows,
                 args,
                 "imgproc",
                 "WARP_AFFINE",
                 "linear_inverse_replicate",
-                "fixed_coordinate_block",
+                cvh::detail::last_warp_affine_algorithm_path(),
                 "CV_8U",
                 1,
                 shape_name,
@@ -1120,6 +1204,7 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
                       true}})
             {
                 cvh::Mat dst;
+                cvh::cpu::reset_last_dispatch_tag();
                 const double cvh_ms = measure_cvh_mat_ms(
                     [&]() {
                         cvh::remap(
@@ -1145,13 +1230,13 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
                         args.iters,
                         args.repeats,
                         seed);
-                append_row(
+                append_observed_row(
                     rows,
                     args,
                     "imgproc",
                     "REMAP",
                     remap_case.variant,
-                    "fixed_coordinate_block",
+                    cvh::detail::last_remap_algorithm_path(),
                     "CV_8U",
                     3,
                     shape_name,
@@ -1176,6 +1261,7 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
             matrix.at<double>(2, 1) = -0.00003;
             matrix.at<double>(2, 2) = 1.0;
             cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() {
                     cvh::warpPerspective(
@@ -1197,7 +1283,7 @@ void append_imgproc_cases(const Args& args, std::vector<CompareRow>& rows)
                     args.iters,
                     args.repeats,
                     seed);
-            append_row(
+            append_observed_row(
                 rows,
                 args,
                 "imgproc",
@@ -1303,6 +1389,7 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
 
         {
             cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::GaussianBlur(src, dst, cvh::Size(5, 5), 0.0, 0.0, cvh::BORDER_REPLICATE); },
                 dst,
@@ -1310,13 +1397,14 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
             const double opencv_ms = bench_opencv_gaussian(
                 shape.rows, shape.cols, type_case.depth, type_case.channels, 5,
                 args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "GAUSSIAN", "5x5_replicate_" + suffix,
-                       cvh::detail::last_gaussianblur_dispatch_path(), type_case.depth_name,
-                       type_case.channels, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "GAUSSIAN", "5x5_replicate_" + suffix,
+                                cvh::detail::last_gaussianblur_dispatch_path(), type_case.depth_name,
+                                type_case.channels, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::boxFilter(src, dst, -1, cvh::Size(3, 3), cvh::Point(-1, -1), true, cvh::BORDER_REPLICATE); },
                 dst,
@@ -1324,13 +1412,14 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
             const double opencv_ms = bench_opencv_box(
                 shape.rows, shape.cols, type_case.depth, type_case.channels, 3,
                 args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "BOX_FILTER", "3x3_replicate_" + suffix,
-                       cvh::detail::last_boxfilter_dispatch_path(), type_case.depth_name,
-                       type_case.channels, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "BOX_FILTER", "3x3_replicate_" + suffix,
+                                cvh::detail::last_boxfilter_dispatch_path(), type_case.depth_name,
+                                type_case.channels, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::copyMakeBorder(src, dst, 2, 2, 2, 2, cvh::BORDER_REPLICATE, cvh::Scalar::all(0.0)); },
                 dst,
@@ -1345,6 +1434,7 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
 
         {
             cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::filter2D(src, dst, -1, kernel, cvh::Point(-1, -1), 0.0, cvh::BORDER_REPLICATE); },
                 dst,
@@ -1352,13 +1442,14 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
             const double opencv_ms = bench_opencv_filter2d(
                 shape.rows, shape.cols, type_case.depth, type_case.channels,
                 args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "FILTER2D", "3x3_replicate_" + suffix,
-                       "header_fastpath", type_case.depth_name, type_case.channels,
-                       shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "FILTER2D", "3x3_replicate_" + suffix,
+                                cvh::detail::last_filter2d_algorithm_path(), type_case.depth_name, type_case.channels,
+                                shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::sepFilter2D(src, dst, -1, kernel_x, kernel_y, cvh::Point(-1, -1), 0.0, cvh::BORDER_REPLICATE); },
                 dst,
@@ -1366,9 +1457,9 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
             const double opencv_ms = bench_opencv_sep_filter2d(
                 shape.rows, shape.cols, type_case.depth, type_case.channels,
                 args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "SEP_FILTER2D", "3x3_replicate_" + suffix,
-                       "header_fastpath", type_case.depth_name, type_case.channels,
-                       shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "SEP_FILTER2D", "3x3_replicate_" + suffix,
+                                cvh::detail::last_sepfilter2d_algorithm_path(), type_case.depth_name, type_case.channels,
+                                shape_name, cvh_ms, opencv_ms);
         }
 
         {
@@ -1381,6 +1472,7 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
             m[3] = 0.0f;
             m[4] = 1.0f;
             m[5] = 0.75f;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() {
                     cvh::warpAffine(
@@ -1393,23 +1485,19 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
             const double opencv_ms = bench_opencv_warp_affine(
                 shape.rows, shape.cols, type_case.depth, type_case.channels,
                 args.warmup, args.iters, args.repeats, seed);
-            append_row(
+            append_observed_row(
                 rows,
                 args,
                 "imgproc",
                 "WARP_AFFINE",
                 "linear_inverse_replicate_" + suffix,
-                type_case.depth == DepthId::U8
-                    ? "fixed_coordinate_block"
-                    : "headers_baseline",
+                cvh::detail::last_warp_affine_algorithm_path(),
                 type_case.depth_name,
                 type_case.channels,
                 shape_name,
                 cvh_ms,
                 opencv_ms,
-                type_case.depth == DepthId::U8
-                    ? "U8 linear path uses fixed coordinate blocks and shared sampling"
-                    : "F32 path remains the public header baseline");
+                "Translation scanline separates border and contiguous interior sampling");
         }
     }
 
@@ -1435,38 +1523,41 @@ void append_imgproc_type_channel_cases(const Args& args, std::vector<CompareRow>
 
         {
             cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::Sobel(src, dst, CV_32F, 1, 0, 3, 1.0, 0.0, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_sobel(
                 shape.rows, shape.cols, channels, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "SOBEL", "dx1_ksize3_replicate_" + suffix,
-                       "header_fastpath", "CV_8U", channels, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "SOBEL", "dx1_ksize3_replicate_" + suffix,
+                                "derivative_convolve", "CV_8U", channels, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::erode(src, dst, cvh::Mat(), cvh::Point(-1, -1), 1, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_erode(
                 shape.rows, shape.cols, channels, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "ERODE", "3x3_replicate_" + suffix,
-                       "header_fastpath", "CV_8U", channels, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "ERODE", "3x3_replicate_" + suffix,
+                                "morph_rect3x3", "CV_8U", channels, shape_name, cvh_ms, opencv_ms);
         }
 
         {
             cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
             const double cvh_ms = measure_cvh_mat_ms(
                 [&]() { cvh::dilate(src, dst, cvh::Mat(), cvh::Point(-1, -1), 1, cvh::BORDER_REPLICATE); },
                 dst,
                 args);
             const double opencv_ms = bench_opencv_dilate(
                 shape.rows, shape.cols, channels, args.warmup, args.iters, args.repeats, seed);
-            append_row(rows, args, "imgproc", "DILATE", "3x3_replicate_" + suffix,
-                       "header_fastpath", "CV_8U", channels, shape_name, cvh_ms, opencv_ms);
+            append_observed_row(rows, args, "imgproc", "DILATE", "3x3_replicate_" + suffix,
+                                "morph_rect3x3", "CV_8U", channels, shape_name, cvh_ms, opencv_ms);
         }
     }
 }
@@ -1650,6 +1741,18 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
             shape_name, cvh_ms, opencv_ms);
         rows.back().layout = "roi";
     };
+    const auto add_observed_roi_row = [&](const char* op,
+                                          const char* variant,
+                                          const char* algorithm_path,
+                                          const char* depth,
+                                          int channels,
+                                          double cvh_ms,
+                                          double opencv_ms) {
+        append_observed_row(
+            rows, args, "imgproc", op, variant, algorithm_path, depth, channels,
+            shape_name, cvh_ms, opencv_ms);
+        rows.back().layout = "roi";
+    };
 
     {
         cvh::Mat dst;
@@ -1680,13 +1783,14 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
         const double opencv_ms = bench_opencv_imgproc_roi(
             ImgprocRoiOpId::CvtColorBgr2Gray, shape.rows, shape.cols,
             args.warmup, args.iters, args.repeats, seed);
-        add_roi_row(
-            "CVTCOLOR", "BGR2GRAY_u8_roi", "opencv_ui", "CV_8U", 3,
+        add_observed_roi_row(
+            "CVTCOLOR", "BGR2GRAY_u8_roi", "cvtcolor_bgr2gray", "CV_8U", 3,
             cvh_ms, opencv_ms);
     }
 
     {
         cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() { cvh::threshold(f32_src, dst, 0.5, 1.0, cvh::THRESH_BINARY); },
             dst,
@@ -1701,6 +1805,7 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
 
     {
         cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() { cvh::boxFilter(u8_src, dst, -1, cvh::Size(3, 3), cvh::Point(-1, -1), true, cvh::BORDER_REPLICATE); },
             dst,
@@ -1708,7 +1813,7 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
         const double opencv_ms = bench_opencv_imgproc_roi(
             ImgprocRoiOpId::Box, shape.rows, shape.cols,
             args.warmup, args.iters, args.repeats, seed);
-        add_roi_row(
+        add_observed_roi_row(
             "BOX_FILTER", "3x3_replicate_u8c3_roi",
             cvh::detail::last_boxfilter_dispatch_path(), "CV_8U", 3,
             cvh_ms, opencv_ms);
@@ -1716,6 +1821,7 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
 
     {
         cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() { cvh::GaussianBlur(u8_src, dst, cvh::Size(5, 5), 0.0, 0.0, cvh::BORDER_REPLICATE); },
             dst,
@@ -1723,7 +1829,7 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
         const double opencv_ms = bench_opencv_imgproc_roi(
             ImgprocRoiOpId::Gaussian, shape.rows, shape.cols,
             args.warmup, args.iters, args.repeats, seed);
-        add_roi_row(
+        add_observed_roi_row(
             "GAUSSIAN", "5x5_replicate_u8c3_roi",
             cvh::detail::last_gaussianblur_dispatch_path(), "CV_8U", 3,
             cvh_ms, opencv_ms);
@@ -1731,6 +1837,7 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
 
     {
         cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() { cvh::filter2D(u8_src, dst, -1, kernel, cvh::Point(-1, -1), 0.0, cvh::BORDER_REPLICATE); },
             dst,
@@ -1738,13 +1845,14 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
         const double opencv_ms = bench_opencv_imgproc_roi(
             ImgprocRoiOpId::Filter2D, shape.rows, shape.cols,
             args.warmup, args.iters, args.repeats, seed);
-        add_roi_row(
-            "FILTER2D", "3x3_replicate_u8c3_roi", "header_fastpath", "CV_8U", 3,
+        add_observed_roi_row(
+            "FILTER2D", "3x3_replicate_u8c3_roi", cvh::detail::last_filter2d_algorithm_path(), "CV_8U", 3,
             cvh_ms, opencv_ms);
     }
 
     {
         cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
         const double cvh_ms = measure_cvh_mat_ms(
             [&]() { cvh::sepFilter2D(u8_src, dst, -1, kernel_x, kernel_y, cvh::Point(-1, -1), 0.0, cvh::BORDER_REPLICATE); },
             dst,
@@ -1752,8 +1860,8 @@ void append_imgproc_roi_cases(const Args& args, std::vector<CompareRow>& rows)
         const double opencv_ms = bench_opencv_imgproc_roi(
             ImgprocRoiOpId::SepFilter2D, shape.rows, shape.cols,
             args.warmup, args.iters, args.repeats, seed);
-        add_roi_row(
-            "SEP_FILTER2D", "3x3_replicate_u8c3_roi", "header_fastpath", "CV_8U", 3,
+        add_observed_roi_row(
+            "SEP_FILTER2D", "3x3_replicate_u8c3_roi", cvh::detail::last_sepfilter2d_algorithm_path(), "CV_8U", 3,
             cvh_ms, opencv_ms);
     }
 }
@@ -1767,7 +1875,7 @@ void write_csv(const std::vector<CompareRow>& rows, const std::string& path)
         std::exit(2);
     }
 
-    out << "impl,profile,suite,op,variant,dispatch_path,depth,channels,layout,shape,cvh_ms,opencv_ms,speedup,status,note\n";
+    out << "impl,profile,suite,op,variant,algorithm_path,dispatch_path,isa_observed,depth,channels,layout,shape,cvh_ms,opencv_ms,speedup,status,note\n";
     out << std::fixed << std::setprecision(6);
     for (const auto& row : rows)
     {
@@ -1776,7 +1884,9 @@ void write_csv(const std::vector<CompareRow>& rows, const std::string& path)
             << row.suite << ","
             << row.op << ","
             << row.variant << ","
+            << row.algorithm_path << ","
             << row.dispatch_path << ","
+            << row.isa_observed << ","
             << row.depth << ","
             << row.channels << ","
             << row.layout << ","
@@ -1789,12 +1899,41 @@ void write_csv(const std::vector<CompareRow>& rows, const std::string& path)
     }
 }
 
+bool is_imgproc_floor_op(const std::string& op)
+{
+    static const char* const names[] = {
+        "GAUSSIAN",
+        "FILTER2D",
+        "SEP_FILTER2D",
+        "BOX_FILTER",
+        "SOBEL",
+        "SCHARR",
+        "LAPLACIAN",
+        "ERODE",
+        "DILATE",
+        "CANNY",
+        "PYR_DOWN",
+        "PYR_UP",
+        "BUILD_PYRAMID",
+        "WARP_AFFINE",
+        "WARP_PERSPECTIVE",
+        "REMAP",
+        "MEDIAN_BLUR",
+        "BILATERAL_FILTER",
+        "STACK_BLUR",
+    };
+    return std::find(std::begin(names), std::end(names), op) != std::end(names);
+}
+
 }  // namespace cvh_bench_compare
 
 int main(int argc, char** argv)
 {
     const auto args = cvh_bench_compare::parse_args(argc, argv);
-    cvh::cpu::set_dispatch_mode(cvh::cpu::DispatchMode::OpenCVUIOnly);
+    cvh::cpu::set_dispatch_mode(
+        args.impl == "cvh_scalar"
+            ? cvh::cpu::DispatchMode::ScalarOnly
+            : cvh::cpu::DispatchMode::OpenCVUIOnly);
     cvh_bench_compare::configure_opencv_threads(args.threads);
     cvh::setNumThreads(args.threads);
     std::vector<cvh_bench_compare::CompareRow> rows;
@@ -1806,6 +1945,22 @@ int main(int argc, char** argv)
     else if (args.ops == "PHASE2_P0")
     {
         cvh_bench_compare::append_phase2_cases(args, rows);
+    }
+    else if (args.ops == "IMGPROC_FLOOR")
+    {
+        cvh_bench_compare::append_imgproc_cases(args, rows);
+        cvh_bench_compare::append_imgproc_type_channel_cases(args, rows);
+        cvh_bench_compare::append_imgproc_resize_color_cases(args, rows);
+        cvh_bench_compare::append_imgproc_roi_cases(args, rows);
+        cvh_bench_compare::append_phase1_cases(args, rows);
+        rows.erase(
+            std::remove_if(
+                rows.begin(),
+                rows.end(),
+                [](const cvh_bench_compare::CompareRow& row) {
+                    return !cvh_bench_compare::is_imgproc_floor_op(row.op);
+                }),
+            rows.end());
     }
     else
     {

@@ -18,6 +18,7 @@ TEST(PyramidTest, pyramid_sizes_constants_and_build_contract)
     std::vector<Mat> pyramid;
     buildPyramid(constant, pyramid, 3);
     ASSERT_EQ(pyramid.size(), 4u);
+    EXPECT_EQ(pyramid[0].data, constant.data);
     for (size_t level = 1; level < pyramid.size(); ++level)
     {
         Mat expected;

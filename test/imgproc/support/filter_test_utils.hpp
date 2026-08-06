@@ -296,6 +296,9 @@ Mat gaussian_blur_reference_u8(const Mat& src, Size ksize, double sigmaX, double
     CV_Assert(ksize.width > 0 && ksize.height > 0);
     CV_Assert((ksize.width & 1) && (ksize.height & 1));
 
+    const bool fixed5x5 =
+        ksize.width == 5 && ksize.height == 5 &&
+        sigmaX <= 0.0 && sigmaY <= 0.0;
     if (sigmaX <= 0.0)
     {
         sigmaX = default_sigma_for_ksize(ksize.width);
@@ -318,8 +321,14 @@ Mat gaussian_blur_reference_u8(const Mat& src, Size ksize, double sigmaX, double
 
     const int rx = ksize.width / 2;
     const int ry = ksize.height / 2;
-    const std::vector<float> kx = gaussian_kernel_1d(ksize.width, sigmaX);
-    const std::vector<float> ky = gaussian_kernel_1d(ksize.height, sigmaY);
+    const std::vector<float> fixed_kernel =
+        {0.0625f, 0.25f, 0.375f, 0.25f, 0.0625f};
+    const std::vector<float> kx =
+        fixed5x5 ? fixed_kernel
+                 : gaussian_kernel_1d(ksize.width, sigmaX);
+    const std::vector<float> ky =
+        fixed5x5 ? fixed_kernel
+                 : gaussian_kernel_1d(ksize.height, sigmaY);
 
     std::vector<float> tmp(static_cast<size_t>(rows) * cols * channels, 0.0f);
 

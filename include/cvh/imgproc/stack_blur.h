@@ -1,9 +1,11 @@
 #ifndef CVH_IMGPROC_STACK_BLUR_H
 #define CVH_IMGPROC_STACK_BLUR_H
 
+#include "../core/detail/dispatch_control.h"
 #include "detail/common.h"
 
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 #include <vector>
 
@@ -12,7 +14,105 @@ namespace cvh
 namespace stack_blur_detail
 {
 
-inline void run_u8(const Mat& src, Mat& dst, Size ksize)
+inline thread_local const char* g_last_stack_blur_algorithm_path =
+    "stack_blur_generic";
+
+inline const char* last_stack_blur_algorithm_path()
+{
+    return g_last_stack_blur_algorithm_path;
+}
+
+inline void run_u8_k5(const Mat& src, Mat& dst)
+{
+    const int rows = src.size.p[0];
+    const int cols = src.size.p[1];
+    const int channels = src.channels();
+    const int row_width = cols * channels;
+    constexpr int divisor = 81;
+    std::vector<std::int32_t> horizontal(
+        static_cast<size_t>(rows) *
+        static_cast<size_t>(row_width));
+    for (int y = 0; y < rows; ++y)
+    {
+        const uchar* input =
+            src.data + static_cast<size_t>(y) * src.step(0);
+        std::int32_t* output =
+            horizontal.data() + static_cast<size_t>(y) * row_width;
+        const int interior_begin = std::min(row_width, 2 * channels);
+        const int interior_end = std::max(
+            interior_begin,
+            (cols - 2) * channels);
+        for (int index = 0; index < interior_begin; ++index)
+        {
+            const int x = index / channels;
+            const int channel = index % channels;
+            const auto read = [&](int source_x) {
+                return static_cast<std::int32_t>(
+                    input[static_cast<size_t>(
+                              std::clamp(source_x, 0, cols - 1)) *
+                              channels +
+                          channel]);
+            };
+            output[index] =
+                read(x - 2) + 2 * read(x - 1) + 3 * read(x) +
+                2 * read(x + 1) + read(x + 2);
+        }
+        for (int index = interior_begin;
+             index < interior_end;
+             ++index)
+        {
+            output[index] =
+                input[index - 2 * channels] +
+                2 * input[index - channels] +
+                3 * input[index] +
+                2 * input[index + channels] +
+                input[index + 2 * channels];
+        }
+        for (int index = interior_end; index < row_width; ++index)
+        {
+            const int x = index / channels;
+            const int channel = index % channels;
+            const auto read = [&](int source_x) {
+                return static_cast<std::int32_t>(
+                    input[static_cast<size_t>(
+                              std::clamp(source_x, 0, cols - 1)) *
+                              channels +
+                          channel]);
+            };
+            output[index] =
+                read(x - 2) + 2 * read(x - 1) + 3 * read(x) +
+                2 * read(x + 1) + read(x + 2);
+        }
+    }
+
+    for (int y = 0; y < rows; ++y)
+    {
+        const auto row = [&](int source_y) {
+            return horizontal.data() +
+                static_cast<size_t>(
+                    std::clamp(source_y, 0, rows - 1)) *
+                    row_width;
+        };
+        const std::int32_t* row0 = row(y - 2);
+        const std::int32_t* row1 = row(y - 1);
+        const std::int32_t* row2 = row(y);
+        const std::int32_t* row3 = row(y + 1);
+        const std::int32_t* row4 = row(y + 2);
+        uchar* output =
+            dst.data + static_cast<size_t>(y) * dst.step(0);
+        for (int index = 0; index < row_width; ++index)
+        {
+            const std::int32_t sum =
+                row0[index] + 2 * row1[index] + 3 * row2[index] +
+                2 * row3[index] + row4[index];
+            output[index] = static_cast<uchar>(
+                (sum + divisor / 2) / divisor);
+        }
+    }
+}
+
+template<typename Accumulator>
+inline void run_u8_accumulator(const Mat& src, Mat& dst, Size ksize)
 {
     const int rows = src.size.p[0];
     const int cols = src.size.p[1];
@@ -20,26 +120,26 @@ inline void run_u8(const Mat& src, Mat& dst, Size ksize)
     const int radius_x = ksize.width / 2;
     const int radius_y = ksize.height / 2;
     const int row_width = cols * channels;
-    const std::int64_t divisor_x =
-        static_cast<std::int64_t>(radius_x + 1) *
-        static_cast<std::int64_t>(radius_x + 1);
-    const std::int64_t divisor_y =
-        static_cast<std::int64_t>(radius_y + 1) *
-        static_cast<std::int64_t>(radius_y + 1);
-    const std::int64_t divisor = divisor_x * divisor_y;
-    std::vector<std::int64_t> temporary(
+    const Accumulator divisor_x =
+        static_cast<Accumulator>(radius_x + 1) *
+        static_cast<Accumulator>(radius_x + 1);
+    const Accumulator divisor_y =
+        static_cast<Accumulator>(radius_y + 1) *
+        static_cast<Accumulator>(radius_y + 1);
+    const Accumulator divisor = divisor_x * divisor_y;
+    std::vector<Accumulator> temporary(
         static_cast<size_t>(rows) *
         static_cast<size_t>(row_width));
     for (int y = 0; y < rows; ++y)
     {
         const uchar* input =
             src.data + static_cast<size_t>(y) * src.step(0);
-        std::int64_t* output =
+        Accumulator* output =
             temporary.data() +
             static_cast<size_t>(y) * static_cast<size_t>(row_width);
         for (int channel = 0; channel < channels; ++channel)
         {
-            const auto read = [&](int x) -> std::int64_t {
+            const auto read = [&](int x) -> Accumulator {
                 const int source_x =
                     std::clamp(x, 0, cols - 1);
                 return input[
@@ -47,15 +147,15 @@ inline void run_u8(const Mat& src, Mat& dst, Size ksize)
                         static_cast<size_t>(channels) +
                     static_cast<size_t>(channel)];
             };
-            std::int64_t weighted_sum = 0;
-            std::int64_t left_sum = 0;
-            std::int64_t right_sum = 0;
+            Accumulator weighted_sum = 0;
+            Accumulator left_sum = 0;
+            Accumulator right_sum = 0;
             for (int offset = -radius_x;
                  offset <= radius_x;
                  ++offset)
             {
                 weighted_sum +=
-                    static_cast<std::int64_t>(
+                    static_cast<Accumulator>(
                         radius_x + 1 - std::abs(offset)) *
                     read(offset);
             }
@@ -89,11 +189,11 @@ inline void run_u8(const Mat& src, Mat& dst, Size ksize)
         }
     }
 
-    std::vector<std::int64_t> weighted_sum(
+    std::vector<Accumulator> weighted_sum(
         static_cast<size_t>(row_width), 0);
-    std::vector<std::int64_t> left_sum(
+    std::vector<Accumulator> left_sum(
         static_cast<size_t>(row_width), 0);
-    std::vector<std::int64_t> right_sum(
+    std::vector<Accumulator> right_sum(
         static_cast<size_t>(row_width), 0);
     const auto temporary_row = [&](int y) {
         const int source_y =
@@ -106,8 +206,8 @@ inline void run_u8(const Mat& src, Mat& dst, Size ksize)
          offset <= radius_y;
          ++offset)
     {
-        const std::int64_t* input = temporary_row(offset);
-        const std::int64_t weight =
+        const Accumulator* input = temporary_row(offset);
+        const Accumulator weight =
             radius_y + 1 - std::abs(offset);
         for (int index = 0; index < row_width; ++index)
         {
@@ -117,7 +217,7 @@ inline void run_u8(const Mat& src, Mat& dst, Size ksize)
     }
     for (int offset = -radius_y; offset <= 0; ++offset)
     {
-        const std::int64_t* input = temporary_row(offset);
+        const Accumulator* input = temporary_row(offset);
         for (int index = 0; index < row_width; ++index)
         {
             left_sum[static_cast<size_t>(index)] += input[index];
@@ -127,7 +227,7 @@ inline void run_u8(const Mat& src, Mat& dst, Size ksize)
          offset <= radius_y + 1;
          ++offset)
     {
-        const std::int64_t* input = temporary_row(offset);
+        const Accumulator* input = temporary_row(offset);
         for (int index = 0; index < row_width; ++index)
         {
             right_sum[static_cast<size_t>(index)] += input[index];
@@ -140,21 +240,20 @@ inline void run_u8(const Mat& src, Mat& dst, Size ksize)
             dst.data + static_cast<size_t>(y) * dst.step(0);
         for (int index = 0; index < row_width; ++index)
         {
-            output[index] =
-                saturate_cast<uchar>(
-                    static_cast<double>(
-                        weighted_sum[static_cast<size_t>(index)]) /
-                    static_cast<double>(divisor));
+            output[index] = static_cast<uchar>(
+                (weighted_sum[static_cast<size_t>(index)] +
+                 divisor / 2) /
+                divisor);
         }
         if (y + 1 == rows)
         {
             continue;
         }
-        const std::int64_t* next_center =
+        const Accumulator* next_center =
             temporary_row(y + 1);
-        const std::int64_t* leaving_left =
+        const Accumulator* leaving_left =
             temporary_row(y - radius_y);
-        const std::int64_t* entering_right =
+        const Accumulator* entering_right =
             temporary_row(y + radius_y + 2);
         for (int index = 0; index < row_width; ++index)
         {
@@ -167,6 +266,24 @@ inline void run_u8(const Mat& src, Mat& dst, Size ksize)
                 entering_right[index] - next_center[index];
         }
     }
+}
+
+inline void run_u8(const Mat& src, Mat& dst, Size ksize)
+{
+    const long double radius_x = ksize.width / 2;
+    const long double radius_y = ksize.height / 2;
+    const long double divisor =
+        (radius_x + 1) * (radius_x + 1) *
+        (radius_y + 1) * (radius_y + 1);
+    if (divisor <=
+        static_cast<long double>(
+            std::numeric_limits<std::int32_t>::max()) /
+            255)
+    {
+        run_u8_accumulator<std::int32_t>(src, dst, ksize);
+        return;
+    }
+    run_u8_accumulator<std::int64_t>(src, dst, ksize);
 }
 
 template<typename T>
@@ -256,6 +373,9 @@ inline void run(const Mat& src, Mat& dst, Size ksize)
 
 inline void stackBlur(const Mat& src, Mat& dst, Size ksize)
 {
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    stack_blur_detail::g_last_stack_blur_algorithm_path =
+        "stack_blur_generic";
     if (src.empty() || src.dims != 2 ||
         (src.depth() != CV_8U && src.depth() != CV_32F) ||
         (src.channels() != 1 && src.channels() != 3 &&
@@ -272,10 +392,23 @@ inline void stackBlur(const Mat& src, Mat& dst, Size ksize)
     dst.create(source.shape(), source.type());
     if (source.depth() == CV_8U)
     {
-        stack_blur_detail::run_u8(source, dst, ksize);
+        if (ksize.width == 5 && ksize.height == 5)
+        {
+            stack_blur_detail::g_last_stack_blur_algorithm_path =
+                "stack_blur_u8_k5_typed";
+            stack_blur_detail::run_u8_k5(source, dst);
+        }
+        else
+        {
+            stack_blur_detail::g_last_stack_blur_algorithm_path =
+                "stack_blur_u8_rolling";
+            stack_blur_detail::run_u8(source, dst, ksize);
+        }
     }
     else
     {
+        stack_blur_detail::g_last_stack_blur_algorithm_path =
+            "stack_blur_f32_generic";
         stack_blur_detail::run<float>(source, dst, ksize);
     }
 }

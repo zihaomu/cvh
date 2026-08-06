@@ -874,6 +874,173 @@ bool validate_imgproc_gaussian_kernel(int ksize,
         depth == CoreDepthId::F32 ? 2e-7 : 2e-14);
 }
 
+bool validate_imgproc_gaussian_blur_u8(int rows,
+                                       int cols,
+                                       int channels,
+                                       int border_type,
+                                       std::uint32_t seed,
+                                       const void* actual_data,
+                                       std::size_t actual_bytes)
+{
+    cv::Mat src(rows, cols, CV_MAKETYPE(CV_8U, channels));
+    fill_u8(src, seed);
+    cv::Mat expected;
+    cv::GaussianBlur(
+        src,
+        expected,
+        cv::Size(5, 5),
+        0.0,
+        0.0,
+        border_type);
+    return matches_bytes(expected, actual_data, actual_bytes, 0);
+}
+
+bool validate_imgproc_gaussian_blur_f32(int rows,
+                                        int cols,
+                                        int channels,
+                                        int border_type,
+                                        std::uint32_t seed,
+                                        const void* actual_data,
+                                        std::size_t actual_bytes)
+{
+    cv::Mat src(rows, cols, CV_MAKETYPE(CV_32F, channels));
+    fill_by_depth(src, CoreDepthId::F32, seed);
+    cv::Mat expected;
+    cv::GaussianBlur(
+        src,
+        expected,
+        cv::Size(5, 5),
+        0.0,
+        0.0,
+        border_type);
+    return matches_float_values(
+        expected, actual_data, actual_bytes, 2e-5);
+}
+
+bool validate_imgproc_box_filter(int rows,
+                                 int cols,
+                                 int channels,
+                                 CoreDepthId depth,
+                                 int border_type,
+                                 std::uint32_t seed,
+                                 const void* actual_data,
+                                 std::size_t actual_bytes)
+{
+    cv::Mat src(
+        rows,
+        cols,
+        CV_MAKETYPE(cv_depth(depth), channels));
+    fill_by_depth(src, depth, seed);
+    cv::Mat expected;
+    cv::boxFilter(
+        src,
+        expected,
+        -1,
+        cv::Size(3, 3),
+        cv::Point(-1, -1),
+        true,
+        border_type);
+    if (depth == CoreDepthId::U8)
+    {
+        return matches_bytes(expected, actual_data, actual_bytes, 0);
+    }
+    return matches_float_values(
+        expected, actual_data, actual_bytes, 2e-5);
+}
+
+bool validate_imgproc_sep_filter3(int rows,
+                                  int cols,
+                                  int channels,
+                                  CoreDepthId depth,
+                                  int border_type,
+                                  std::uint32_t seed,
+                                  const void* actual_data,
+                                  std::size_t actual_bytes)
+{
+    cv::Mat src(
+        rows,
+        cols,
+        CV_MAKETYPE(cv_depth(depth), channels));
+    fill_by_depth(src, depth, seed);
+    const float values[] = {0.25f, 0.5f, 0.25f};
+    const cv::Mat kernel(3, 1, CV_32FC1, const_cast<float*>(values));
+    cv::Mat expected;
+    cv::sepFilter2D(
+        src,
+        expected,
+        -1,
+        kernel,
+        kernel,
+        cv::Point(-1, -1),
+        0.0,
+        border_type);
+    if (depth == CoreDepthId::U8)
+    {
+        return matches_bytes(expected, actual_data, actual_bytes, 1);
+    }
+    return matches_float_values(
+        expected, actual_data, actual_bytes, 2e-5);
+}
+
+bool validate_imgproc_filter2d_cross3(int rows,
+                                      int cols,
+                                      int channels,
+                                      CoreDepthId depth,
+                                      int border_type,
+                                      std::uint32_t seed,
+                                      const void* actual_data,
+                                      std::size_t actual_bytes)
+{
+    cv::Mat src(
+        rows,
+        cols,
+        CV_MAKETYPE(cv_depth(depth), channels));
+    fill_by_depth(src, depth, seed);
+    const float values[] = {
+        0.0f, 0.25f, 0.0f,
+        0.25f, 0.0f, 0.25f,
+        0.0f, 0.25f, 0.0f};
+    const cv::Mat kernel(3, 3, CV_32FC1, const_cast<float*>(values));
+    cv::Mat expected;
+    cv::filter2D(
+        src,
+        expected,
+        -1,
+        kernel,
+        cv::Point(-1, -1),
+        0.0,
+        border_type);
+    if (depth == CoreDepthId::U8)
+    {
+        return matches_bytes(expected, actual_data, actual_bytes, 1);
+    }
+    return matches_float_values(
+        expected, actual_data, actual_bytes, 2e-5);
+}
+
+bool validate_imgproc_canny(int rows,
+                            int cols,
+                            double threshold1,
+                            double threshold2,
+                            int aperture_size,
+                            bool l2_gradient,
+                            std::uint32_t seed,
+                            const void* actual_data,
+                            std::size_t actual_bytes)
+{
+    cv::Mat src(rows, cols, CV_8UC1);
+    fill_u8(src, seed);
+    cv::Mat expected;
+    cv::Canny(
+        src,
+        expected,
+        threshold1,
+        threshold2,
+        aperture_size,
+        l2_gradient);
+    return matches_bytes(expected, actual_data, actual_bytes, 0);
+}
+
 bool validate_imgproc_deriv_kernels(int dx,
                                     int dy,
                                     int ksize,
@@ -1377,6 +1544,54 @@ bool validate_imgproc_geometry_sampling(
                 actual_data,
                 actual_bytes,
                 1);
+        }
+        case ImgprocGeometrySamplingOpId::WarpAffineTranslationU8:
+        {
+            cv::Mat matrix(2, 3, CV_32FC1);
+            const float matrix_values[] = {
+                1.0f, 0.0f, -1.25f,
+                0.0f, 1.0f, 0.75f};
+            std::memcpy(
+                matrix.data,
+                matrix_values,
+                sizeof(matrix_values));
+            cv::warpAffine(
+                source,
+                expected,
+                matrix,
+                cv::Size(9, 7),
+                cv::INTER_LINEAR | cv::WARP_INVERSE_MAP,
+                cv::BORDER_REPLICATE);
+            return matches_bytes(
+                expected,
+                actual_data,
+                actual_bytes,
+                0);
+        }
+        case ImgprocGeometrySamplingOpId::WarpAffineTranslationF32:
+        {
+            cv::Mat source_f32(9, 11, CV_32FC4);
+            fill_f32(source_f32, seed + 4u);
+            cv::Mat matrix(2, 3, CV_32FC1);
+            const float matrix_values[] = {
+                1.0f, 0.0f, -1.25f,
+                0.0f, 1.0f, 0.75f};
+            std::memcpy(
+                matrix.data,
+                matrix_values,
+                sizeof(matrix_values));
+            cv::warpAffine(
+                source_f32,
+                expected,
+                matrix,
+                cv::Size(9, 7),
+                cv::INTER_LINEAR | cv::WARP_INVERSE_MAP,
+                cv::BORDER_REPLICATE);
+            return matches_float_values(
+                expected,
+                actual_data,
+                actual_bytes,
+                1e-5);
         }
         case ImgprocGeometrySamplingOpId::WarpPerspectiveU8:
         {

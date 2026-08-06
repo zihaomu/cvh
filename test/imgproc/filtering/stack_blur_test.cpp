@@ -27,7 +27,8 @@ TEST(StackBlurTest, stack_blur_sliding_u8_matches_naive_for_roi_and_channels)
         fill_pattern(parent);
         const Mat roi =
             parent(Range(1, 8), Range(2, 12));
-        for (const Size ksize : {Size(3, 5), Size(5, 3)})
+        for (const Size ksize :
+             {Size(3, 5), Size(5, 3), Size(5, 5)})
         {
             const Mat expected =
                 naive_stack_blur_u8(roi, ksize);
