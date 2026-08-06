@@ -114,6 +114,9 @@ Current caveats:
 
 ## Dated Snapshots
 
+- [2026-08-04 v0.1 RC OpenCV upstream performance (English)](results/2026-08-04-v0.1-rc-opencv-upstream-performance.en.md):
+  clean `f94f2d8` Apple M5, single-threaded full profile; 369 valid rows,
+  overall geometric mean `0.7289` and Imgproc geometric mean `0.8366`.
 - [2026-08-03 OpenCV upstream performance (English)](results/2026-08-03-opencv-upstream-performance.en.md):
   current Apple M5, single-threaded full profile; all CVH rows use `cvh_ui`.
 - [2026-07-25 OpenCV upstream performance (English)](results/2026-07-25-opencv-upstream-performance.en.md):

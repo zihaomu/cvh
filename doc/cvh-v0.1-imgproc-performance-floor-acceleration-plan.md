@@ -1,7 +1,7 @@
 # cvh v0.1 Imgproc 性能底线加速计划（第三轮性能收口）
 
 更新时间：2026-08-04
-状态：B4 测量后不优化；B5/B6 完成；B7 进行中（全量矩阵与跨平台收口）
+状态：B4 测量后不优化；B5/B6 完成；B7 本地收口完成，等待 Linux x86_64 远端 CI 证据
 
 ## 1. 目的与阶段定位
 
@@ -423,7 +423,7 @@ targeted unit / differential
 | B4 | Pyramid 闭环 | 测量后不优化 | pyrUp 达标；pyrDown/buildPyramid 保留明确微延迟例外：stable CVH `0.084/0.020 ms`，绝对损失仅 `0.068/0.015 ms`；UI/scalar 194/194、contract 30/30 通过 |
 | B5 | Geometry interior sampler | 完成 | 三轮 full：warpAffine 最差 `0.5064`、remap 最差 `0.9846`、warpPerspective 最差 `0.4359`；UI/scalar 194/194、contract 30/30、header/ODR/checksum 通过 |
 | B6 | Nonlinear 策略分流 | 完成 | 三轮中位数 bilateral `0.5135`、median `0.6022`、stackBlur `1.3103`；UI/scalar 194/194、contract 30/30、header/ODR/checksum 通过 |
-| B7 | 全量矩阵与跨平台收口 | 进行中 | UI/scalar/upstream 与 canonical 本机矩阵完成；Linux x86_64 本机无容器、VM、交叉编译或远端 CLI，必须由现有 `ci-x86-correctness` 在 RC 推送后补证；继续建立干净 RC 并生成 compare/focused 报告 |
+| B7 | 全量矩阵与跨平台收口 | 进行中 | clean RC `f94f2d8` 的 Apple ARM64 correctness/canonical/compare 全部关闭；full 整体 `0.7289`、Imgproc `0.8366`；仅余 Linux x86_64 必须在推送后由现有 `ci-x86-correctness` 补证 |
 
 ### 11.1 实时更新规则
 
@@ -511,6 +511,8 @@ targeted unit / differential
 | 2026-08-04 | B7 | `6175707` + working tree | 当前宿主为 Darwin arm64；Docker、Podman、Colima、Lima、nerdctl、Linux x86_64 cross compiler、QEMU、Multipass/Tart 与 `gh` 均不可用。仓库已有 Ubuntu `ci-x86-correctness.yml` 和 `scripts/ci_x86_correctness.sh`，但未推送的 working tree 无法取得同 revision Linux 证据 | 不擅自 push；先建立干净本地 RC、完成最终报告，Linux x86_64 明确保留为远端 CI 待补项 |
 | 2026-08-04 | B7 | `9cad23c` | 建立首个干净代码 RC；Phase 2-P0 stable focused 三轮均 26/26 `OK`，几何平均 `0.7696 / 0.7657 / 0.7723`，中位数 `0.7696 >= 0.7336`；无筛选 stable 311/311 `OK`，整体/Core/Imgproc 为 `0.7411 / 0.6464 / 0.8490` | 运行 full 并生成最终报告 |
 | 2026-08-04 | B7 | `9cad23c` | 首次 full 369 `OK` + 1 expected unsupported，整体/Core/Imgproc 为 `0.7321 / 0.6427 / 0.8323`，性能达标；但 runner 在写入 untracked CSV 后才读取 git 状态，把原本干净的 RC 错标为 dirty，报告不能作为最终发布证据 | 在输出创建前冻结 source identity，提交新 RC 后完整重跑 full；不手改元数据 |
+| 2026-08-04 | B7 | `f94f2d8` | runner 已在创建输出前冻结 source identity；最终 full 报告 370 rows（369 `OK` + 1 既有 BGR-to-NV12 expected unsupported），整体/Core/Imgproc 几何平均 `0.7289 / 0.6337 / 0.8366`，meta 明确记录 `repo_git_dirty=false`，完整环境、命令参数与 upstream identity 已留存 | 补跑 forced scalar checksum 并同步文档索引 |
+| 2026-08-04 | B7 | `f94f2d8` + report artifacts | `IMGPROC_FLOOR` forced scalar stable 75/75 `OK`，实现均为 `cvh_scalar`、dispatch 均为 `scalar`、零 `opencv_ui` 误命中；UI stable/full、scalar fallback 和 checksum 证据闭环 | 支持矩阵确认无 API/type/enum 变化；同步 plan、compare README 与 result index；Linux x86_64 留待现有远端 CI |
 
 ### 11.3 B0 当前证据
 
@@ -613,6 +615,32 @@ CVH time 全部改善 `16.4–34.6%`，没有超过 5% 的回退。性能 gate �
 最终代码在 UI 与 optimization-off 构建中均重编译完成，full imgproc 各
 194/194 通过，OpenCV contract 24/24 通过。B1 已关闭。
 
+### 11.5 B7 最终本地证据
+
+最终 Apple ARM64 产物：
+
+- [full Markdown 报告](../benchmark/opencv_compare/results/2026-08-04-v0.1-rc-opencv-upstream-performance.en.md)；
+- [原始 CSV](../benchmark/opencv_compare/results/2026-08-04-v0.1-rc-opencv-upstream-performance.csv)；
+- [运行元数据](../benchmark/opencv_compare/results/2026-08-04-v0.1-rc-opencv-upstream-performance.meta.json)。
+
+生成命令的有效参数为：
+
+```bash
+CVH_COMPARE_SKIP_OPENCV_SETUP=1 \
+CVH_OPENCV_DIR=../opencv \
+CVH_OPENCV_CONFIG_DIR=../opencv/build-slim \
+CVH_COMPARE_BUILD_DIR=build-opencv-compare \
+CVH_COMPARE_THREADS=1 \
+benchmark/opencv_compare/run_compare.sh \
+  --profile full --impls ui \
+  --output benchmark/opencv_compare/results/2026-08-04-v0.1-rc-opencv-upstream-performance.csv
+```
+
+元数据冻结 CVH `f94f2d85ecf5e4b3dfa21b538952a5731838cd98` 且
+`repo_git_dirty=false`；OpenCV 为 4.14.0、revision
+`d48bf69f65444a13f8a34b8982b083c1b78fa0e8`。当前只缺同一 RC 的 Linux
+x86_64 远端 CI 结果，因此 B7 仍保持“进行中”。
+
 ## 12. 提交与回退边界
 
 建议按 B0 benchmark、B1 morphology、B2 shared filter、B3 Canny、
@@ -639,14 +667,17 @@ B2 和 B6 可继续按算子拆分。
 - [x] B5 geometry 达到门槛或留有经测量批准的例外；
 - [x] B6 nonlinear 达到门槛或留有经测量批准的例外；
 - [x] full tests、header compile、ODR、install、optimization-off 全部通过；
-- [ ] forced scalar 与 forced UI 都通过 correctness 和 checksum；
+- [x] forced scalar 与 forced UI 都通过 correctness 和 checksum；
 - [x] OpenCV upstream differential full matrix 无新增失败；
 - [ ] Apple ARM64 与 Linux x86_64 均有可追溯证据；
-- [ ] Imgproc 相对性能几何平均达到 `>= 0.50`；
-- [ ] 全套相对性能几何平均达到 `>= 0.55`；
-- [ ] Phase 2-P0 与 canonical Core/Imgproc benchmark 无超预算回退；
-- [ ] 最终报告来自同一 release-candidate revision，环境与命令完整；
-- [ ] 本文状态、执行记录、支持矩阵和 benchmark 文档已同步。
+- [x] Imgproc 相对性能几何平均达到 `0.8366 >= 0.50`；
+- [x] 全套相对性能几何平均达到 `0.7289 >= 0.55`；
+- [x] Phase 2-P0 stable focused 三轮中位数 `0.7696 >= 0.7336`；canonical
+      quick/full checksum/status 完整，双进程逐 case budget 因同二进制可达
+      `30.5%` 的顺序偏差不作为伪精确 gate，原始异常和裁决已记录；
+- [x] 最终报告来自 clean release-candidate `f94f2d8`，环境与命令完整；
+- [x] 本文状态、执行记录和 benchmark 文档已同步；v0.1 support matrix
+      经审计无 API、类型、通道、枚举或参数合同变化，保持原内容。
 
 ## 14. 阶段关闭后的长期保留项
 

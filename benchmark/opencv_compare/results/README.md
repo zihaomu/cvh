@@ -2,17 +2,22 @@
 
 ## Current Snapshot
 
-- [English report](2026-08-04-opencv-upstream-performance.en.md)
-- [Raw CSV](2026-08-04-opencv-upstream-performance.csv)
-- [Run metadata](2026-08-04-opencv-upstream-performance.meta.json)
+- [v0.1 RC English report](2026-08-04-v0.1-rc-opencv-upstream-performance.en.md)
+- [v0.1 RC raw CSV](2026-08-04-v0.1-rc-opencv-upstream-performance.csv)
+- [v0.1 RC run metadata](2026-08-04-v0.1-rc-opencv-upstream-performance.meta.json)
 
 This is the current single-target, UI-only comparison. The CVH implementation
 is `cvh_ui`; the full profile contains 370 rows collected on Apple M5 with one
 thread. Of these, 369 are valid and the one expected `UNSUPPORTED` row records
-that upstream OpenCV has no single-call BGR-to-NV12 encoder.
+that upstream OpenCV has no single-call BGR-to-NV12 encoder. The clean
+`f94f2d8` release-candidate snapshot records geometric means of `0.7289`
+overall and `0.8366` for Imgproc.
 
 ## Historical Snapshots
 
+- [2026-08-04 pre-closure English report](2026-08-04-opencv-upstream-performance.en.md),
+  [CSV](2026-08-04-opencv-upstream-performance.csv), and
+  [metadata](2026-08-04-opencv-upstream-performance.meta.json)
 - [2026-07-25 English report](2026-07-25-opencv-upstream-performance.en.md)
   and its [Chinese translation](2026-07-25-opencv-upstream-performance.md)
 - [2026-07-24 report](2026-07-24-opencv-upstream-performance.md)
