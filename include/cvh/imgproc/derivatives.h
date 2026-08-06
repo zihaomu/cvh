@@ -180,6 +180,13 @@ inline void Scharr(const Mat& src,
     {
         CV_Error(Error::StsBadArg, "Scharr expects first x or y derivative");
     }
+    cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    if (src.channels() == 1 && detail::derivative3_neon::try_single(
+            src, dst, ddepth, dx, dy, 3, 10,
+            scale, delta, borderType, "scharr3_u8"))
+    {
+        return;
+    }
     const std::vector<double> derivative = {-1.0, 0.0, 1.0};
     const std::vector<double> smoothing = {3.0, 10.0, 3.0};
     const std::vector<double>& kernel_x = dx == 1 ? derivative : smoothing;
@@ -263,6 +270,11 @@ inline void spatialGradient(const Mat& src,
             "spatialGradient supports ksize=3 and reflect101/replicate borders");
     }
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    if (detail::derivative3_neon::try_spatial_gradient(
+            src, dx, dy, borderType))
+    {
+        return;
+    }
     const bool isolated = (borderType & BORDER_ISOLATED) != 0;
     const detail::SobelSamplingWindow window =
         detail::resolve_sobel_sampling_window(src, isolated);

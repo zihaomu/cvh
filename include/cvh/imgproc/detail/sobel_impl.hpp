@@ -357,6 +357,12 @@ inline void sobel_fast_impl(const Mat& src,
                         int borderType)
 {
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    if (ksize == 3 && derivative3_neon::try_single(
+            src, dst, ddepth, dx, dy, 1, 2,
+            scale, delta, borderType, "sobel3_u8"))
+    {
+        return;
+    }
     if (sobel_fastpath::try_sobel_fastpath_u8(
             src, dst, ddepth, dx, dy, ksize, scale, delta, borderType))
     {

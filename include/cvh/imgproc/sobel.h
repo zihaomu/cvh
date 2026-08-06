@@ -249,6 +249,7 @@ inline void sobel_fallback(const Mat& src,
 }  // namespace detail
 }  // namespace cvh
 
+#include "detail/derivative3_neon.hpp"
 #include "detail/sobel_impl.hpp"
 
 namespace cvh {

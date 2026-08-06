@@ -426,6 +426,34 @@ H0 只改善观测，不修改目标 kernel 性能。
 
 ### H3：Shared derivative3 U8
 
+#### H3 实时记录（2026-08-06）
+
+- 已新增 `detail/derivative3_neon.hpp`；Sobel/Scharr 共享 channel-stride aware
+  三行 kernel，U8 widen 后在 S16 lane 内计算。Sobel 理论范围为
+  `[-1020, 1020]`，Scharr 为 `[-4080, 4080]`，均不溢出 S16；F32 adapter
+  只在最终 store 前转换；
+- spatialGradient 复用同一次 top/middle/bottom row load 同时生成 dx/dy，
+  不再串行调用两次 Sobel；当前 direct predicate 限于 U8、常用
+  `scale=1/delta=0`、replicate/reflect101、有效 16-byte interior 和
+  workload >=256，其余参数保留原 UI/scalar；
+- direct tests 已覆盖 Sobel C1/C3/C4、dx/dy、S16/F32、replicate/
+  reflect101、isolated non-contiguous ROI、parent-sampled ROI、Scharr C1、
+  spatialGradient 双输出与所有 dispatch mode；当前 derivative targeted
+  11/11（含 2 个 upstream Sobel case）通过，NEON 与 scalar byte-exact；
+- 第一次 stable run 发现动态构造的 `kernel_route` 生命周期短于 telemetry
+  消费，CSV 出现非 UTF-8 字节并被 renderer 拒绝；已改为静态 route literal，
+  未将该失败报告计入性能结论；
+- 初版逐行 scalar tail 使 spatialGradient 240p/480p 未过保留线；改为最后
+  一个 16-lane overlapping block 后，单轮 probe 中 Sobel 各目标 relative
+  为 `1.17–1.85`，Scharr 为 `1.06–1.55`，spatialGradient 480p/720p/1080p
+  为 `0.54/0.67/0.70`；进一步让 spatialGradient 左右 border 共享一次
+  3x3 采样后，probe 的 240p/480p/720p/1080p relative 为
+  `0.53/0.72/0.80/0.78`，全部越过 `>=0.50` floor；待 clean revision
+  正式 stable 三轮确认；
+- 当前 derivative targeted 11/11、独立头编译、ODR smoke 与
+  `git diff --check` 通过；
+- Canny 未接入新 primitive，继续走原有已验证路径。
+
 1. 建立三行、channel-stride aware 的 interior kernel；边界列独立 scalar。
 2. Sobel 使用 `[1,2,1]` smoothing 与 `[-1,0,1]` derivative；Scharr 使用
    `[3,10,3]` 与同一 derivative 结构。
