@@ -2,7 +2,7 @@
 
 Updated: 2026-08-03
 
-Current baseline: `d96bfde` (`refactor: finalize header-only architecture and UI-only CI`)
+Current baseline: `6f7135e` (`docs(ci): close x86 performance floor evidence`)
 
 Current stage: P7.1 is complete. P7.2 user onboarding and release packaging is
 the next product milestone.
@@ -47,7 +47,7 @@ cvh::highgui
 - install-tree CMake consumer checks;
 - Core, Imgproc, Imgcodecs, HighGUI, and ISA correctness tests;
 - Linux x86 correctness and sanitizer workflow;
-- optional UI-only OpenCV comparison workflow.
+- optional product-auto OpenCV comparison workflow with forced UI/scalar diagnostics.
 
 ## 3. Completed Release-Readiness Work
 
@@ -153,7 +153,7 @@ Required reports:
 - Apple ARM64;
 - Linux x86-64;
 - internal baseline/current regression;
-- UI-only cvh versus upstream OpenCV comparison.
+- product-auto cvh versus upstream OpenCV comparison, plus forced UI/scalar diagnostics.
 
 Every report records:
 
@@ -166,7 +166,7 @@ Every report records:
 Acceptance criteria:
 
 - [ ] README points to an English report generated from the release candidate.
-- [ ] Specialized ISA paths are excluded from the UI-only comparison.
+- [ ] Product-auto reports record specialized ISA paths; forced UI diagnostics exclude them.
 - [ ] Regressions are separated from accepted numerical or implementation changes.
 - [ ] Dated reports remain immutable after publication.
 

@@ -14,11 +14,13 @@ affiliated with or endorsed by the OpenCV project.
 
 Repository: [github.com/zihaomu/cvh](https://github.com/zihaomu/cvh)
 
-> **Latest performance report:** [cvh vs OpenCV upstream benchmark (2026-08-03, English)](benchmark/opencv_compare/results/2026-08-03-opencv-upstream-performance.en.md)
+> **Latest performance report:** [cvh v0.1 RC vs OpenCV upstream benchmark (2026-08-04, English)](benchmark/opencv_compare/results/2026-08-04-v0.1-rc-opencv-upstream-performance.en.md)
 >
-> Apple M5, single-threaded full profile: 344 cases using the single public
-> `cvh::headers` target with the forced `cvh_ui` comparison policy. Raw data,
-> metadata, and immutable older snapshots are listed in the
+> Apple M5, single-threaded full profile: 370 cases using the single public
+> `cvh::headers` target. This immutable snapshot forced `cvh_ui`; it remains UI
+> diagnostic evidence and must not be used to infer product-auto GEMM
+> performance. New reports default to `cvh_auto`. Raw data, metadata, and
+> immutable older snapshots are listed in the
 > [benchmark result index](benchmark/opencv_compare/results/README.md).
 
 ## Status
@@ -135,7 +137,8 @@ Legend:
 | `imgproc` | `Sobel` | Supported + fast path | `CV_8U` / `CV_16S` / `CV_32F` input, `CV_16S` / `CV_32F` output, `ksize=3/5`, first-order derivatives. | `CV_8U`, `ksize=3/5`, first-order header path. |
 | `imgproc` | kernel generators, `integral`, `Scharr`, `Laplacian`, `spatialGradient`, `sqrBoxFilter` | Supported | F32/F64 kernel generation, U8 integral sums, derivative extensions, and wide-accumulator square filtering for the documented subset. | Scalar public-header baseline; benchmark rows are established. |
 | `imgproc` | `medianBlur`, `bilateralFilter`, `stackBlur`, `adaptiveThreshold`, `thresholdWithMask`, `equalizeHist`, `applyColorMap` | Supported | U8/F32 nonlinear filters and masked/statistical intensity transforms for the documented type, channel, border, and colormap subsets. | Scalar public-header baseline; no fast path is claimed. |
-| `imgproc` | accumulate family, `blendLinear`, pyramid family, `cvtColorTwoPlane`, `demosaicing` | Supported | U8/F32 accumulation and blending, fixed-kernel Gaussian pyramids, separate-plane NV12/NV21 decode, and U8 bilinear Bayer decode. | Scalar public-header baseline; benchmark rows are established. |
+| `imgproc` | accumulate family, `blendLinear`, pyramid family, `cvtColorTwoPlane` | Supported | U8/F32 accumulation and blending, fixed-kernel Gaussian pyramids, and separate-plane NV12/NV21 decode. | Scalar public-header baseline; benchmark rows are established. |
+| `imgproc` | `demosaicing` | WIP | The existing U8 bilinear Bayer implementation remains callable for evaluation, but is excluded from the v0.1 support commitment because demand is low and the RC benchmark is `11.70x` behind OpenCV. | Retain correctness and benchmark evidence; reconsider only in a demand-driven later batch. |
 | `imgproc` | affine/perspective matrix generators, rotation matrix, affine inverse | Supported | Point2f/Point2d matrix generation plus F32/F64 2x3 inverse with explicit degenerate-input behavior. | Small fixed-size scalar solve; no fast path is needed. |
 | `imgproc` | `remap`, `convertMaps`, `warpPerspective`, `getRectSubPix` | Supported | U8/F32 C1/C3/C4 nearest/bilinear geometric sampling, three map layouts, F32/F64 perspective matrices, and sub-pixel patches. | Public scalar baseline with Mode A/B benchmark rows; SIMD is pending. |
 | `imgproc` | `Canny` | Supported + fast path | Image overload for `CV_8UC1`; derivative overload for `CV_16SC1`; `apertureSize=3/5`; L1/L2 gradient. | Shared header magnitude/NMS/hysteresis path. |

@@ -6,14 +6,21 @@ header-only `cvh` versus OpenCV upstream.
 
 ## Target Design
 
-Mode B uses the single public compute target and forces its OpenCV Universal
-Intrinsics dispatch policy at runtime:
+Mode B uses the single public compute target. Product reports use automatic
+runtime dispatch; forced UI/scalar modes remain available for diagnostics:
 
 | Implementation | Meaning |
 |---|---|
+| `cvh_auto` | Current `cvh::headers` with product `Auto` dispatch; eligible direct NEON/AVX2 kernels take priority, followed by OpenCV UI and scalar fallbacks. This is the default report mode. |
 | `cvh_ui` | Current `cvh::headers` with `OpenCVUIOnly` forced; specialized NEON/AVX2 dispatch is rejected. |
 | `cvh_scalar` | The same public headers with `ScalarOnly` forced, used to verify fallback correctness and dispatch observability. |
 | `opencv` | Official OpenCV `core` / `imgproc` built on the same machine. |
+
+`opencv_ui` is a vector-dialect observation, not an ISA observation. On an
+ARM64 build the UI operations normally compile to NEON instructions, but the
+report only claims a concrete ISA when `isa_observed` can record it. In
+particular, a `GEMM` row tagged `opencv_ui` in this mode did not use CVH's
+specialized direct-NEON GEMM backend because `OpenCVUIOnly` rejects that path.
 
 The compare report is for visibility and prioritization. It is log-only by
 default and should not block every PR.
@@ -74,8 +81,8 @@ checkout unless you explicitly want that script to manage the repo.
 Existing files:
 
 - `setup_opencv_bench_slim.sh`: historical helper for a slim OpenCV clone.
-- `run_compare.sh`: one-command runner for UI-forced `cvh::headers` versus
-  upstream OpenCV.
+- `run_compare.sh`: one-command runner for product-auto `cvh::headers` versus
+  upstream OpenCV, with optional forced UI/scalar diagnostics.
 - `csv_to_markdown.py`: render compare CSV into Markdown.
 - `opencv_compare_header_benchmark.cpp`: pure header-only `cvh` compare cases.
 - `opencv_compare_opencv_backend.cpp`: OpenCV-side implementation, compiled
@@ -98,10 +105,10 @@ Markdown renderer.
 
 Current caveats:
 
-- Mode B has one product target with two forced runtime observations:
-  `cvh_ui` (`OpenCVUIOnly`) and `cvh_scalar` (`ScalarOnly`). The benchmark
-  fails if a direct specialized ISA tag is observed, if an explicitly
-  UI-required case misses UI in `cvh_ui`, or if `cvh_scalar` reports UI.
+- Mode B has one product target with three runtime observations: `cvh_auto`
+  (`Auto`), `cvh_ui` (`OpenCVUIOnly`), and `cvh_scalar` (`ScalarOnly`). Product
+  reports default to `cvh_auto`; the benchmark rejects direct ISA in `cvh_ui`
+  and rejects every accelerated dispatch in `cvh_scalar`.
 - Rolling `current_*` reports are generated artifacts. A reviewed date-named
   snapshot may commit its English Markdown, raw CSV, and metadata together
   under `benchmark/opencv_compare/results/`.

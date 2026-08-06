@@ -4,7 +4,7 @@
 
 Imgproc provides the accepted OpenCV-style image-processing subset, including:
 
-- color conversion and Bayer/YUV input handling;
+- color conversion and YUV input handling;
 - resize, remap, affine/perspective transforms, and sub-pixel sampling;
 - threshold, LUT, histogram equalization, and colormaps;
 - box, Gaussian, separable, median, bilateral, stack, and derivative filters;
@@ -21,9 +21,9 @@ This module README does not duplicate the full support matrix.
 #include <cvh/imgproc/imgproc.h>
 ```
 
-Top-level `include/cvh/imgproc/*.h` files are public. Implementation helpers in
-`detail/**` are internal even though they are installed with the header-only
-package.
+Top-level `include/cvh/imgproc/*.h` files are public unless the coverage document
+marks them as a deferred preview. Implementation helpers in `detail/**` are
+internal even though they are installed with the header-only package.
 
 ## Implementation Rules
 
@@ -62,3 +62,7 @@ coverage, fallback coverage, and benchmark evidence before a performance claim.
 
 All entries above are scalar header implementations; no SIMD fast-path claim is
 made without separate benchmark evidence.
+
+`demosaicing` is not part of the v0.1 support matrix. Its callable U8 bilinear
+preview, correctness tests and benchmark row are retained for a demand-driven
+later batch; the v0.1 RC measured it `11.70x` behind OpenCV.

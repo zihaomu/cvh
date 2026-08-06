@@ -8,7 +8,7 @@ binary dependency of the normal cvh package.
 
 - [design.md](design.md): product direction, header-only contract, public
   targets, module boundaries, and optimization principles.
-- [ci.md](ci.md): required correctness CI, x86 validation, optional UI-only
+- [ci.md](ci.md): required correctness CI, x86 validation, optional product-auto
   OpenCV comparison, artifacts, and local reproduction.
 - [cpu-optimization.md](cpu-optimization.md): public optimization policy,
   compile/runtime capability detection, and dispatch modes.

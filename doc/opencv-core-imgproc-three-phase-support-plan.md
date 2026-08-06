@@ -1,6 +1,6 @@
 # OpenCV Core / Imgproc 三阶段支持清单
 
-更新时间：2026-08-03
+更新时间：2026-08-06
 
 ## 1. 文档范围
 
@@ -9,8 +9,9 @@
 中的 220 个 upstream CPU C++ 操作族进行分期。
 
 P2-P0 的 17 个操作族已完成并通过最终阶段 gate；当前共有 124 个可调用
-操作族，没有仅声明未实现的 API，另有 96 个操作族未支持。其余第二阶段
-操作族只保留为需求驱动的候选。本清单只回答：
+操作族，其中 `demosaicing` 作为可调用 preview 保留但不计入 v0.1 支持承诺。
+因此 v0.1 承诺 123 个操作族，没有仅声明未实现的 API，另有 96 个操作族
+未支持。其余第二阶段操作族只保留为需求驱动的候选。本清单只回答：
 
 - 每个阶段支持哪些 `core` 算子；
 - 每个阶段支持哪些 `imgproc` 算子；
@@ -25,9 +26,9 @@ upstream 操作族盘点上限，不再作为发布承诺。
 
 | 阶段 | 定位 | Core | Imgproc | 操作族 | 累计覆盖/状态 |
 |---|---|---:|---:|---:|---|
-| 第一阶段 | 高频基础算子与通用图像流水线 | 43 | 36 | 79 | 已完成；107 / 220，48.6% |
-| 第二阶段 P0 | 随机数据、坐标、区域、轮廓、形状、直方图和模板匹配 | 4 | 13 | 17 | 已完成；124 / 220，56.4% |
-| 第二阶段 backlog | 低频或高依赖数值/特征/形状候选 | 31 | 34 | 65 | 不计入承诺覆盖 |
+| 第一阶段 | 高频基础算子与通用图像流水线 | 43 | 35 | 78 | 已完成；106 / 220，48.2% |
+| 第二阶段 P0 | 随机数据、坐标、区域、轮廓、形状、直方图和模板匹配 | 4 | 13 | 17 | 已完成；123 / 220，55.9% |
+| 第二阶段 backlog | 低频或高依赖数值/特征/形状候选 | 31 | 35 | 66 | 不计入承诺覆盖；含可调用 preview `demosaicing` |
 | 第三阶段 backlog | 高复杂度算法与长尾接口 | 5 | 26 | 31 | 不计入承诺覆盖 |
 
 ## 3. 第一阶段：高频基础算子与通用图像流水线
@@ -57,9 +58,9 @@ upstream 操作族盘点上限，不再作为发布承诺。
 | 类别 | 算子 | 数量 | 放在第一阶段的原因 |
 |---|---|---:|---|
 | 核生成、滤波与强度处理 | `getStructuringElement`<br>`getGaussianKernel`<br>`getDerivKernels`<br>`getGaborKernel`<br>`createHanningWindow`<br>`integral`<br>`Scharr`<br>`Laplacian`<br>`spatialGradient`<br>`sqrBoxFilter`<br>`medianBlur`<br>`bilateralFilter`<br>`stackBlur`<br>`adaptiveThreshold`<br>`thresholdWithMask`<br>`equalizeHist`<br>`applyColorMap` | 17 | 与现有滤波、Sobel、threshold 路径关联紧密，也是最常见的预处理能力。 |
-| 累积、金字塔与颜色输入 | `accumulate`<br>`accumulateProduct`<br>`accumulateSquare`<br>`accumulateWeighted`<br>`blendLinear`<br>`pyrDown`<br>`pyrUp`<br>`buildPyramid`<br>`cvtColorTwoPlane`<br>`demosaicing` | 10 | 视频统计、图像融合、多尺度处理和相机/YUV 输入场景使用频率较高。 |
+| 累积、金字塔与颜色输入 | `accumulate`<br>`accumulateProduct`<br>`accumulateSquare`<br>`accumulateWeighted`<br>`blendLinear`<br>`pyrDown`<br>`pyrUp`<br>`buildPyramid`<br>`cvtColorTwoPlane` | 9 | 视频统计、图像融合、多尺度处理和 YUV 输入场景使用频率较高。 |
 | 几何变换基础 | `remap`<br>`convertMaps`<br>`warpPerspective`<br>`getAffineTransform`<br>`getPerspectiveTransform`<br>`getRotationMatrix2D`<br>`getRotationMatrix2D_`<br>`invertAffineTransform`<br>`getRectSubPix` | 9 | remap 和变换矩阵是透视、极坐标、配准及后续几何算法的共同基础。 |
-| **合计** |  | **36** |  |
+| **合计** |  | **35** |  |
 <!-- P1_IMGPROC_API_LIST_END -->
 
 ## 4. 第二阶段 P0：精选高价值操作族
@@ -92,7 +93,7 @@ contract 和 OpenCV 差分门禁。
 | **合计** |  | **13** |  |
 <!-- P2_P0_IMGPROC_API_LIST_END -->
 
-### 4.3 第二阶段候选 backlog：65 个
+### 4.3 第二阶段候选 backlog：66 个
 
 以下操作族不属于 P2-P0。只有真实流水线需求、共享基础设施和维护成本得到确认
 后，才从 backlog 中建立新的 P2 批次。
@@ -108,8 +109,11 @@ Core 候选 31 个：
   `getOptimalDFTSize`、`randShuffle`、`setRNGSeed`、`theRNG`、`sort`、
   `sortIdx`。
 
-Imgproc 候选 34 个：
+Imgproc 候选 35 个：
 
+- 低频颜色输入：`demosaicing`。现有 U8 bilinear preview、正确性测试和
+  benchmark 证据保留，但 v0.1 RC 中 OpenCV 快 `11.70x`，只有出现真实
+  Bayer 流水线需求并建立性能验收后才重新进入支持面；
 - 直方图、频域、区域与极坐标：`calcBackProject`、`createCLAHE`、
   `phaseCorrelate`、`phaseCorrelateIterative`、`divSpectrums`、
   `distanceTransform`、`floodFill`、`linearPolar`、`logPolar`、`warpPolar`；

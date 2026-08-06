@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPARE_RUN_SCRIPT="${ROOT_DIR}/benchmark/opencv_compare/run_compare.sh"
 
 PROFILE="${CVH_COMPARE_PROFILE:-quick}"
-IMPLS="${CVH_COMPARE_IMPLS:-ui}"
+IMPLS="${CVH_COMPARE_IMPLS:-auto}"
 ARTIFACT_DIR="${CVH_COMPARE_ARTIFACT_DIR:-${ROOT_DIR}/build-ci-compare-reports}"
 
 if [[ "${ARTIFACT_DIR}" != /* ]]; then

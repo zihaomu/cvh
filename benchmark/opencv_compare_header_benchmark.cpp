@@ -19,11 +19,11 @@
 #include <vector>
 
 #ifndef CVH_COMPARE_IMPL_NAME
-#define CVH_COMPARE_IMPL_NAME "cvh_ui"
+#define CVH_COMPARE_IMPL_NAME "cvh_auto"
 #endif
 
 #if !CVH_DETAIL_HAVE_OPENCV_UI
-#error "The UI-only OpenCV compare requires CVH_ENABLE_OPTIMIZATION=1"
+#error "The optimized OpenCV compare requires CVH_ENABLE_OPTIMIZATION=1"
 #endif
 
 namespace cvh_bench_compare {
@@ -85,21 +85,24 @@ void require_opencv_ui_dispatch(const char* op, const char* variant)
     }
 }
 
-void validate_ui_only_rows(const std::vector<CompareRow>& rows)
+void validate_dispatch_rows(const std::vector<CompareRow>& rows)
 {
     for (const CompareRow& row : rows)
     {
-        if (row.dispatch_path == "neon" || row.dispatch_path == "avx2")
+        const bool direct_isa =
+            row.dispatch_path == "neon" || row.dispatch_path == "avx2";
+        if (row.impl == "cvh_ui" && direct_isa)
         {
             throw std::runtime_error(
                 "UI-only compare observed specialized ISA dispatch for " +
                 row.op + "/" + row.variant + ": " + row.dispatch_path);
         }
-        if (row.impl == "cvh_scalar" && row.dispatch_path == "opencv_ui")
+        if (row.impl == "cvh_scalar" &&
+            (row.dispatch_path == "opencv_ui" || direct_isa))
         {
             throw std::runtime_error(
-                "Scalar-only compare observed opencv_ui dispatch for " +
-                row.op + "/" + row.variant);
+                "Scalar-only compare observed accelerated dispatch for " +
+                row.op + "/" + row.variant + ": " + row.dispatch_path);
         }
     }
 }
@@ -126,9 +129,9 @@ std::string observed_isa()
 void usage()
 {
     std::cout
-        << "Usage: cvh_benchmark_opencv_compare_ui "
+        << "Usage: cvh_benchmark_opencv_compare "
         << "[--profile quick|stable|full] [--warmup N] [--iters N] [--repeats N] "
-        << "[--threads N] [--impl cvh_ui|cvh_scalar] "
+        << "[--threads N] [--impl cvh_auto|cvh_ui|cvh_scalar] "
         << "[--ops GEMM|PHASE2_P0|IMGPROC_FLOOR] "
         << "[--output path]\n";
 }
@@ -196,7 +199,11 @@ Args parse_args(int argc, char** argv)
         std::cerr << "Unsupported profile: " << args.profile << "\n";
         std::exit(2);
     }
-    if (args.impl == "ui")
+    if (args.impl == "auto")
+    {
+        args.impl = "cvh_auto";
+    }
+    else if (args.impl == "ui")
     {
         args.impl = "cvh_ui";
     }
@@ -204,10 +211,11 @@ Args parse_args(int argc, char** argv)
     {
         args.impl = "cvh_scalar";
     }
-    if (args.impl != "cvh_ui" && args.impl != "cvh_scalar")
+    if (args.impl != "cvh_auto" &&
+        args.impl != "cvh_ui" && args.impl != "cvh_scalar")
     {
         std::cerr << "Unsupported impl: " << args.impl
-                  << " (expected cvh_ui or cvh_scalar)\n";
+                  << " (expected cvh_auto, cvh_ui or cvh_scalar)\n";
         std::exit(2);
     }
     if (!args.ops.empty() && args.ops != "GEMM" &&
@@ -876,6 +884,7 @@ void append_gemm_compare_cases(
                 std::string(gemm_case.name) +
                 ";component=public_end_to_end;iters=" +
                 std::to_string(gemm_args.iters));
+        rows.back().algorithm_path = "gemm_nn";
 
         const cvh::GemmPackedB packed_b = cvh::gemm_pack_b(b);
         dst = cvh::gemm(a, packed_b);
@@ -925,6 +934,7 @@ void append_gemm_compare_cases(
                 ";component=public_pack_once;"
                 "opencv_reuses_B_without_public_pack_handle;iters=" +
                 std::to_string(gemm_args.iters));
+        rows.back().algorithm_path = "gemm_nn_packed_b";
     }
 }
 
@@ -1933,7 +1943,9 @@ int main(int argc, char** argv)
     cvh::cpu::set_dispatch_mode(
         args.impl == "cvh_scalar"
             ? cvh::cpu::DispatchMode::ScalarOnly
-            : cvh::cpu::DispatchMode::OpenCVUIOnly);
+            : args.impl == "cvh_ui"
+                  ? cvh::cpu::DispatchMode::OpenCVUIOnly
+                  : cvh::cpu::DispatchMode::Auto);
     cvh_bench_compare::configure_opencv_threads(args.threads);
     cvh::setNumThreads(args.threads);
     std::vector<cvh_bench_compare::CompareRow> rows;
@@ -1976,14 +1988,14 @@ int main(int argc, char** argv)
         cvh_bench_compare::append_phase2_cases(args, rows);
     }
 
-    cvh_bench_compare::validate_ui_only_rows(rows);
+    cvh_bench_compare::validate_dispatch_rows(rows);
 
     if (!args.output_csv.empty())
     {
         cvh_bench_compare::write_csv(rows, args.output_csv);
     }
 
-    std::cout << "cvh_benchmark_opencv_compare_ui: impl=" << args.impl
+    std::cout << "cvh_benchmark_opencv_compare: impl=" << args.impl
               << ", profile=" << args.profile
               << ", ops=" << (args.ops.empty() ? "all" : args.ops)
               << ", threads=" << args.threads

@@ -125,8 +125,8 @@ def check_current_report() -> list[str]:
         errors.append("latest performance report is outside the result archive")
 
     report_text = report.read_text(encoding="utf-8")
-    if "`cvh_ui`" not in report_text:
-        errors.append("latest performance report does not identify cvh_ui")
+    if "`cvh_auto`" not in report_text and "`cvh_ui`" not in report_text:
+        errors.append("latest performance report does not identify cvh_auto or cvh_ui")
 
     name = report.name.removesuffix(".en.md")
     csv_path = report.with_name(f"{name}.csv")
@@ -138,14 +138,35 @@ def check_current_report() -> list[str]:
 
     if csv_path.is_file():
         with csv_path.open(encoding="utf-8", newline="") as stream:
-            rows = list(csv.DictReader(stream))
+            reader = csv.DictReader(stream)
+            rows = list(reader)
         if not rows:
             errors.append("latest performance CSV has no rows")
-        invalid_impls = sorted({row.get("impl", "") for row in rows} - {"cvh_ui"})
-        if invalid_impls:
+        required_route_fields = {"algorithm_path", "dispatch_path", "isa_observed"}
+        missing_route_fields = sorted(
+            required_route_fields - set(reader.fieldnames or [])
+        )
+        if missing_route_fields:
             errors.append(
-                "latest performance CSV contains non-UI implementations: "
-                + ", ".join(invalid_impls)
+                "latest performance CSV is missing dispatch route fields: "
+                + ", ".join(missing_route_fields)
+            )
+        for row_index, row in enumerate(rows, start=2):
+            empty_route_fields = sorted(
+                field for field in required_route_fields if not row.get(field, "")
+            )
+            if empty_route_fields:
+                errors.append(
+                    f"latest performance CSV row {row_index} has empty dispatch "
+                    "route fields: " + ", ".join(empty_route_fields)
+                )
+                break
+        report_impls = {row.get("impl", "") for row in rows}
+        if report_impls not in ({"cvh_auto"}, {"cvh_ui"}):
+            errors.append(
+                "latest performance CSV must contain exactly one accepted "
+                "product-report implementation: "
+                + ", ".join(sorted(report_impls))
             )
     return errors
 
@@ -166,7 +187,7 @@ def main() -> int:
 
     print(
         "Documentation contract check passed: "
-        f"{len(files)} maintained Markdown files; current report is UI-only."
+        f"{len(files)} maintained Markdown files; current report uses an accepted product mode."
     )
     return 0
 

@@ -131,19 +131,19 @@ if(CVH_BUILD_BENCHMARKS)
             ${OpenCV_INCLUDE_DIRS}
         )
 
-        add_executable(cvh_benchmark_opencv_compare_ui
+        add_executable(cvh_benchmark_opencv_compare
             benchmark/opencv_compare_header_benchmark.cpp
             benchmark/opencv_compare_phase1_header_benchmark.cpp
             benchmark/opencv_compare_phase2_header_benchmark.cpp
             $<TARGET_OBJECTS:cvh_benchmark_opencv_compare_backend_obj>
         )
-        target_link_libraries(cvh_benchmark_opencv_compare_ui PRIVATE cvh::headers ${OpenCV_LIBS})
-        target_compile_features(cvh_benchmark_opencv_compare_ui PRIVATE cxx_std_17)
-        target_compile_definitions(cvh_benchmark_opencv_compare_ui PRIVATE CVH_COMPARE_IMPL_NAME="cvh_ui")
-        target_include_directories(cvh_benchmark_opencv_compare_ui BEFORE PRIVATE
+        target_link_libraries(cvh_benchmark_opencv_compare PRIVATE cvh::headers ${OpenCV_LIBS})
+        target_compile_features(cvh_benchmark_opencv_compare PRIVATE cxx_std_17)
+        target_compile_definitions(cvh_benchmark_opencv_compare PRIVATE CVH_COMPARE_IMPL_NAME="cvh_auto")
+        target_include_directories(cvh_benchmark_opencv_compare BEFORE PRIVATE
             ${OpenCV_INCLUDE_DIRS}
         )
-        target_include_directories(cvh_benchmark_opencv_compare_ui PRIVATE
+        target_include_directories(cvh_benchmark_opencv_compare PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/include
         )

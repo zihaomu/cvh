@@ -1,6 +1,6 @@
 # Continuous Integration
 
-Updated: 2026-08-03
+Updated: 2026-08-06
 
 ## 1. Scope
 
@@ -10,11 +10,11 @@ CI has three separate responsibilities:
 | --- | --- | --- |
 | `CI` | Complete optimized header-only correctness gate | Yes |
 | `x86 correctness` | x86-64-v3, AVX2/FMA, and sanitizer coverage | Scheduled/manual |
-| `CI Compare On Demand` | UI-only cvh versus upstream OpenCV performance visibility | No |
+| `CI Compare On Demand` | Product-auto cvh versus upstream OpenCV performance visibility | No |
 
 The required correctness gate and the optional OpenCV comparison are not the
-same policy. The required gate enables the complete accepted optimization
-configuration; only the comparison forces the OpenCV Universal Intrinsics path.
+same policy. Both use the complete accepted optimization configuration; the
+comparison additionally records per-case algorithm, dispatch and observed ISA.
 
 ## 2. Required Header-Only Gate
 
@@ -83,7 +83,7 @@ CVH_X86_SANITIZER_PARALLEL=2 \
 ./scripts/ci_x86_correctness.sh
 ```
 
-## 4. UI-Only OpenCV Comparison
+## 4. Product-Auto OpenCV Comparison
 
 `.github/workflows/ci-compare-on-demand.yml` is an optional performance
 workflow. It can be triggered by:
@@ -99,18 +99,20 @@ The `ci/run-opencv-compare` label is managed by
 The comparison configuration is fixed to:
 
 ```text
-CVH_COMPARE_IMPLS=ui
+CVH_COMPARE_IMPLS=auto
 CVH_COMPARE_THREADS=1
 ```
 
-The cvh executable forces `OpenCVUIOnly`. It rejects specialized NEON or AVX2
-dispatch tags and normalizes the cvh implementation name to `cvh_ui`.
+The cvh executable uses product `Auto` dispatch. Eligible specialized NEON or
+AVX2 kernels take priority over OpenCV UI and scalar fallbacks; the report names
+the implementation `cvh_auto` and records the actual dispatch and ISA. Forced
+`ui` and `scalar` remain available for diagnostic runs.
 
 Run a local quick comparison with:
 
 ```bash
 CVH_COMPARE_PROFILE=quick \
-CVH_COMPARE_IMPLS=ui \
+CVH_COMPARE_IMPLS=auto \
 CVH_COMPARE_THREADS=1 \
 ./scripts/ci_compare_log_only.sh
 ```
@@ -138,5 +140,5 @@ cross-compilation results do not replace those hosted gates.
 - Forced dispatch belongs to tests and benchmarks, not consumer CMake targets.
 - Preserve machine-readable reports on failure.
 - Update workflow, script, expectations, and this document in the same change.
-- Keep the optional comparison UI-only until a different comparison policy is
-  explicitly approved and documented.
+- Keep product-auto as the default comparison; use forced UI/scalar only for
+  dispatch and fallback diagnostics.

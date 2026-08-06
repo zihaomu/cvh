@@ -6,12 +6,15 @@
 - [v0.1 RC raw CSV](2026-08-04-v0.1-rc-opencv-upstream-performance.csv)
 - [v0.1 RC run metadata](2026-08-04-v0.1-rc-opencv-upstream-performance.meta.json)
 
-This is the current single-target, UI-only comparison. The CVH implementation
-is `cvh_ui`; the full profile contains 370 rows collected on Apple M5 with one
-thread. Of these, 369 are valid and the one expected `UNSUPPORTED` row records
-that upstream OpenCV has no single-call BGR-to-NV12 encoder. The clean
-`f94f2d8` release-candidate snapshot records geometric means of `0.7289`
-overall and `0.8366` for Imgproc.
+This is the latest archived full comparison. It used the diagnostic `cvh_ui`
+mode and therefore excluded specialized NEON/AVX2 dispatch; it must not be used
+to infer product-auto GEMM performance. The full profile contains 370 rows
+collected on Apple M5 with one thread. Of these, 369 are valid and the one
+expected `UNSUPPORTED` row records that upstream OpenCV has no single-call
+BGR-to-NV12 encoder. The clean `f94f2d8` release-candidate snapshot records
+geometric means of `0.7289` overall and `0.8366` for Imgproc. New reports
+default to `cvh_auto`; the next reviewed full snapshot will replace this index
+entry without rewriting the immutable artifact above.
 
 ## Historical Snapshots
 

@@ -27,8 +27,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  opencv_compare_ui:
-    name: OpenCV Compare UI
+  opencv_compare_auto:
+    name: OpenCV Compare Auto
     if: >
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'ci/run-opencv-compare')
@@ -60,10 +60,10 @@ jobs:
         with:
           ref: ${{ steps.resolve.outputs.ref }}
 
-      - name: Run UI/OpenCV Compare (log-only)
+      - name: Run Auto/OpenCV Compare (log-only)
         env:
           CVH_COMPARE_PROFILE: quick
-          CVH_COMPARE_IMPLS: ui
+          CVH_COMPARE_IMPLS: auto
           CVH_COMPARE_THREADS: "1"
           CVH_COMPARE_OMP_DYNAMIC: "false"
           CVH_COMPARE_OMP_PROC_BIND: "close"
@@ -74,6 +74,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: opencv-compare-ui
+          name: opencv-compare-auto
           path: build-ci-compare-reports/*
           if-no-files-found: warn

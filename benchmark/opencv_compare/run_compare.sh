@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "${COMPARE_DIR}/../.." && pwd)"
 SETUP_SCRIPT="${COMPARE_DIR}/setup_opencv_bench_slim.sh"
 
 PROFILE="${CVH_COMPARE_PROFILE:-quick}"
-IMPLS="${CVH_COMPARE_IMPLS:-ui}"
+IMPLS="${CVH_COMPARE_IMPLS:-auto}"
 WARMUP=""
 ITERS=""
 REPEATS=""
@@ -32,11 +32,11 @@ REPORT_SCRIPT="${COMPARE_DIR}/csv_to_markdown.py"
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--profile quick|stable|full] [--impls ui|scalar|ui,scalar] [--ops GEMM|PHASE2_P0|IMGPROC_FLOOR] [--warmup N] [--iters N] [--repeats N] [--output path] [--baseline]
+Usage: $(basename "$0") [--profile quick|stable|full] [--impls auto|ui|scalar|auto,ui,scalar] [--ops GEMM|PHASE2_P0|IMGPROC_FLOOR] [--warmup N] [--iters N] [--repeats N] [--output path] [--baseline]
 
 Environment:
   CVH_COMPARE_PROFILE   (default: ${PROFILE})
-  CVH_COMPARE_IMPLS     (default: ${IMPLS}; ui/scalar and cvh_ui/cvh_scalar aliases)
+  CVH_COMPARE_IMPLS     (default: ${IMPLS}; auto/ui/scalar and cvh_auto/cvh_ui/cvh_scalar aliases)
   CVH_COMPARE_WARMUP    (profile default, quick=1 stable=2 full=1)
   CVH_COMPARE_ITERS     (profile default, quick=5 stable=20 full=10)
   CVH_COMPARE_REPEATS   (profile default, quick=1 stable=5 full=3)
@@ -133,14 +133,16 @@ for raw_impl in "${RAW_IMPLS[@]}"; do
     continue
   fi
 
-  if [[ "${impl}" == "cvh_ui" ]]; then
+  if [[ "${impl}" == "cvh_auto" ]]; then
+    impl="auto"
+  elif [[ "${impl}" == "cvh_ui" ]]; then
     impl="ui"
   elif [[ "${impl}" == "cvh_scalar" ]]; then
     impl="scalar"
   fi
 
-  if [[ "${impl}" != "ui" && "${impl}" != "scalar" ]]; then
-    echo "Unsupported impl: ${impl} (expected ui or scalar)" >&2
+  if [[ "${impl}" != "auto" && "${impl}" != "ui" && "${impl}" != "scalar" ]]; then
+    echo "Unsupported impl: ${impl} (expected auto, ui or scalar)" >&2
     exit 2
   fi
 
@@ -157,7 +159,7 @@ for raw_impl in "${RAW_IMPLS[@]}"; do
 done
 
 if [[ "${#REQUESTED_IMPLS[@]}" -eq 0 ]]; then
-  echo "No valid impl selected. Use --impls ui or --impls scalar" >&2
+  echo "No valid impl selected. Use --impls auto, ui or scalar" >&2
   exit 2
 fi
 
@@ -441,11 +443,11 @@ cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" \
   -DCVH_ENABLE_OPENCV_COMPARE=ON \
   -DOpenCV_DIR="${OPENCV_CONFIG_DIR}"
 
-cmake --build "${BUILD_DIR}" --target cvh_benchmark_opencv_compare_ui -j
+cmake --build "${BUILD_DIR}" --target cvh_benchmark_opencv_compare -j
 
 TMP_OUTPUT_CSVS=()
 for impl in "${REQUESTED_IMPLS[@]-}"; do
-  BENCH_BIN="${BUILD_DIR}/cvh_benchmark_opencv_compare_ui"
+  BENCH_BIN="${BUILD_DIR}/cvh_benchmark_opencv_compare"
   IMPL_NAME="cvh_${impl}"
 
   if [[ ! -x "${BENCH_BIN}" ]]; then

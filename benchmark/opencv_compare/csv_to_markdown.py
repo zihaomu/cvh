@@ -205,6 +205,8 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
 
     generated_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
     implementations = sorted({(r.get("impl", "") or "unknown") for r in rows})
+    auto_mode = implementations == ["cvh_auto"]
+    auto_present = "cvh_auto" in implementations
     ui_forced = implementations == ["cvh_ui"]
     scalar_forced = implementations == ["cvh_scalar"]
 
@@ -216,13 +218,18 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("## Scope")
     lines.append("")
     lines.append("- `cvh` is a pure header-only library; every CVH row enters through the public `cvh::headers` API.")
-    if ui_forced:
+    if auto_mode:
+        lines.append("- The benchmark uses product `Auto` dispatch; eligible specialized NEON/AVX2 kernels take priority over OpenCV UI and scalar fallbacks.")
+    elif ui_forced:
         lines.append("- The benchmark forces `OpenCVUIOnly`; the CVH implementation label is `cvh_ui`.")
     elif scalar_forced:
         lines.append("- The benchmark forces `ScalarOnly`; the CVH implementation label is `cvh_scalar`.")
     else:
-        lines.append(f"- The report contains these forced CVH modes: `{', '.join(implementations)}`.")
-    lines.append("- Direct architecture-specific dispatch is rejected. `CVH algorithm`, `CVH dispatch`, and `Observed ISA` are separate fields; unavailable ISA observation is reported as `unknown` rather than inferred from the host.")
+        lines.append(f"- The report contains these CVH runtime modes: `{', '.join(implementations)}`.")
+    if auto_present:
+        lines.append("- Direct architecture-specific dispatch is allowed and recorded. `CVH algorithm`, `CVH dispatch`, and `Observed ISA` remain separate fields; unavailable ISA observation is reported as `unknown` rather than inferred from the host.")
+    else:
+        lines.append("- Direct architecture-specific dispatch is rejected. `CVH algorithm`, `CVH dispatch`, and `Observed ISA` are separate fields; unavailable ISA observation is reported as `unknown` rather than inferred from the host.")
     lines.append("- The reference is the upstream OpenCV build recorded in the metadata, running on the same host with matching inputs and parameters.")
     lines.append("")
 
@@ -230,7 +237,7 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     lines.append("")
     lines.append("| Layer | Current Implementation | Meaning in This Report |")
     lines.append("| --- | --- | --- |")
-    lines.append("| Public candidate | `cvh::headers` | Runtime mode is recorded by the implementation label (`cvh_ui` or `cvh_scalar`) |")
+    lines.append("| Public candidate | `cvh::headers` | Runtime mode is recorded by the implementation label (`cvh_auto`, `cvh_ui`, or `cvh_scalar`) |")
     lines.append("| Vector dialect | OpenCV Universal Intrinsics | Portable UI kernels selected by the compiler and intrinsics layer |")
     lines.append("| Public fallback | Header-only scalar or generic fast path | Algorithm and actual kernel dispatch are recorded separately |")
     lines.append("| Reference | Upstream OpenCV `core` / `imgproc` | Same input, dimensions, borders, parameters, and thread setting |")
@@ -367,7 +374,9 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
     )
     lines.append("")
 
-    lines.append("## Operator-Level Overview")
+    lines.append("## CVH Dispatch Route Overview")
+    lines.append("")
+    lines.append("Each operator summarizes the observed route as `CVH algorithm -> CVH dispatch -> Observed ISA`. The detailed tables retain the same three fields for every concrete benchmark case.")
     lines.append("")
     for suite in ("core_mat", "imgproc"):
         suite_rows = [r for r in supported if row_suite(r) == suite]
@@ -408,6 +417,8 @@ def render_report(rows, title: str, input_path: Path, meta_path: Optional[Path] 
         lines.append("")
 
     lines.append("## Detailed Results")
+    lines.append("")
+    lines.append("Every row below records the route actually observed during that case; dispatch and ISA are never inferred from the host architecture.")
     lines.append("")
     for suite in ("core_mat", "imgproc"):
         suite_rows = [r for r in supported if row_suite(r) == suite]

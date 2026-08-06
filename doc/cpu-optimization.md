@@ -76,7 +76,7 @@ The internal dispatch control supports:
 | --- | --- |
 | `Auto` | Normal product execution |
 | `ScalarOnly` | Correctness and fallback diagnostics |
-| `OpenCVUIOnly` | UI-only tests and OpenCV comparison |
+| `OpenCVUIOnly` | UI-only tests and comparison diagnostics |
 | `NeonOnly` | Forced NEON correctness tests |
 | `Avx2Only` | Forced AVX2/FMA correctness tests |
 
@@ -107,12 +107,13 @@ An operator without a specialized ISA kernel can still use OpenCV UI. An
 operator without either optimized path remains a valid scalar implementation.
 Optimization availability must never change public API availability.
 
-## 7. UI-Only Comparison Policy
+## 7. OpenCV Comparison Policy
 
-The optional OpenCV comparison forces `OpenCVUIOnly` at runtime. It verifies
-that the cvh implementation reports `opencv_ui` for cases requiring a UI path
-and rejects any `neon` or `avx2` result. This keeps the comparison focused on
-the requested implementation family without creating a separate target.
+The optional OpenCV comparison defaults to product `Auto` dispatch so eligible
+specialized NEON/AVX2 kernels are measured before OpenCV UI and scalar
+fallbacks. Diagnostic `cvh_ui` runs force `OpenCVUIOnly` and reject `neon` or
+`avx2`; `cvh_scalar` runs reject every accelerated dispatch. All modes use the
+same public target and report the actual per-case dispatch tag.
 
 ## 8. Source Ownership
 
@@ -134,7 +135,7 @@ Required checks include:
 - forced UI, NEON, AVX2, and scalar correctness where applicable;
 - install-tree consumer and multi-translation-unit ODR tests;
 - real x86 runtime checks before claiming AVX2/FMA coverage;
-- UI-only comparison tag validation.
+- product-auto comparison ISA observation and forced UI/scalar tag validation.
 
 The canonical required command is:
 

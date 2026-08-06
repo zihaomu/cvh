@@ -1,8 +1,8 @@
 # OpenCV Core / Imgproc API Coverage
 
-Last updated: 2026-08-03
+Last updated: 2026-08-06
 
-cvh baseline: `33045f1`
+cvh baseline: `6f7135e`
 
 ## 1. Purpose
 
@@ -70,19 +70,22 @@ method would produce a much larger and less stable number.
 | Status | Meaning |
 |---|---|
 | `Available (subset)` | A public, header-defined `cvh` counterpart is callable, but it does not cover the full upstream overload, type, or parameter matrix. |
+| `Deferred preview` | A callable header implementation is retained for evaluation and future work, but it is excluded from the current v0.1 support commitment. |
 | `Declared only` | A public declaration exists in `cvh`, but no accepted inline definition exists. It is not part of the usable header-only contract. |
 | `Missing` | No public `cvh` counterpart exists. |
 
 Current summary:
 
-| Module | Upstream families | Available (subset) | Declared only | Missing | Callable family coverage |
-|---|---:|---:|---:|---:|---:|
-| `core` | 97 | 61 | 0 | 36 | 62.9% |
-| `imgproc` | 123 | 63 | 0 | 60 | 51.2% |
-| **Total** | **220** | **124** | **0** | **96** | **56.4%** |
+| Module | Upstream families | Available (subset) | Deferred preview | Declared only | Missing | v0.1 committed coverage |
+|---|---:|---:|---:|---:|---:|---:|
+| `core` | 97 | 61 | 0 | 0 | 36 | 62.9% |
+| `imgproc` | 123 | 62 | 1 | 0 | 60 | 50.4% |
+| **Total** | **220** | **123** | **1** | **0** | **96** | **55.9%** |
 
-The percentages measure name-level callable coverage only. They do not measure
-type coverage, numerical compatibility, performance, or overload parity.
+The committed percentages measure the v0.1 name-level support surface. Including
+the callable `demosaicing` preview, implementation coverage remains 124 / 220
+(`56.4%`). Neither number measures type coverage, numerical compatibility,
+performance, or overload parity.
 
 ## 4. Core Operation Families
 
@@ -278,7 +281,6 @@ parameter matrix.
 | `createHanningWindow` | Available (subset) | F32/F64 two-dimensional Hanning window with pinned upstream square-root product semantics. |
 | `convertMaps` | Available (subset) | F32 pair/F32C2/fixed S16C2+U16 maps, including 5-bit linear fractions and nearest maps without map2. |
 | `cvtColorTwoPlane` | Available (subset) | Separate U8C1 Y and half-size U8C2 UV planes for NV12/NV21 to BGR/RGB. |
-| `demosaicing` | Available (subset) | U8 Bayer BG/GB/RG/GR to three-channel BGR/RGB aliases using bilinear interpolation. |
 | `dilate` | Available (subset) | `CV_8U`, C1/C3/C4, custom kernel, iterations, and basic border handling. |
 | `erode` | Available (subset) | `CV_8U`, C1/C3/C4, custom kernel, iterations, and basic border handling. |
 | `equalizeHist` | Available (subset) | `CV_8UC1` 256-bin histogram equalization with constant-image and in-place handling. |
@@ -331,7 +333,6 @@ Public implementation source:
 - [`imgproc/blend_linear.h`](../include/cvh/imgproc/blend_linear.h)
 - [`imgproc/pyramid.h`](../include/cvh/imgproc/pyramid.h)
 - [`imgproc/cvtcolor_two_plane.h`](../include/cvh/imgproc/cvtcolor_two_plane.h)
-- [`imgproc/demosaicing.h`](../include/cvh/imgproc/demosaicing.h)
 - [`imgproc/geometry_transform.h`](../include/cvh/imgproc/geometry_transform.h)
 - [`imgproc/convert_maps.h`](../include/cvh/imgproc/convert_maps.h)
 - [`imgproc/remap.h`](../include/cvh/imgproc/remap.h)
@@ -344,7 +345,17 @@ Public implementation source:
 - [`imgproc/template_match.h`](../include/cvh/imgproc/template_match.h)
 - [`imgproc/readme.md`](../include/cvh/imgproc/readme.md)
 
-### 6.2 Missing Imgproc Families
+### 6.2 Deferred Imgproc Preview
+
+| Upstream API | Status | Retained scope and re-entry gate |
+|---|---|---|
+| `demosaicing` | Deferred preview | The U8 Bayer BG/GB/RG/GR bilinear implementation, [standalone header](../include/cvh/imgproc/demosaicing.h), correctness tests, upstream differential and benchmark case remain available for evaluation. It is excluded from v0.1 support after the RC measured OpenCV `11.70x` faster; re-entry requires a real Bayer pipeline demand and an explicit performance acceptance gate. |
+
+The dated v0.1 RC report remains immutable historical evidence. Keeping a
+correct implementation or benchmark row does not by itself make this family a
+supported v0.1 API.
+
+### 6.3 Missing Imgproc Families
 
 - [ ] `EMD`
 - [ ] `HoughCircles`
@@ -407,7 +418,7 @@ Public implementation source:
 - [ ] `warpPolar`
 - [ ] `watershed`
 
-### 6.3 Imgproc Class-Only Gaps
+### 6.4 Imgproc Class-Only Gaps
 
 Class methods are not included in the 123-family denominator. Important
 class-level gaps include:
@@ -448,6 +459,7 @@ Update this document when any of the following happens:
 - A declared-only operation becomes usable or is removed.
 - A supported operation expands its accepted depth, channel, overload, border,
   interpolation, or flag matrix.
+- A callable preview enters or leaves the current support commitment.
 
 An API moves from `Missing` to `Available (subset)` only when:
 
@@ -459,4 +471,6 @@ An API moves from `Missing` to `Available (subset)` only when:
 
 Benchmark coverage is tracked separately. An operation can be correct and
 available without having a fast path, and a benchmark does not by itself make
-an API supported.
+an API supported. A deferred preview moves back to `Available (subset)` only
+after product prioritization and its explicit correctness and performance gates
+are accepted.

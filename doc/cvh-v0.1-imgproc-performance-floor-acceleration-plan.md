@@ -521,7 +521,7 @@ targeted unit / differential
 
 ```bash
 cmake --build build-opencv-compare \
-  --target cvh_benchmark_opencv_compare_ui -j
+  --target cvh_benchmark_opencv_compare -j
 cmake --build build-ci-headers-ui \
   --target cvh_resize_dispatch_smoke -j
 ctest --test-dir build-ci-headers-ui \

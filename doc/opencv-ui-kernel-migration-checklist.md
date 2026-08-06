@@ -80,7 +80,8 @@ OpenCV UI alias. It must:
 - remain reachable only through the normal `cvh::headers` product target;
 - preserve UI and scalar fallbacks;
 - report `neon` or `avx2`, never `opencv_ui`;
-- stay excluded from the UI-only OpenCV comparison.
+- stay excluded from forced UI diagnostics while remaining visible in the
+  default product-auto OpenCV comparison.
 
 ## 7. Correctness Gate
 
@@ -156,7 +157,8 @@ ctest --test-dir build-scalar --output-on-failure
 - [ ] Tails and non-contiguous rows are covered.
 - [ ] Dispatch tags identify the implementation actually executed.
 - [ ] Specialized ISA code remains internal and header-only.
-- [ ] UI-only comparison cannot execute a specialized ISA kernel.
+- [ ] Product-auto comparison records specialized ISA kernels; forced UI
+      diagnostics cannot execute them.
 - [ ] Upstream provenance and license obligations are recorded.
 - [ ] Benchmark evidence is attached for performance claims.
 - [ ] Current design, API coverage, and dated reports are updated only when

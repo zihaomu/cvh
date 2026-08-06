@@ -16,8 +16,8 @@
         "compiled_extension_required": false,
         "default_gate": "log_only",
         "preferred_opencv_source": "../opencv",
-        "cvh_target": "cvh_benchmark_opencv_compare_ui",
-        "cvh_implementation": "cvh_ui"
+        "cvh_target": "cvh_benchmark_opencv_compare",
+        "cvh_implementation": "cvh_auto"
       }
     },
     "suites": {
