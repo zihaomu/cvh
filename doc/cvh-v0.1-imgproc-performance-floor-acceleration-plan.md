@@ -1,7 +1,7 @@
 # cvh v0.1 Imgproc 性能底线加速计划（第三轮性能收口）
 
-更新时间：2026-08-04
-状态：B4 测量后不优化；B5/B6 完成；B7 本地收口完成，等待 Linux x86_64 远端 CI 证据
+更新时间：2026-08-06
+状态：B0–B3、B5–B7 完成；B4 测量后不优化；本阶段全部关闭
 
 ## 1. 目的与阶段定位
 
@@ -423,7 +423,7 @@ targeted unit / differential
 | B4 | Pyramid 闭环 | 测量后不优化 | pyrUp 达标；pyrDown/buildPyramid 保留明确微延迟例外：stable CVH `0.084/0.020 ms`，绝对损失仅 `0.068/0.015 ms`；UI/scalar 194/194、contract 30/30 通过 |
 | B5 | Geometry interior sampler | 完成 | 三轮 full：warpAffine 最差 `0.5064`、remap 最差 `0.9846`、warpPerspective 最差 `0.4359`；UI/scalar 194/194、contract 30/30、header/ODR/checksum 通过 |
 | B6 | Nonlinear 策略分流 | 完成 | 三轮中位数 bilateral `0.5135`、median `0.6022`、stackBlur `1.3103`；UI/scalar 194/194、contract 30/30、header/ODR/checksum 通过 |
-| B7 | 全量矩阵与跨平台收口 | 进行中 | clean RC `f94f2d8` 的 Apple ARM64 correctness/canonical/compare 全部关闭；full 整体 `0.7289`、Imgproc `0.8366`；仅余 Linux x86_64 必须在推送后由现有 `ci-x86-correctness` 补证 |
+| B7 | 全量矩阵与跨平台收口 | 完成 | clean RC `f94f2d8` 的 Apple ARM64 correctness/canonical/compare 全部关闭；full 整体 `0.7289`、Imgproc `0.8366`；Linux x86_64 [x86 correctness #2](https://github.com/zihaomu/cvh/actions/runs/31067125539) 在 `87d92d2` 通过 Release、AVX2 smoke、ASan/UBSan 与报告上传 |
 
 ### 11.1 实时更新规则
 
@@ -513,6 +513,7 @@ targeted unit / differential
 | 2026-08-04 | B7 | `9cad23c` | 首次 full 369 `OK` + 1 expected unsupported，整体/Core/Imgproc 为 `0.7321 / 0.6427 / 0.8323`，性能达标；但 runner 在写入 untracked CSV 后才读取 git 状态，把原本干净的 RC 错标为 dirty，报告不能作为最终发布证据 | 在输出创建前冻结 source identity，提交新 RC 后完整重跑 full；不手改元数据 |
 | 2026-08-04 | B7 | `f94f2d8` | runner 已在创建输出前冻结 source identity；最终 full 报告 370 rows（369 `OK` + 1 既有 BGR-to-NV12 expected unsupported），整体/Core/Imgproc 几何平均 `0.7289 / 0.6337 / 0.8366`，meta 明确记录 `repo_git_dirty=false`，完整环境、命令参数与 upstream identity 已留存 | 补跑 forced scalar checksum 并同步文档索引 |
 | 2026-08-04 | B7 | `f94f2d8` + report artifacts | `IMGPROC_FLOOR` forced scalar stable 75/75 `OK`，实现均为 `cvh_scalar`、dispatch 均为 `scalar`、零 `opencv_ui` 误命中；UI stable/full、scalar fallback 和 checksum 证据闭环 | 支持矩阵确认无 API/type/enum 变化；同步 plan、compare README 与 result index；Linux x86_64 留待现有远端 CI |
+| 2026-08-06 | B7 | `87d92d2` | 推送同一实现树后手动执行 [x86 correctness #2](https://github.com/zihaomu/cvh/actions/runs/31067125539)，Ubuntu x86_64 / GCC 13.3 / Intel Xeon Platinum 8573C 在 27m28s 内成功：Release CTest 21/21、Core 213/213、Imgproc 194/194；AVX2 runtime probe 成功；ASan/UBSan 下 Core 213/213、Imgproc 194/194、Imgcodecs 8 pass + 1 optional HDR fixture skip，三个 test status 均为 0；test reports 上传成功 | B7 与本阶段全部关闭，保留长期 correctness、compare 和跨平台门禁 |
 
 ### 11.3 B0 当前证据
 
@@ -615,7 +616,7 @@ CVH time 全部改善 `16.4–34.6%`，没有超过 5% 的回退。性能 gate �
 最终代码在 UI 与 optimization-off 构建中均重编译完成，full imgproc 各
 194/194 通过，OpenCV contract 24/24 通过。B1 已关闭。
 
-### 11.5 B7 最终本地证据
+### 11.5 B7 最终跨平台证据
 
 最终 Apple ARM64 产物：
 
@@ -638,8 +639,18 @@ benchmark/opencv_compare/run_compare.sh \
 
 元数据冻结 CVH `f94f2d85ecf5e4b3dfa21b538952a5731838cd98` 且
 `repo_git_dirty=false`；OpenCV 为 4.14.0、revision
-`d48bf69f65444a13f8a34b8982b083c1b78fa0e8`。当前只缺同一 RC 的 Linux
-x86_64 远端 CI 结果，因此 B7 仍保持“进行中”。
+`d48bf69f65444a13f8a34b8982b083c1b78fa0e8`。
+
+Linux x86_64 证据来自
+[x86 correctness #2](https://github.com/zihaomu/cvh/actions/runs/31067125539)，
+执行 revision 为 `87d92d201779e5f3ee80ca5b9724451799ff8ad5`。该 revision 相对最终
+性能 RC 只增加报告与文档证据，Imgproc kernel 实现未变化。运行环境为 Ubuntu
+x86_64、GCC 13.3、Intel Xeon Platinum 8573C，CMake runtime probe 确认
+AVX2 可用。Release CTest 21/21、Core 213/213、Imgproc 194/194 通过；
+ASan/UBSan 构建中 Core 213/213、Imgproc 194/194、Imgcodecs 8 pass +
+1 个可选 HDR fixture skip，三个测试程序状态均为 0；报告上传步骤成功。
+至此 Apple ARM64 UI/scalar 与 Linux x86_64 UI/AVX2/scalar fallback 均有
+可追溯证据，B7 关闭。
 
 ## 12. 提交与回退边界
 
@@ -669,7 +680,9 @@ B2 和 B6 可继续按算子拆分。
 - [x] full tests、header compile、ODR、install、optimization-off 全部通过；
 - [x] forced scalar 与 forced UI 都通过 correctness 和 checksum；
 - [x] OpenCV upstream differential full matrix 无新增失败；
-- [ ] Apple ARM64 与 Linux x86_64 均有可追溯证据；
+- [x] Apple ARM64 与 Linux x86_64 均有可追溯证据；Linux x86_64
+      [x86 correctness #2](https://github.com/zihaomu/cvh/actions/runs/31067125539)
+      在 `87d92d2` 完整通过；
 - [x] Imgproc 相对性能几何平均达到 `0.8366 >= 0.50`；
 - [x] 全套相对性能几何平均达到 `0.7289 >= 0.55`；
 - [x] Phase 2-P0 stable focused 三轮中位数 `0.7696 >= 0.7336`；canonical
