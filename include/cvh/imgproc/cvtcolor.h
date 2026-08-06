@@ -1483,6 +1483,7 @@ inline void cvtColor_fallback(const Mat& src, Mat& dst, int code)
 #include "detail/cvtcolor_yuv420.hpp"
 #include "detail/cvtcolor_yuv422.hpp"
 #include "detail/cvtcolor_yuv444.hpp"
+#include "detail/cvtcolor_neon.hpp"
 #include "detail/cvtcolor_impl.hpp"
 
 namespace cvh {

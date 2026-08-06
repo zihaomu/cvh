@@ -1,7 +1,7 @@
 # cvh v0.1 高频 NEON 热点加速计划
 
 更新时间：2026-08-06  
-状态：H0 进行中；H1–H5 待执行
+状态：H0 完成；H1 进行中；H2–H5 待执行
 
 ## 1. 目的与阶段定位
 
@@ -254,8 +254,8 @@ case。若某项因 upstream 特殊 HAL 或平台库无法达到，必须保留�
 
 | 批次 | 内容 | 状态 | 主要产物 |
 | --- | --- | --- | --- |
-| H0 | focused matrix 与 stage dispatch 可信化 | 进行中 | baseline、`kernel_route`、三模式报告 |
-| H1 | CVTCOLOR packed/YUV U8 NEON | 待执行 | color NEON header、tests、before/after |
+| H0 | focused matrix 与 stage dispatch 可信化 | 完成 | baseline、`kernel_route`、三模式报告 |
+| H1 | CVTCOLOR packed/YUV U8 NEON | 进行中 | color NEON header、tests、before/after |
 | H2 | Resize bilinear U8C3 NEON | 待执行 | resize NEON header、tests、before/after |
 | H3 | Sobel/Scharr/spatialGradient shared NEON | 待执行 | derivative3 NEON header、tests、before/after |
 | H4 | 全量正确性与跨平台 fallback | 待执行 | ARM runtime、x86 compile/runtime、sanitizer evidence |
@@ -289,10 +289,62 @@ H0 只改善观测，不修改目标 kernel 性能。
 - 首次测试构建发现 compare runner 会重新配置同一 build directory 并关闭
   `CVH_BUILD_TESTS`。因此测试与 compare 从本记录起固定使用不同 build 目录，
   “无 target”不计为通过；
-- H0 剩余项：提交观测代码后，在 clean revision 上完成三轮 stable
-  Auto/UI/scalar baseline，并记录三轮中位数。
+- H0 观测代码提交为 `3af51d2`；在该 clean revision 上完成三轮 stable
+  Auto/UI/scalar baseline，每轮 210 行，metadata 均记录
+  `repo_git_dirty=false`；
+- Auto 三轮逐 case 中位数的 family relative 几何平均为：CVTCOLOR
+  `0.2003`、Resize `0.3571`、Sobel `0.4866`、Scharr `0.3938`、
+  spatialGradient `0.1775`；
+- 代表性 before：BGR2RGB `0.1273`、BGR2BGRA `0.0730`、I420-to-BGR
+  `0.0786`、Resize U8C3 0.75x `0.1803`、Sobel C1 1080p `0.4300`、
+  Scharr `0.3800`、spatialGradient `0.1809`；
+- 三轮 Auto dispatch 均为 52 scalar + 18 UI，ISA 均为 unknown；H0 所有
+  correctness、dispatch、schema 与 clean baseline 条件齐备，H0 关闭。
 
 ### H1：CVTCOLOR packed/YUV U8
+
+#### H1 实时记录（2026-08-06）
+
+- 已新增 `detail/cvtcolor_neon.hpp`，direct selector 仅允许 ARM64
+  `Auto/NeonOnly`、U8、至少一个 16-pixel vector block 且总像素不少于
+  256；UIOnly、ScalarOnly、小 workload 和非目标 code 保持原路径；
+- packed 第一批已覆盖 C3/C4 R/B swap、3->4 alpha fill、4->3 alpha drop、
+  BGRA/RGBA->GRAY、GRAY->C3/C4；BGR/RGB->GRAY UI 路径未被替换；
+- 新增 `CvtColorDispatchInternalTest`，覆盖 37 像素 tail、non-contiguous
+  ROI、Auto/NeonOnly/UIOnly/ScalarOnly、短 workload fallback 和 stage route；
+- packed 实现完成后，颜色专项 61/61 通过，Imgproc 独立头编译与 ODR smoke
+  通过；
+- 首轮 stable Auto 探测结果（尚未作为三轮 gate 结论）：BGR2RGB 480p 从
+  H0 `0.117590 ms` 降至 `0.016054 ms`，`7.32x`；BGR2BGRA 从
+  `0.245404 ms` 降至 `0.024856 ms`，`9.87x`；BGRA2GRAY 从
+  `0.163715 ms` 降至 `0.038531 ms`，`4.25x`；对应 relative 分别为
+  `1.0051`、`0.7479`、`0.9595`，均达到 packed `>=0.70` 初测 floor；
+- 三个代表 packed case 均报告 `dispatch=neon`、`isa=neon` 和实际
+  `load/shuffle-or-gray/store/tail` route；H1 继续实施 YUV，最终仍需三轮
+  clean stable 数据才能关闭 retention gate。
+- YUV decode 第一批已共用 fixed-point 8-lane conversion primitive，并接入
+  NV12/NV21、I420/YV12、YUY2/UYVY 的 16-pixel block；新增 direct 大图、
+  tail 与 non-contiguous step 的 scalar/NEON byte-exact 对照；
+- 首轮 stable Auto 探测中，I420->BGR 480p 从 H0 `0.842492 ms` 降至
+  `0.118158 ms`（`7.13x`，relative `0.5960`），YUY2->BGR 从
+  `0.391808 ms` 降至 `0.081146 ms`（`4.83x`，relative `0.8554`），
+  NV12->BGR 从 `0.389704 ms` 降至 `0.078004 ms`（`5.00x`，relative
+  `0.9066`）；三项均超过 YUV `>=0.45` 初测 floor，并具有完整 direct
+  NEON stage route；
+- YUV420 planar/semi-planar 与 YUV422 packed encode 已完成；2x2/2x1
+  chroma average 使用 widen pair sum 保持 `(sum+round)>>shift` 原合同；direct
+  non-contiguous ROI、tail 与 scalar byte-exact 测试通过；
+- encode 首轮 stable Auto：BGR->I420 480p 从 H0 `0.347540 ms` 降至
+  `0.073442 ms`（`4.73x`，relative `0.7421`），BGR->YUY2 从
+  `0.328054 ms` 降至 `0.078867 ms`（`4.16x`，relative `0.7449`）；
+- interleaved BGR/RGB<->YUV444 使用现有 float coefficient 和 AArch64 scalar
+  相同的 FMA evaluation order；随机 67x257 non-contiguous ROI 验证了 direct
+  路径 byte-exact，未用 fixed-point 近似替换舍入合同；
+- interleaved YUV444 首轮 stable Auto：BGR->YUV 480p `0.127002 ms`、
+  relative `0.5901`，YUV->BGR `0.116490 ms`、relative `0.4869`；相对 H0
+  分别提升约 `2.20x`、`2.40x`，均超过 YUV `>=0.45` 初测 floor；
+- H1 当前颜色专项 65/65 通过，独立头编译、ODR 和 `git diff --check`
+  通过；待 clean revision 三轮 stable Auto/UI/scalar 后关闭 H1。
 
 #### H1.1 Packed channel
 
@@ -456,8 +508,8 @@ git diff --check
 
 ## 11. 完成定义
 
-- [ ] H0 focused matrix 覆盖三类 family 的主流尺寸、ROI、tail 和 fallback；
-- [ ] 每个 focused case 均有完整
+- [x] H0 focused matrix 覆盖三类 family 的主流尺寸、ROI、tail 和 fallback；
+- [x] 每个 focused case 均有完整
       `algorithm_path -> dispatch_path -> isa_observed -> kernel_route`；
 - [ ] packed RGB/BGRA U8 达到 `relative >= 0.70`；
 - [ ] 目标 YUV U8 路径达到 `relative >= 0.45`；

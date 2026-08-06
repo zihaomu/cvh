@@ -19,6 +19,22 @@ inline void cvtColor_fast_impl(const Mat& src, Mat& dst, int code)
 
     if (src.depth() == CV_8U)
     {
+        if (cvtcolor_neon::try_cvtcolor_packed_u8(src, dst, code))
+        {
+            return;
+        }
+        if (cvtcolor_neon::try_cvtcolor_yuv_decode_u8(src, dst, code))
+        {
+            return;
+        }
+        if (cvtcolor_neon::try_cvtcolor_yuv_encode_u8(src, dst, code))
+        {
+            return;
+        }
+        if (cvtcolor_neon::try_cvtcolor_yuv_interleaved_u8(src, dst, code))
+        {
+            return;
+        }
         if (cvtcolor_rgb_gray_fastpath::try_cvtcolor_fastpath_u8_rgb_gray(src, dst, code))
         {
             return;

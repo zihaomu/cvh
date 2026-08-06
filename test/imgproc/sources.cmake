@@ -33,6 +33,7 @@ set(CVH_IMGPROC_TEST_SOURCES
     test/imgproc/intensity/equalize_hist_test.cpp
     test/imgproc/intensity/lut_test.cpp
     test/imgproc/intensity/threshold_test.cpp
+    test/imgproc/internal/cvtcolor_dispatch_test.cpp
     test/imgproc/internal/derivatives_dispatch_test.cpp
     test/imgproc/internal/median_blur_dispatch_test.cpp
     test/imgproc/internal/pyramid_dispatch_test.cpp
