@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "title": "The speedup came from changing data flow",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "canny-input", "role": "context", "text": "U8C1 image", "width": 220 },
+    { "id": "old-gradient-passes", "role": "objection", "text": "Two Sobel\npasses", "width": 280 },
+    { "id": "old-full-magnitude", "role": "objection", "text": "Full-frame\nmagnitude", "width": 300 },
+    { "id": "old-nms-copy", "role": "objection", "text": "Separate\nNMS buffer", "width": 280 },
+    { "id": "old-bounded-hysteresis", "role": "objection", "text": "Bounds check\nper neighbor", "width": 340 },
+    { "id": "new-fused-gradient", "role": "claim", "text": "New: fused\nGx + Gy", "width": 280 },
+    { "id": "new-magnitude-ring", "role": "inference", "text": "Three-row\nmagnitude ring", "width": 300 },
+    { "id": "new-state-map", "role": "inference", "text": "NMS writes\npadded state map", "width": 320 },
+    { "id": "new-offset-hysteresis", "role": "conclusion", "text": "Eight fixed offsets\nfor hysteresis", "width": 320 }
+  ],
+  "edges": [
+    { "from": "canny-input", "to": "old-gradient-passes", "label": "old path", "relation": "leads-to" },
+    { "from": "old-gradient-passes", "to": "old-full-magnitude", "label": "materialize", "relation": "causes" },
+    { "from": "old-full-magnitude", "to": "old-nms-copy", "label": "another pass", "relation": "causes" },
+    { "from": "old-nms-copy", "to": "old-bounded-hysteresis", "label": "scan again", "relation": "causes" },
+    { "from": "canny-input", "to": "new-fused-gradient", "label": "new path", "relation": "leads-to" },
+    { "from": "new-fused-gradient", "to": "new-magnitude-ring", "label": "stream rows", "relation": "leads-to" },
+    { "from": "new-magnitude-ring", "to": "new-state-map", "label": "NMS + threshold", "relation": "leads-to" },
+    { "from": "new-state-map", "to": "new-offset-hysteresis", "label": "padded border", "relation": "leads-to" }
+  ]
+}

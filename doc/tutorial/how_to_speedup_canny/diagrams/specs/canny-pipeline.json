@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "title": "Canny 把梯度变成细而连续的边缘",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "gray-input", "role": "context", "text": "U8 灰度图", "width": 240 },
+    { "id": "image-gradient", "role": "example", "text": "Sobel 梯度\nGx + Gy", "width": 260 },
+    { "id": "gradient-magnitude", "role": "inference", "text": "梯度强度\nL1 或 L2", "width": 240 },
+    { "id": "nonmax-suppression", "role": "claim", "text": "非极大值抑制", "width": 280 },
+    { "id": "double-threshold", "role": "example", "text": "抑制 / 弱边 / 强边", "width": 320 },
+    { "id": "edge-hysteresis", "role": "inference", "text": "从强边出发\n连接相邻弱边", "width": 320 },
+    { "id": "binary-edges", "role": "conclusion", "text": "细而连续的\n二值边缘图", "width": 280 }
+  ],
+  "edges": [
+    { "from": "gray-input", "to": "image-gradient", "label": "测量变化", "relation": "leads-to" },
+    { "from": "image-gradient", "to": "gradient-magnitude", "label": "合并两个方向", "relation": "leads-to" },
+    { "from": "gradient-magnitude", "to": "nonmax-suppression", "label": "细化梯度脊", "relation": "leads-to" },
+    { "from": "nonmax-suppression", "to": "double-threshold", "label": "分类", "relation": "leads-to" },
+    { "from": "double-threshold", "to": "edge-hysteresis", "label": "利用连通性", "relation": "leads-to" },
+    { "from": "edge-hysteresis", "to": "binary-edges", "label": "输出 0 或 255", "relation": "leads-to" }
+  ]
+}

@@ -451,8 +451,41 @@ TEST(ArrayDispatchInternalTest, ui_inrange_matches_scalar_for_bounds_roi_tail_an
         Scalar(-2.5, 20.25, 70.75),
         Scalar(127.5, 210.5, 300.0),
         actual);
-    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    EXPECT_EQ(
+        cpu::last_dispatch_tag(),
+        cpu::neon_runtime_available()
+            ? cpu::DispatchTag::NEON
+            : cpu::DispatchTag::OpenCVUI);
     expect_mat_bytes_equal(actual, scalar_bounds);
+
+    {
+        DispatchModeGuard neon_guard(cpu::DispatchMode::NeonOnly);
+        Mat forced_neon;
+        cpu::reset_last_dispatch_tag();
+        inRange(
+            src,
+            Scalar(-2.5, 20.25, 70.75),
+            Scalar(127.5, 210.5, 300.0),
+            forced_neon);
+        expect_mat_bytes_equal(forced_neon, scalar_bounds);
+        EXPECT_EQ(
+            cpu::last_dispatch_tag(),
+            cpu::neon_runtime_available()
+                ? cpu::DispatchTag::NEON
+                : cpu::DispatchTag::Scalar);
+    }
+    {
+        DispatchModeGuard ui_guard(cpu::DispatchMode::OpenCVUIOnly);
+        Mat forced_ui;
+        cpu::reset_last_dispatch_tag();
+        inRange(
+            src,
+            Scalar(-2.5, 20.25, 70.75),
+            Scalar(127.5, 210.5, 300.0),
+            forced_ui);
+        expect_mat_bytes_equal(forced_ui, scalar_bounds);
+        EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    }
 
     inRange(src, lower, upper, actual);
     EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
@@ -521,7 +554,11 @@ TEST(ArrayDispatchInternalTest, ui_inrange_matches_scalar_for_bounds_roi_tail_an
         inRange(alias, Scalar::all(5.5), Scalar::all(25.5), alias_expected);
     }
     inRange(alias, Scalar::all(5.5), Scalar::all(25.5), alias);
-    EXPECT_EQ(cpu::last_dispatch_tag(), cpu::DispatchTag::OpenCVUI);
+    EXPECT_EQ(
+        cpu::last_dispatch_tag(),
+        cpu::neon_runtime_available()
+            ? cpu::DispatchTag::NEON
+            : cpu::DispatchTag::OpenCVUI);
     expect_mat_bytes_equal(alias, alias_expected);
 
     Mat f64({2, 19}, CV_64FC1);

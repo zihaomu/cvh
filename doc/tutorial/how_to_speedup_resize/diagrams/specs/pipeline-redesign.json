@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "title": "性能转折点：向量化之后，还要让数据少折腾",
+  "direction": "RIGHT",
+  "nodes": [
+    {
+      "id": "u8c3-source",
+      "role": "context",
+      "text": "同一行 BGR bytes"
+    },
+    {
+      "id": "old-split-channels",
+      "role": "objection",
+      "text": "旧：拆成 B / G / R",
+      "width": 280
+    },
+    {
+      "id": "old-float-roundtrip",
+      "role": "objection",
+      "text": "U8 → float → 插值 → U8",
+      "width": 320
+    },
+    {
+      "id": "old-merge-channels",
+      "role": "objection",
+      "text": "重新交织 B / G / R",
+      "width": 280
+    },
+    {
+      "id": "new-byte-stream",
+      "role": "claim",
+      "text": "新：保持连续字节流",
+      "width": 280
+    },
+    {
+      "id": "new-integer-mix",
+      "role": "inference",
+      "text": "直接做整数插值",
+      "width": 260
+    },
+    {
+      "id": "new-vector-output",
+      "role": "conclusion",
+      "text": "每轮输出 16 bytes",
+      "width": 300
+    }
+  ],
+  "edges": [
+    {
+      "from": "u8c3-source",
+      "to": "old-split-channels",
+      "label": "旧路径",
+      "relation": "leads-to"
+    },
+    {
+      "from": "old-split-channels",
+      "to": "old-float-roundtrip",
+      "label": "格式转换多",
+      "relation": "leads-to"
+    },
+    {
+      "from": "old-float-roundtrip",
+      "to": "old-merge-channels",
+      "label": "再装回去",
+      "relation": "leads-to"
+    },
+    {
+      "from": "u8c3-source",
+      "to": "new-byte-stream",
+      "label": "换个视角",
+      "relation": "leads-to"
+    },
+    {
+      "from": "new-byte-stream",
+      "to": "new-integer-mix",
+      "label": "不拆通道",
+      "relation": "leads-to"
+    },
+    {
+      "from": "new-integer-mix",
+      "to": "new-vector-output",
+      "label": "直接批量写回",
+      "relation": "leads-to"
+    }
+  ]
+}

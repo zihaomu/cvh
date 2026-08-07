@@ -3,6 +3,7 @@
 #include "test/support/dispatch_mode_guard.hpp"
 #include "cvh.h"
 #include "cvh/core/detail/arithm_ui.hpp"
+#include "cvh/core/detail/cpu_features.hpp"
 #include "cvh/core/detail/dispatch_control.h"
 #include "gtest/gtest.h"
 

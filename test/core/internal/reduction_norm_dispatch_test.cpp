@@ -100,18 +100,23 @@ TEST(ReductionNormDispatchInternalTest,
                     }
 
                     DispatchModeGuard guard(cpu::DispatchMode::Auto);
+                    const cpu::DispatchTag expected_auto_tag =
+                        depth == CV_32F && channels == 1 && masked == 0 &&
+                                cpu::neon_runtime_available()
+                            ? cpu::DispatchTag::NEON
+                            : expected_norm_auto_tag(depth, ui_enabled);
                     cpu::reset_last_dispatch_tag();
                     const double auto_single =
                         norm(first, norm_type, active_mask);
                     EXPECT_EQ(
                         cpu::last_dispatch_tag(),
-                        expected_norm_auto_tag(depth, ui_enabled));
+                        expected_auto_tag);
                     cpu::reset_last_dispatch_tag();
                     const double auto_diff =
                         norm(first, second, norm_type, active_mask);
                     EXPECT_EQ(
                         cpu::last_dispatch_tag(),
-                        expected_norm_auto_tag(depth, ui_enabled));
+                        expected_auto_tag);
 
                     const double relative_tolerance =
                         depth == CV_32F ? 1e-6 : 0.0;
@@ -212,6 +217,104 @@ TEST(ReductionNormDispatchInternalTest,
         norm(f32_high, f32_low, NORM_L2),
         std::sqrt(33.0) * wide_difference,
         1e-12 * std::sqrt(33.0) * wide_difference);
+}
+
+TEST(ReductionNormDispatchInternalTest,
+     norm_f32_c1_direct_neon_covers_forced_modes_roi_and_tail)
+{
+    Mat first_owner({5, 75}, CV_32FC1);
+    Mat second_owner({5, 75}, CV_32FC1);
+    for (int row = 0; row < 5; ++row)
+    {
+        for (int column = 0; column < 75; ++column)
+        {
+            first_owner.at<float>(row, column) =
+                static_cast<float>((row * 31 + column * 7) % 43 - 21) *
+                0.125f;
+            second_owner.at<float>(row, column) =
+                static_cast<float>((row * 19 + column * 11) % 37 - 18) *
+                0.25f;
+        }
+    }
+    Mat first = first_owner.colRange(2, 73);
+    Mat second = second_owner.colRange(2, 73);
+    ASSERT_FALSE(first.isContinuous());
+
+    for (const int norm_type : {NORM_INF, NORM_L1, NORM_L2})
+    {
+        double expected_single = 0.0;
+        double expected_diff = 0.0;
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+            expected_single = norm(first, norm_type);
+            expected_diff = norm(first, second, norm_type);
+        }
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::NeonOnly);
+            cpu::reset_last_dispatch_tag();
+            const double actual_single = norm(first, norm_type);
+            EXPECT_EQ(
+                cpu::last_dispatch_tag(),
+                cpu::neon_runtime_available()
+                    ? cpu::DispatchTag::NEON
+                    : cpu::DispatchTag::Scalar);
+            if (cpu::neon_runtime_available())
+            {
+                EXPECT_NE(
+                    std::string(cpu::last_kernel_route()).find("merge=f64"),
+                    std::string::npos);
+            }
+            cpu::reset_last_dispatch_tag();
+            const double actual_diff = norm(first, second, norm_type);
+            EXPECT_EQ(
+                cpu::last_dispatch_tag(),
+                cpu::neon_runtime_available()
+                    ? cpu::DispatchTag::NEON
+                    : cpu::DispatchTag::Scalar);
+            const double tolerance = 1e-12 *
+                std::max({1.0, std::fabs(expected_single),
+                          std::fabs(expected_diff)});
+            EXPECT_NEAR(actual_single, expected_single, tolerance);
+            EXPECT_NEAR(actual_diff, expected_diff, tolerance);
+        }
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::OpenCVUIOnly);
+            cpu::reset_last_dispatch_tag();
+            (void)norm(first, norm_type);
+            EXPECT_NE(cpu::last_dispatch_tag(), cpu::DispatchTag::NEON);
+        }
+
+        Mat expected_normalized;
+        Mat actual_normalized;
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+            normalize(
+                first,
+                expected_normalized,
+                3.0,
+                0.0,
+                norm_type,
+                CV_32F);
+        }
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::NeonOnly);
+            cpu::reset_last_dispatch_tag();
+            normalize(
+                first,
+                actual_normalized,
+                3.0,
+                0.0,
+                norm_type,
+                CV_32F);
+            EXPECT_EQ(
+                cpu::last_dispatch_tag(),
+                cpu::neon_runtime_available()
+                    ? cpu::DispatchTag::NEON
+                    : cpu::DispatchTag::Scalar);
+        }
+        expect_f32_mat_close(
+            actual_normalized, expected_normalized, 2e-6f);
+    }
 }
 
 TEST(ReductionNormDispatchInternalTest,
@@ -332,5 +435,42 @@ TEST(ReductionNormDispatchInternalTest,
         EXPECT_FLOAT_EQ(
             reinterpret_cast<const float*>(constant_dst.data)[index],
             -4.0f);
+    }
+}
+
+TEST(ReductionNormDispatchInternalTest,
+     norm_f32_block_merge_stays_within_contract_across_multiple_chunks)
+{
+    Mat first({1, 4099}, CV_32FC1);
+    Mat second({1, 4099}, CV_32FC1);
+    for (int column = 0; column < first.size[1]; ++column)
+    {
+        first.at<float>(0, column) =
+            static_cast<float>((column * 37) % 997 - 498) / 31.0f;
+        second.at<float>(0, column) =
+            static_cast<float>((column * 53) % 991 - 495) / 29.0f;
+    }
+    for (const int norm_type : {NORM_INF, NORM_L1, NORM_L2})
+    {
+        double expected_single = 0.0;
+        double expected_diff = 0.0;
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+            expected_single = norm(first, norm_type);
+            expected_diff = norm(first, second, norm_type);
+        }
+        double actual_single = 0.0;
+        double actual_diff = 0.0;
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::NeonOnly);
+            actual_single = norm(first, norm_type);
+            actual_diff = norm(first, second, norm_type);
+        }
+        const double single_tolerance = 1e-6 *
+            std::max(1.0, std::fabs(expected_single));
+        const double diff_tolerance = 1e-6 *
+            std::max(1.0, std::fabs(expected_diff));
+        EXPECT_NEAR(actual_single, expected_single, single_tolerance);
+        EXPECT_NEAR(actual_diff, expected_diff, diff_tolerance);
     }
 }

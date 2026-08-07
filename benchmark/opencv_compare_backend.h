@@ -29,6 +29,29 @@ enum class CoreBinaryOpId
     Divide,
 };
 
+enum class CoreMatNeonOpId
+{
+    ReduceSumAxis0 = 0,
+    ReduceSumAxis1,
+    ReduceAvgAxis0,
+    ReduceAvgAxis1,
+    ReduceSum2Axis0,
+    ReduceSum2Axis1,
+    NormInf,
+    NormL1,
+    NormL2,
+    NormInfDiff,
+    NormL1Diff,
+    NormL2Diff,
+    NormalizeInf,
+    NormalizeL1,
+    NormalizeL2,
+    MeanStdDev,
+    Rotate90Clockwise,
+    Rotate90CounterClockwise,
+    InRangeScalar,
+};
+
 enum class ImgprocRoiOpId
 {
     ResizeLinear = 0,
@@ -85,6 +108,17 @@ double bench_opencv_binary(CoreBinaryOpId op,
                            int repeats,
                            std::uint32_t seed_a,
                            std::uint32_t seed_b);
+
+double bench_opencv_core_mat_neon(CoreMatNeonOpId op,
+                                  int rows,
+                                  int cols,
+                                  int channels,
+                                  bool roi,
+                                  int warmup,
+                                  int iters,
+                                  int repeats,
+                                  std::uint32_t seed_a,
+                                  std::uint32_t seed_b);
 
 double bench_opencv_transpose(int rows,
                               int cols,

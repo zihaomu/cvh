@@ -1,4 +1,5 @@
 #include "cvh.h"
+#include "cvh/imgproc/detail/resize_fixed_u8c3.hpp"
 #include "gtest/gtest.h"
 #include "opencv_contract_backend.h"
 #include "../support/dispatch_mode_guard.hpp"
@@ -7,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -369,6 +371,100 @@ TEST(OpenCVContractSmoke_TEST, imgproc_resize_linear_u8_matches_upstream)
         seed,
         dst.data,
         dst.total() * dst.elemSize()));
+}
+
+TEST(OpenCVContractSmoke_TEST,
+     imgproc_resize_fixed_u8c3_target_matches_upstream_exactly)
+{
+    const cvh::test::DispatchModeGuard dispatch_mode_guard;
+    struct Case
+    {
+        int src_rows;
+        int src_cols;
+        int dst_rows;
+        int dst_cols;
+        bool roi;
+        std::uint32_t seed;
+    };
+    const std::vector<Case> cases = {
+        {4, 4, 3, 3, false, 0x00000001u},
+        {64, 96, 48, 72, false, 0x12345678u},
+        {479, 641, 359, 480, true, 0x9e3779b9u},
+        {480, 640, 360, 480, false, 0x4e454f4eu},
+    };
+    for (const Case& test_case : cases)
+    {
+        SCOPED_TRACE(
+            std::to_string(test_case.src_rows) + "x" +
+            std::to_string(test_case.src_cols) + " -> " +
+            std::to_string(test_case.dst_rows) + "x" +
+            std::to_string(test_case.dst_cols) +
+            (test_case.roi ? " roi" : " continuous"));
+        Mat parent;
+        Mat src;
+        if (test_case.roi)
+        {
+            parent.create(
+                {test_case.src_rows + 2, test_case.src_cols + 5},
+                CV_8UC3);
+            src = parent(
+                Range(1, test_case.src_rows + 1),
+                Range(2, test_case.src_cols + 2));
+            ASSERT_FALSE(src.isContinuous());
+        }
+        else
+        {
+            src.create(
+                {test_case.src_rows, test_case.src_cols},
+                CV_8UC3);
+        }
+        fill_u8(src, test_case.seed);
+
+        Mat dst;
+        resize(
+            src,
+            dst,
+            Size(test_case.dst_cols, test_case.dst_rows),
+            0.0,
+            0.0,
+            INTER_LINEAR);
+        EXPECT_TRUE(
+            cvh_test_opencv_contract::validate_imgproc_resize_linear_u8(
+                test_case.src_rows,
+                test_case.src_cols,
+                test_case.dst_rows,
+                test_case.dst_cols,
+                3,
+                test_case.seed,
+                dst.data,
+                dst.total() * dst.elemSize()));
+    }
+
+    constexpr int src_rows = 480;
+    constexpr int src_cols = 640;
+    constexpr int dst_rows = 360;
+    constexpr int dst_cols = 480;
+    constexpr std::uint32_t seed = 0x4e454f4eu;
+
+    Mat src({src_rows, src_cols}, CV_8UC3);
+    fill_u8(src, seed);
+
+    Mat dst;
+    cvh::detail::resize_fixed_u8c3::resize_linear_scalar_reference(
+        src, dst, dst_rows, dst_cols);
+    ASSERT_EQ(dst.type(), CV_8UC3);
+    ASSERT_TRUE(dst.isContinuous());
+
+    EXPECT_TRUE(
+        cvh_test_opencv_contract::validate_imgproc_resize_linear_u8_exact(
+            src_rows,
+            src_cols,
+            dst_rows,
+            dst_cols,
+            3,
+            seed,
+            dst.data,
+            dst.total() * dst.elemSize()));
 }
 
 TEST(OpenCVContractSmoke_TEST, v01_neon_hot_paths_match_upstream)

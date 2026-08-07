@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "title": "Canny: from gradients to connected edges",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "gray-input", "role": "context", "text": "Gray U8 image", "width": 240 },
+    { "id": "image-gradient", "role": "example", "text": "Sobel gradient\nGx + Gy", "width": 260 },
+    { "id": "gradient-magnitude", "role": "inference", "text": "Magnitude\nL1 or L2", "width": 240 },
+    { "id": "nonmax-suppression", "role": "claim", "text": "Non-maximum\nsuppression", "width": 280 },
+    { "id": "double-threshold", "role": "example", "text": "0 / weak / strong", "width": 320 },
+    { "id": "edge-hysteresis", "role": "inference", "text": "Follow weak\nneighbors from\nstrong seeds", "width": 320 },
+    { "id": "binary-edges", "role": "conclusion", "text": "Thin connected\nedge map", "width": 280 }
+  ],
+  "edges": [
+    { "from": "gray-input", "to": "image-gradient", "label": "measure change", "relation": "leads-to" },
+    { "from": "image-gradient", "to": "gradient-magnitude", "label": "combine axes", "relation": "leads-to" },
+    { "from": "gradient-magnitude", "to": "nonmax-suppression", "label": "thin ridges", "relation": "leads-to" },
+    { "from": "nonmax-suppression", "to": "double-threshold", "label": "classify", "relation": "leads-to" },
+    { "from": "double-threshold", "to": "edge-hysteresis", "label": "use connectivity", "relation": "leads-to" },
+    { "from": "edge-hysteresis", "to": "binary-edges", "label": "emit 0 or 255", "relation": "leads-to" }
+  ]
+}

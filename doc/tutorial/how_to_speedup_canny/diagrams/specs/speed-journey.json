@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "1080p Canny 性能演进",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "baseline-latency", "role": "context", "text": "8 月 4 日基线\n67.17 ms", "width": 280 },
+    { "id": "fused-gradient-latency", "role": "example", "text": "融合 Gx + Gy\n49.48 ms", "width": 280 },
+    { "id": "state-map-latency", "role": "evidence", "text": "移除方向除法\n直接写状态图\n28.72 ms", "width": 300 },
+    { "id": "ring-buffer-latency", "role": "claim", "text": "三行环形缓存\n26.51 ms", "width": 280 },
+    { "id": "current-cvh-latency", "role": "conclusion", "text": "8 月 6 日 clean cvh\n26.82 ms", "width": 300 },
+    { "id": "current-opencv-latency", "role": "conclusion", "text": "同轮 OpenCV\n28.03 ms", "width": 300 }
+  ],
+  "edges": [
+    { "from": "baseline-latency", "to": "fused-gradient-latency", "label": "一次梯度扫描", "relation": "leads-to" },
+    { "from": "fused-gradient-latency", "to": "state-map-latency", "label": "融合 NMS 与阈值", "relation": "leads-to" },
+    { "from": "state-map-latency", "to": "ring-buffer-latency", "label": "不再保存整幅中间图", "relation": "leads-to" },
+    { "from": "ring-buffer-latency", "to": "current-cvh-latency", "label": "clean 验证", "relation": "supports" },
+    { "from": "current-cvh-latency", "to": "current-opencv-latency", "label": "约快 4.5%", "relation": "supports" }
+  ]
+}

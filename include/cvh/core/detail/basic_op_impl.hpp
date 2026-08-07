@@ -3,6 +3,7 @@
 
 #include "arithm_ui.hpp"
 #include "dispatch_control.h"
+#include "inrange_neon.hpp"
 #include "transpose_kernel.hpp"
 #include "../saturate.h"
 
@@ -2377,10 +2378,14 @@ inline void dispatch_inrange_mat(const Mat& src,
     if (applied)
     {
         cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        cpu::set_last_kernel_route(
+            "inrange:bounds=mat;load=opencv_ui;channel_reduce=scalar;tail=scalar");
         return;
     }
 
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    cpu::set_last_kernel_route(
+        "inrange:bounds=mat;load=scalar;channel_reduce=scalar");
     switch (src.depth())
     {
         case CV_8U: apply_inrange_mat_impl<uchar>(src, lower, upper, dst); break;
@@ -2402,6 +2407,29 @@ inline void dispatch_inrange_scalar(const Mat& src,
                                     Mat& dst,
                                     const char* fn_name)
 {
+    if (src.depth() == CV_8U)
+    {
+        uchar typed_lower[4] = {};
+        uchar typed_upper[4] = {};
+        prepare_scalar_inrange_bounds(
+            lower,
+            upper,
+            src.channels(),
+            typed_lower,
+            typed_upper);
+        if (detail::inrange_neon::apply_u8_scalar_bounds(
+                src, typed_lower, typed_upper, dst))
+        {
+            cpu::set_last_dispatch_tag(cpu::DispatchTag::NEON);
+            cpu::set_last_kernel_route(
+                src.channels() == 1
+                    ? "inrange:bounds=scalar;type=u8c1;load=neon;compare=inclusive;store=mask;tail=scalar"
+                    : src.channels() == 3
+                          ? "inrange:bounds=scalar;type=u8c3;load=neon_deinterleave;compare=inclusive;reduce=channel_and;store=mask;tail=scalar"
+                          : "inrange:bounds=scalar;type=u8c4;load=neon_deinterleave;compare=inclusive;reduce=channel_and;store=mask;tail=scalar");
+            return;
+        }
+    }
     bool applied = false;
     switch (src.depth())
     {
@@ -2421,10 +2449,14 @@ inline void dispatch_inrange_scalar(const Mat& src,
     if (applied)
     {
         cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        cpu::set_last_kernel_route(
+            "inrange:bounds=scalar;load=opencv_ui;channel_reduce=scalar;tail=scalar");
         return;
     }
 
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    cpu::set_last_kernel_route(
+        "inrange:bounds=scalar;load=scalar;channel_reduce=scalar");
     switch (src.depth())
     {
         case CV_8U: apply_inrange_scalar_impl<uchar>(src, lower, upper, dst); break;

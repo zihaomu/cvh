@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "title": "从会调用 cv::resize 到理解它为什么快",
+  "direction": "RIGHT",
+  "nodes": [
+    {
+      "id": "opencv-call",
+      "role": "context",
+      "text": "会调用 cv::resize"
+    },
+    {
+      "id": "nearest-model",
+      "role": "example",
+      "text": "最近邻：复制一个源像素"
+    },
+    {
+      "id": "bilinear-model",
+      "role": "example",
+      "text": "双线性：混合四个邻点"
+    },
+    {
+      "id": "readable-baseline",
+      "role": "inference",
+      "text": "写出可读的普通 C++"
+    },
+    {
+      "id": "measure-gap",
+      "role": "evidence",
+      "text": "对比 OpenCV：慢约 2.8x"
+    },
+    {
+      "id": "optimize-dataflow",
+      "role": "claim",
+      "text": "预计算、定点、字节流、SIMD",
+      "width": 280
+    },
+    {
+      "id": "reliable-product",
+      "role": "conclusion",
+      "text": "专用快路径 + 通用回退",
+      "width": 280
+    }
+  ],
+  "edges": [
+    {
+      "from": "opencv-call",
+      "to": "nearest-model",
+      "label": "先建立直觉",
+      "relation": "leads-to"
+    },
+    {
+      "from": "nearest-model",
+      "to": "bilinear-model",
+      "label": "减少锯齿",
+      "relation": "leads-to"
+    },
+    {
+      "from": "bilinear-model",
+      "to": "readable-baseline",
+      "label": "翻译成代码",
+      "relation": "leads-to"
+    },
+    {
+      "from": "readable-baseline",
+      "to": "measure-gap",
+      "label": "正确后再测速",
+      "relation": "leads-to"
+    },
+    {
+      "from": "measure-gap",
+      "to": "optimize-dataflow",
+      "label": "数据决定方向",
+      "relation": "supports"
+    },
+    {
+      "from": "optimize-dataflow",
+      "to": "reliable-product",
+      "label": "验证后接入",
+      "relation": "leads-to"
+    }
+  ]
+}

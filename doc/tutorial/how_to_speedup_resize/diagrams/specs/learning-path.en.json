@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "title": "From calling cv::resize to understanding why it is fast",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "opencv-call", "role": "context", "text": "Call cv::resize", "width": 220 },
+    { "id": "nearest-model", "role": "example", "text": "Nearest:\ncopy one pixel", "width": 280 },
+    { "id": "bilinear-model", "role": "example", "text": "Bilinear:\nmix four neighbors", "width": 300 },
+    { "id": "readable-baseline", "role": "inference", "text": "Readable\nscalar C++", "width": 280 },
+    { "id": "measure-gap", "role": "evidence", "text": "OpenCV comparison:\n2.8x slower", "width": 340 },
+    { "id": "optimize-dataflow", "role": "claim", "text": "Maps + fixed point\nbyte stream + SIMD", "width": 380 },
+    { "id": "reliable-product", "role": "conclusion", "text": "Fast paths\n+ reliable fallback", "width": 340 }
+  ],
+  "edges": [
+    { "from": "opencv-call", "to": "nearest-model", "label": "build intuition", "relation": "leads-to" },
+    { "from": "nearest-model", "to": "bilinear-model", "label": "improve quality", "relation": "leads-to" },
+    { "from": "bilinear-model", "to": "readable-baseline", "label": "turn into code", "relation": "leads-to" },
+    { "from": "readable-baseline", "to": "measure-gap", "label": "measure after correctness", "relation": "leads-to" },
+    { "from": "measure-gap", "to": "optimize-dataflow", "label": "let data choose", "relation": "supports" },
+    { "from": "optimize-dataflow", "to": "reliable-product", "label": "validate and integrate", "relation": "leads-to" }
+  ]
+}

@@ -246,3 +246,105 @@ TEST(ReductionAxisDispatchInternalTest,
             cpu::DispatchTag::Scalar);
     }
 }
+
+TEST(ReductionAxisDispatchInternalTest,
+     reduce_f32_c1_direct_neon_covers_axes_rtypes_roi_and_forced_modes)
+{
+    Mat owner({9, 23}, CV_32FC1);
+    for (int row = 0; row < owner.size.p[0]; ++row)
+    {
+        for (int column = 0; column < owner.size.p[1]; ++column)
+        {
+            owner.at<float>(row, column) =
+                static_cast<float>((row * 29 + column * 7) % 41 - 20) /
+                8.0f;
+        }
+    }
+    Mat src = owner.colRange(2, 21);
+    ASSERT_FALSE(src.isContinuous());
+
+    for (const int axis : {0, 1})
+    {
+        for (const int rtype : {REDUCE_SUM, REDUCE_AVG, REDUCE_SUM2})
+        {
+            Mat expected;
+            {
+                DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+                reduce(src, expected, axis, rtype, CV_32F);
+            }
+            Mat actual;
+            {
+                DispatchModeGuard guard(cpu::DispatchMode::NeonOnly);
+                cpu::reset_last_dispatch_tag();
+                reduce(src, actual, axis, rtype, CV_32F);
+                EXPECT_EQ(
+                    cpu::last_dispatch_tag(),
+                    cpu::neon_runtime_available()
+                        ? cpu::DispatchTag::NEON
+                        : cpu::DispatchTag::Scalar);
+            }
+            expect_reduce_mat_close(actual, expected, 1e-6, 1e-6);
+
+            Mat ui_result;
+            {
+                DispatchModeGuard guard(cpu::DispatchMode::OpenCVUIOnly);
+                cpu::reset_last_dispatch_tag();
+                reduce(src, ui_result, axis, rtype, CV_32F);
+                EXPECT_NE(cpu::last_dispatch_tag(), cpu::DispatchTag::NEON);
+            }
+            expect_reduce_mat_close(ui_result, expected, 1e-6, 1e-6);
+        }
+    }
+}
+
+TEST(ReductionAxisDispatchInternalTest,
+     reduce_f32_axis0_block_merge_preserves_accuracy_and_extreme_fallback)
+{
+    Mat src({259, 19}, CV_32FC1);
+    for (int row = 0; row < src.size[0]; ++row)
+    {
+        for (int column = 0; column < src.size[1]; ++column)
+        {
+            src.at<float>(row, column) =
+                static_cast<float>((row * 37 + column * 17) % 101 - 50) /
+                16.0f;
+        }
+    }
+    for (const int rtype : {REDUCE_SUM, REDUCE_AVG, REDUCE_SUM2})
+    {
+        Mat expected;
+        Mat actual;
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+            reduce(src, expected, 0, rtype, CV_32F);
+        }
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::NeonOnly);
+            reduce(src, actual, 0, rtype, CV_32F);
+            EXPECT_EQ(
+                cpu::last_dispatch_tag(),
+                cpu::neon_runtime_available()
+                    ? cpu::DispatchTag::NEON
+                    : cpu::DispatchTag::Scalar);
+        }
+        expect_reduce_mat_close(actual, expected, 1e-5, 1e-5);
+    }
+
+    src.setTo(Scalar::all(1.0e38));
+    Mat expected_average;
+    Mat actual_average;
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+        reduce(src, expected_average, 0, REDUCE_AVG, CV_32F);
+    }
+    {
+        DispatchModeGuard guard(cpu::DispatchMode::NeonOnly);
+        reduce(src, actual_average, 0, REDUCE_AVG, CV_32F);
+    }
+    EXPECT_EQ(cpu::last_dispatch_tag(),
+              cpu::neon_runtime_available()
+                  ? cpu::DispatchTag::NEON
+                  : cpu::DispatchTag::Scalar);
+    expect_reduce_mat_close(
+        actual_average, expected_average, 1e-6, 1e-6);
+}

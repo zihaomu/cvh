@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "title": "Bilinear interpolation: two one-dimensional blends",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "destination-pixel", "role": "context", "text": "Destination pixel", "width": 260 },
+    { "id": "fractional-source", "role": "inference", "text": "Source position:\n(12.25, 7.60)", "width": 360 },
+    { "id": "four-neighbors", "role": "example", "text": "P00   P01\nP10   P11", "width": 360 },
+    { "id": "row-interpolation", "role": "inference", "text": "Blend both rows\nat 25%", "width": 320 },
+    { "id": "column-interpolation", "role": "conclusion", "text": "Blend both results\nat 60%", "width": 320 }
+  ],
+  "edges": [
+    { "from": "destination-pixel", "to": "fractional-source", "label": "look back into source", "relation": "leads-to" },
+    { "from": "fractional-source", "to": "four-neighbors", "label": "one pixel is not enough", "relation": "leads-to" },
+    { "from": "four-neighbors", "to": "row-interpolation", "label": "horizontal first", "relation": "leads-to" },
+    { "from": "row-interpolation", "to": "column-interpolation", "label": "then vertical", "relation": "leads-to" }
+  ]
+}

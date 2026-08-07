@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "滞后连接用连通性区分边缘与噪声",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "threshold-state-map", "role": "context", "text": "状态图\n0 / 弱边 / 强边", "width": 300 },
+    { "id": "strong-edge-seed", "role": "claim", "text": "从强边像素出发", "width": 280 },
+    { "id": "connected-weak-chain", "role": "inference", "text": "沿 8 邻域\n遍历相连弱边", "width": 340 },
+    { "id": "retained-edge-chain", "role": "conclusion", "text": "保留整条\n连通边缘", "width": 300 },
+    { "id": "isolated-weak-pixel", "role": "objection", "text": "没有连接强边的\n孤立弱像素", "width": 320 },
+    { "id": "discarded-noise", "role": "conclusion", "text": "作为噪声丢弃", "width": 280 }
+  ],
+  "edges": [
+    { "from": "threshold-state-map", "to": "strong-edge-seed", "label": "状态为强边", "relation": "leads-to" },
+    { "from": "strong-edge-seed", "to": "connected-weak-chain", "label": "栈式 DFS", "relation": "leads-to" },
+    { "from": "connected-weak-chain", "to": "retained-edge-chain", "label": "提升为边缘", "relation": "leads-to" },
+    { "from": "threshold-state-map", "to": "isolated-weak-pixel", "label": "状态为弱边", "relation": "leads-to" },
+    { "from": "isolated-weak-pixel", "to": "discarded-noise", "label": "不会被访问", "relation": "leads-to" }
+  ]
+}

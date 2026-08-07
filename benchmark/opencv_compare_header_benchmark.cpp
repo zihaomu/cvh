@@ -6,6 +6,7 @@
 #include "opencv_compare_phase2_benchmark.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
@@ -17,6 +18,10 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#if defined(__APPLE__)
+#include <pthread.h>
+#endif
 
 #ifndef CVH_COMPARE_IMPL_NAME
 #define CVH_COMPARE_IMPL_NAME "cvh_auto"
@@ -69,6 +74,44 @@ struct ShapeCase
 };
 
 volatile std::uint64_t g_sink = 0;
+
+void configure_benchmark_qos()
+{
+#if defined(__APPLE__)
+    const int result =
+        pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0);
+    if (result != 0)
+    {
+        std::cerr << "opencv_compare: warning: failed to set macOS "
+                     "user-initiated QoS (error="
+                  << result << ")\n";
+    }
+    else
+    {
+        std::cout << "opencv_compare: macos_qos=user_initiated\n";
+    }
+#endif
+}
+
+void precondition_benchmark_cpu()
+{
+#if defined(__APPLE__)
+    constexpr auto duration = std::chrono::seconds(3);
+    const auto deadline = std::chrono::steady_clock::now() + duration;
+    std::uint64_t value = g_sink + 0x9e3779b97f4a7c15ULL;
+    do
+    {
+        for (int iteration = 0; iteration < 4096; ++iteration)
+        {
+            value ^= value << 13;
+            value ^= value >> 7;
+            value ^= value << 17;
+        }
+    } while (std::chrono::steady_clock::now() < deadline);
+    g_sink ^= value;
+    std::cout << "opencv_compare: process_warmup_ms=3000\n";
+#endif
+}
 
 void require_opencv_ui_dispatch(const char* op, const char* variant)
 {
@@ -143,7 +186,7 @@ void usage()
         << "Usage: cvh_benchmark_opencv_compare "
         << "[--profile quick|stable|full] [--warmup N] [--iters N] [--repeats N] "
         << "[--threads N] [--impl cvh_auto|cvh_ui|cvh_scalar] "
-        << "[--ops GEMM|PHASE2_P0|IMGPROC_FLOOR|V01_NEON_HOT] "
+        << "[--ops GEMM|PHASE2_P0|IMGPROC_FLOOR|V01_NEON_HOT|CORE_MAT_NEON|CORE_MAT_NEON_RETAINED] "
         << "[--output path]\n";
 }
 
@@ -231,10 +274,11 @@ Args parse_args(int argc, char** argv)
     }
     if (!args.ops.empty() && args.ops != "GEMM" &&
         args.ops != "PHASE2_P0" && args.ops != "IMGPROC_FLOOR" &&
-        args.ops != "V01_NEON_HOT")
+        args.ops != "V01_NEON_HOT" && args.ops != "CORE_MAT_NEON" &&
+        args.ops != "CORE_MAT_NEON_RETAINED")
     {
         std::cerr << "Unsupported --ops value: " << args.ops
-                  << " (currently supported: GEMM, PHASE2_P0, IMGPROC_FLOOR, V01_NEON_HOT)\n";
+                  << " (currently supported: GEMM, PHASE2_P0, IMGPROC_FLOOR, V01_NEON_HOT, CORE_MAT_NEON, CORE_MAT_NEON_RETAINED)\n";
         std::exit(2);
     }
     return args;
@@ -731,7 +775,7 @@ void append_core_compute_cases(const Args& args, std::vector<CompareRow>& rows)
                         args.repeats,
                         seed_a,
                         seed_b);
-                    append_row(
+                    append_observed_row(
                         rows,
                         args,
                         "core_mat",
@@ -798,6 +842,361 @@ void append_core_compute_cases(const Args& args, std::vector<CompareRow>& rows)
         }
     }
 
+}
+
+void append_core_convert_scale_abs_cases(
+    const Args& args, std::vector<CompareRow>& rows)
+{
+    constexpr std::uint32_t seed = 0x51A7u;
+    for (const auto& shape : build_shapes(args.profile))
+    {
+        cvh::Mat src({shape.rows, shape.cols}, CV_32FC3);
+        cvh::Mat dst;
+        fill_by_depth(src, DepthId::F32, seed);
+        cvh::convertScaleAbs(src, dst, 1.5, 2.0);
+        cvh::cpu::reset_last_dispatch_tag();
+        const double cvh_ms = measure_cvh_mat_ms(
+            [&]() { cvh::convertScaleAbs(src, dst, 1.5, 2.0); },
+            dst,
+            args);
+        const double opencv_ms = bench_opencv_phase1(
+            Phase1OpId::ConvertScaleAbs,
+            shape.rows,
+            shape.cols,
+            args.warmup,
+            args.iters,
+            args.repeats,
+            seed);
+        append_observed_row(
+            rows,
+            args,
+            "core_mat",
+            "CONVERT_SCALE_ABS",
+            "f32c3_to_u8c3",
+            "phase1_public_header",
+            "CV_32F",
+            3,
+            shape_string(shape),
+            cvh_ms,
+            opencv_ms,
+            "diagnostic_candidate;checksum=enabled");
+    }
+}
+
+cvh::Mat make_core_mat_neon_source(int rows,
+                                   int cols,
+                                   DepthId depth,
+                                   int channels,
+                                   bool roi,
+                                   std::uint32_t seed,
+                                   cvh::Mat& owner)
+{
+    owner.create(
+        {rows + (roi ? 2 : 0), cols + (roi ? 3 : 0)},
+        CV_MAKETYPE(depth == DepthId::U8 ? CV_8U : CV_32F, channels));
+    fill_by_depth(owner, depth, seed);
+    if (!roi)
+    {
+        return owner;
+    }
+    return owner(
+        cvh::Range(1, rows + 1),
+        cvh::Range(1, cols + 1));
+}
+
+void append_core_mat_neon_cases_for_shape(const Args& args,
+                                          const ShapeCase& shape,
+                                          bool roi,
+                                          std::vector<CompareRow>& rows)
+{
+    constexpr std::uint32_t seed_a = 0xC301u;
+    constexpr std::uint32_t seed_b = 0xC402u;
+    const std::string layout = roi ? "roi" : "continuous";
+    const std::string shape_name = shape_string(shape);
+    const std::string note =
+        "focused=core_mat_neon;correctness=opencv_contract;layout=" + layout;
+
+    cvh::Mat f32_owner;
+    cvh::Mat f32_peer_owner;
+    const cvh::Mat f32 = make_core_mat_neon_source(
+        shape.rows, shape.cols, DepthId::F32, 1, roi, seed_a, f32_owner);
+    const cvh::Mat f32_peer = make_core_mat_neon_source(
+        shape.rows, shape.cols, DepthId::F32, 1, roi, seed_b, f32_peer_owner);
+
+    struct ReduceCase
+    {
+        CoreMatNeonOpId id;
+        const char* variant;
+        int axis;
+        int rtype;
+    };
+    const ReduceCase reduce_cases[] = {
+        {CoreMatNeonOpId::ReduceSumAxis0, "sum_axis0", 0, cvh::REDUCE_SUM},
+        {CoreMatNeonOpId::ReduceSumAxis1, "sum_axis1", 1, cvh::REDUCE_SUM},
+        {CoreMatNeonOpId::ReduceAvgAxis0, "avg_axis0", 0, cvh::REDUCE_AVG},
+        {CoreMatNeonOpId::ReduceAvgAxis1, "avg_axis1", 1, cvh::REDUCE_AVG},
+        {CoreMatNeonOpId::ReduceSum2Axis0, "sum2_axis0", 0, cvh::REDUCE_SUM2},
+        {CoreMatNeonOpId::ReduceSum2Axis1, "sum2_axis1", 1, cvh::REDUCE_SUM2},
+    };
+    for (const ReduceCase& reduce_case : reduce_cases)
+    {
+        cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
+        const double cvh_ms = measure_cvh_mat_ms(
+            [&]() {
+                cvh::reduce(
+                    f32,
+                    dst,
+                    reduce_case.axis,
+                    reduce_case.rtype,
+                    CV_32F);
+            },
+            dst,
+            args);
+        const double opencv_ms = bench_opencv_core_mat_neon(
+            reduce_case.id,
+            shape.rows,
+            shape.cols,
+            1,
+            roi,
+            args.warmup,
+            args.iters,
+            args.repeats,
+            seed_a,
+            seed_b);
+        append_observed_row(
+            rows, args, "core_mat", "REDUCE", reduce_case.variant,
+            "reduction_axis", "CV_32F", 1, shape_name,
+            cvh_ms, opencv_ms, note);
+        rows.back().layout = layout;
+    }
+
+    struct NormCase
+    {
+        CoreMatNeonOpId id;
+        const char* variant;
+        int norm_type;
+        bool difference;
+    };
+    const NormCase norm_cases[] = {
+        {CoreMatNeonOpId::NormInf, "inf_single", cvh::NORM_INF, false},
+        {CoreMatNeonOpId::NormL1, "l1_single", cvh::NORM_L1, false},
+        {CoreMatNeonOpId::NormL2, "l2_single", cvh::NORM_L2, false},
+        {CoreMatNeonOpId::NormInfDiff, "inf_diff", cvh::NORM_INF, true},
+        {CoreMatNeonOpId::NormL1Diff, "l1_diff", cvh::NORM_L1, true},
+        {CoreMatNeonOpId::NormL2Diff, "l2_diff", cvh::NORM_L2, true},
+    };
+    for (const NormCase& norm_case : norm_cases)
+    {
+        double value = 0.0;
+        cvh::cpu::reset_last_dispatch_tag();
+        const double cvh_ms = measure_cvh_ms(
+            [&]() {
+                value = norm_case.difference
+                    ? cvh::norm(f32, f32_peer, norm_case.norm_type)
+                    : cvh::norm(f32, norm_case.norm_type);
+            },
+            [&]() { return value; },
+            args);
+        const double opencv_ms = bench_opencv_core_mat_neon(
+            norm_case.id,
+            shape.rows,
+            shape.cols,
+            1,
+            roi,
+            args.warmup,
+            args.iters,
+            args.repeats,
+            seed_a,
+            seed_b);
+        append_observed_row(
+            rows, args, "core_mat", "NORM", norm_case.variant,
+            "reduction_norm", "CV_32F", 1, shape_name,
+            cvh_ms, opencv_ms, note);
+        rows.back().layout = layout;
+    }
+
+    struct NormalizeCase
+    {
+        CoreMatNeonOpId id;
+        const char* variant;
+        int norm_type;
+    };
+    const NormalizeCase normalize_cases[] = {
+        {CoreMatNeonOpId::NormalizeInf, "inf", cvh::NORM_INF},
+        {CoreMatNeonOpId::NormalizeL1, "l1", cvh::NORM_L1},
+        {CoreMatNeonOpId::NormalizeL2, "l2", cvh::NORM_L2},
+    };
+    for (const NormalizeCase& normalize_case : normalize_cases)
+    {
+        cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
+        const double cvh_ms = measure_cvh_mat_ms(
+            [&]() {
+                cvh::normalize(
+                    f32,
+                    dst,
+                    1.0,
+                    0.0,
+                    normalize_case.norm_type,
+                    CV_32F);
+            },
+            dst,
+            args);
+        const double opencv_ms = bench_opencv_core_mat_neon(
+            normalize_case.id,
+            shape.rows,
+            shape.cols,
+            1,
+            roi,
+            args.warmup,
+            args.iters,
+            args.repeats,
+            seed_a,
+            seed_b);
+        append_observed_row(
+            rows, args, "core_mat", "NORMALIZE", normalize_case.variant,
+            "normalize", "CV_32F", 1, shape_name,
+            cvh_ms, opencv_ms, note);
+        rows.back().layout = layout;
+    }
+
+    for (const int channels : {1, 3})
+    {
+        cvh::Mat owner;
+        const cvh::Mat src = make_core_mat_neon_source(
+            shape.rows,
+            shape.cols,
+            DepthId::F32,
+            channels,
+            roi,
+            seed_a,
+            owner);
+        cvh::Scalar mean;
+        cvh::Scalar stddev;
+        cvh::cpu::reset_last_dispatch_tag();
+        const double cvh_ms = measure_cvh_ms(
+            [&]() { cvh::meanStdDev(src, mean, stddev); },
+            [&]() {
+                double checksum = 0.0;
+                for (int channel = 0; channel < channels; ++channel)
+                {
+                    checksum += mean[channel] + stddev[channel];
+                }
+                return checksum;
+            },
+            args);
+        const double opencv_ms = bench_opencv_core_mat_neon(
+            CoreMatNeonOpId::MeanStdDev,
+            shape.rows,
+            shape.cols,
+            channels,
+            roi,
+            args.warmup,
+            args.iters,
+            args.repeats,
+            seed_a,
+            seed_b);
+        append_observed_row(
+            rows, args, "core_mat", "MEAN_STDDEV",
+            "f32c" + std::to_string(channels),
+            "stable_statistics", "CV_32F", channels, shape_name,
+            cvh_ms, opencv_ms, note);
+        rows.back().layout = layout;
+    }
+
+    for (const int channels : {1, 3, 4})
+    {
+        cvh::Mat owner;
+        const cvh::Mat src = make_core_mat_neon_source(
+            shape.rows,
+            shape.cols,
+            DepthId::U8,
+            channels,
+            roi,
+            seed_a,
+            owner);
+        struct RotateCase
+        {
+            CoreMatNeonOpId id;
+            const char* variant;
+            int code;
+        };
+        const RotateCase rotate_cases[] = {
+            {CoreMatNeonOpId::Rotate90Clockwise,
+             "clockwise", cvh::ROTATE_90_CLOCKWISE},
+            {CoreMatNeonOpId::Rotate90CounterClockwise,
+             "counterclockwise", cvh::ROTATE_90_COUNTERCLOCKWISE},
+        };
+        for (const RotateCase& rotate_case : rotate_cases)
+        {
+            cvh::Mat dst;
+            cvh::cpu::reset_last_dispatch_tag();
+            const double cvh_ms = measure_cvh_mat_ms(
+                [&]() { cvh::rotate(src, dst, rotate_case.code); },
+                dst,
+                args);
+            const double opencv_ms = bench_opencv_core_mat_neon(
+                rotate_case.id,
+                shape.rows,
+                shape.cols,
+                channels,
+                roi,
+                args.warmup,
+                args.iters,
+                args.repeats,
+                seed_a,
+                seed_b);
+            append_observed_row(
+                rows, args, "core_mat", "ROTATE90",
+                std::string(rotate_case.variant) + "_u8c" +
+                    std::to_string(channels),
+                "rotate90", "CV_8U", channels, shape_name,
+                cvh_ms, opencv_ms, note);
+            rows.back().layout = layout;
+        }
+
+        cvh::Mat dst;
+        cvh::cpu::reset_last_dispatch_tag();
+        const double cvh_ms = measure_cvh_mat_ms(
+            [&]() {
+                cvh::inRange(
+                    src,
+                    cvh::Scalar::all(64.0),
+                    cvh::Scalar::all(192.0),
+                    dst);
+            },
+            dst,
+            args);
+        const double opencv_ms = bench_opencv_core_mat_neon(
+            CoreMatNeonOpId::InRangeScalar,
+            shape.rows,
+            shape.cols,
+            channels,
+            roi,
+            args.warmup,
+            args.iters,
+            args.repeats,
+            seed_a,
+            seed_b);
+        append_observed_row(
+            rows, args, "core_mat", "IN_RANGE",
+            "scalar_bounds_u8c" + std::to_string(channels),
+            "inrange_scalar", "CV_8U", channels, shape_name,
+            cvh_ms, opencv_ms, note);
+        rows.back().layout = layout;
+    }
+}
+
+void append_core_mat_neon_cases(const Args& args,
+                                std::vector<CompareRow>& rows)
+{
+    for (const ShapeCase& shape : build_shapes(args.profile))
+    {
+        append_core_mat_neon_cases_for_shape(args, shape, false, rows);
+    }
+    append_core_mat_neon_cases_for_shape(
+        args, ShapeCase {479, 641}, true, rows);
 }
 
 void append_gemm_compare_cases(
@@ -2281,6 +2680,8 @@ bool is_v01_neon_hot_op(const std::string& op)
 
 int main(int argc, char** argv)
 {
+    cvh_bench_compare::configure_benchmark_qos();
+    cvh_bench_compare::precondition_benchmark_cpu();
     const auto args = cvh_bench_compare::parse_args(argc, argv);
     cvh::cpu::set_dispatch_mode(
         args.impl == "cvh_scalar"
@@ -2330,6 +2731,36 @@ int main(int argc, char** argv)
                 rows.end(),
                 [](const cvh_bench_compare::CompareRow& row) {
                     return !cvh_bench_compare::is_v01_neon_hot_op(row.op);
+                }),
+            rows.end());
+    }
+    else if (args.ops == "CORE_MAT_NEON")
+    {
+        cvh_bench_compare::append_core_compute_cases(args, rows);
+        rows.erase(
+            std::remove_if(
+                rows.begin(),
+                rows.end(),
+                [](const cvh_bench_compare::CompareRow& row) {
+                    return row.op != "ADD" && row.op != "SUBTRACT" &&
+                           row.op != "MULTIPLY";
+                }),
+            rows.end());
+        cvh_bench_compare::append_core_convert_scale_abs_cases(args, rows);
+        cvh_bench_compare::append_core_mat_neon_cases(args, rows);
+    }
+    else if (args.ops == "CORE_MAT_NEON_RETAINED")
+    {
+        cvh_bench_compare::append_core_mat_neon_cases(args, rows);
+        rows.erase(
+            std::remove_if(
+                rows.begin(),
+                rows.end(),
+                [](const cvh_bench_compare::CompareRow& row) {
+                    return row.op != "REDUCE" && row.op != "NORM" &&
+                           row.op != "NORMALIZE" && row.op != "IN_RANGE" &&
+                           !(row.op == "MEAN_STDDEV" &&
+                             row.variant == "f32c3");
                 }),
             rows.end());
     }

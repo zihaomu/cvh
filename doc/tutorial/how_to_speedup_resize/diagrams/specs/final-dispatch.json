@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "title": "一个 API，内部选择最合适的实现",
+  "direction": "DOWN",
+  "nodes": [
+    {
+      "id": "public-call",
+      "role": "context",
+      "text": "cvh::resize(src, dst, ...)"
+    },
+    {
+      "id": "inspect-case",
+      "role": "inference",
+      "text": "检查类型、通道、比例、图像大小和 CPU",
+      "width": 360
+    },
+    {
+      "id": "half-kernel",
+      "role": "example",
+      "text": "0.5x：2×2 专用平均",
+      "width": 260
+    },
+    {
+      "id": "three-quarter-kernel",
+      "role": "claim",
+      "text": "0.75x：定点字节流 NEON",
+      "width": 300
+    },
+    {
+      "id": "generic-u8-kernel",
+      "role": "example",
+      "text": "其他 U8：通用优化路径",
+      "width": 280
+    },
+    {
+      "id": "safe-fallback",
+      "role": "conclusion",
+      "text": "小图、F32、非 ARM：可靠回退",
+      "width": 340
+    }
+  ],
+  "edges": [
+    {
+      "from": "public-call",
+      "to": "inspect-case",
+      "label": "用户只看见一个 API",
+      "relation": "leads-to"
+    },
+    {
+      "from": "inspect-case",
+      "to": "half-kernel",
+      "label": "精确 0.5x",
+      "relation": "leads-to"
+    },
+    {
+      "from": "inspect-case",
+      "to": "three-quarter-kernel",
+      "label": "目标 0.75x",
+      "relation": "leads-to"
+    },
+    {
+      "from": "inspect-case",
+      "to": "generic-u8-kernel",
+      "label": "其他常见 U8",
+      "relation": "leads-to"
+    },
+    {
+      "from": "inspect-case",
+      "to": "safe-fallback",
+      "label": "快路径不适用",
+      "relation": "leads-to"
+    }
+  ]
+}

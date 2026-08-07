@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "title": "真正的提速来自数据流重构",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "canny-input", "role": "context", "text": "U8C1 图像", "width": 220 },
+    { "id": "old-gradient-passes", "role": "objection", "text": "旧路径：两次\nSobel 扫描", "width": 280 },
+    { "id": "old-full-magnitude", "role": "objection", "text": "整幅 float\n梯度强度图", "width": 300 },
+    { "id": "old-nms-copy", "role": "objection", "text": "独立 NMS\n工作区", "width": 280 },
+    { "id": "old-bounded-hysteresis", "role": "objection", "text": "遍历每个邻居时\n检查边界", "width": 340 },
+    { "id": "new-fused-gradient", "role": "claim", "text": "新路径：一次生成\nGx + Gy", "width": 280 },
+    { "id": "new-magnitude-ring", "role": "inference", "text": "三行梯度强度\n环形缓存", "width": 300 },
+    { "id": "new-state-map", "role": "inference", "text": "NMS 直接写入\n带边框状态图", "width": 320 },
+    { "id": "new-offset-hysteresis", "role": "conclusion", "text": "八个固定偏移完成\n滞后连接", "width": 320 }
+  ],
+  "edges": [
+    { "from": "canny-input", "to": "old-gradient-passes", "label": "旧路径", "relation": "leads-to" },
+    { "from": "old-gradient-passes", "to": "old-full-magnitude", "label": "完整落盘", "relation": "causes" },
+    { "from": "old-full-magnitude", "to": "old-nms-copy", "label": "再次遍历", "relation": "causes" },
+    { "from": "old-nms-copy", "to": "old-bounded-hysteresis", "label": "再扫描一次", "relation": "causes" },
+    { "from": "canny-input", "to": "new-fused-gradient", "label": "新路径", "relation": "leads-to" },
+    { "from": "new-fused-gradient", "to": "new-magnitude-ring", "label": "流式处理行", "relation": "leads-to" },
+    { "from": "new-magnitude-ring", "to": "new-state-map", "label": "NMS + 阈值", "relation": "leads-to" },
+    { "from": "new-state-map", "to": "new-offset-hysteresis", "label": "利用填充边框", "relation": "leads-to" }
+  ]
+}

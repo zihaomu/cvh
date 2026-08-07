@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "title": "Target-case performance journey (lower latency is better)",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "scalar-stage", "role": "context", "text": "Scalar\nabout 0.333 ms", "width": 240 },
+    { "id": "float-neon-stage", "role": "example", "text": "Float NEON\nabout 0.157 ms", "width": 240 },
+    { "id": "profile-stage", "role": "evidence", "text": "Measurement: conversions and float math dominate", "width": 360 },
+    { "id": "fixed-neon-stage", "role": "claim", "text": "Flat-C3 fixed NEON\nabout 0.060 ms", "width": 280 },
+    { "id": "opencv-reference", "role": "conclusion", "text": "OpenCV\nabout 0.056 ms", "width": 240 }
+  ],
+  "edges": [
+    { "from": "scalar-stage", "to": "float-neon-stage", "label": "batch work", "relation": "leads-to" },
+    { "from": "float-neon-stage", "to": "profile-stage", "label": "still far behind", "relation": "leads-to" },
+    { "from": "profile-stage", "to": "fixed-neon-stage", "label": "redesign data flow", "relation": "supports" },
+    { "from": "fixed-neon-stage", "to": "opencv-reference", "label": "about 7–8% gap", "relation": "leads-to" }
+  ]
+}

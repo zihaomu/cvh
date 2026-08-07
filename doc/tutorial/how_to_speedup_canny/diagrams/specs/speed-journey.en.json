@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "1080p Canny performance journey",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "baseline-latency", "role": "context", "text": "Aug 4 baseline\n67.17 ms", "width": 280 },
+    { "id": "fused-gradient-latency", "role": "example", "text": "Fused Gx + Gy\n49.48 ms", "width": 280 },
+    { "id": "state-map-latency", "role": "evidence", "text": "No division\nDirect state map\n28.72 ms", "width": 300 },
+    { "id": "ring-buffer-latency", "role": "claim", "text": "Three-row ring\n26.51 ms", "width": 280 },
+    { "id": "current-cvh-latency", "role": "conclusion", "text": "Clean Aug 6 cvh\n26.82 ms", "width": 300 },
+    { "id": "current-opencv-latency", "role": "conclusion", "text": "Same-run OpenCV\n28.03 ms", "width": 300 }
+  ],
+  "edges": [
+    { "from": "baseline-latency", "to": "fused-gradient-latency", "label": "one gradient pass", "relation": "leads-to" },
+    { "from": "fused-gradient-latency", "to": "state-map-latency", "label": "fuse NMS + threshold", "relation": "leads-to" },
+    { "from": "state-map-latency", "to": "ring-buffer-latency", "label": "stop storing a frame", "relation": "leads-to" },
+    { "from": "ring-buffer-latency", "to": "current-cvh-latency", "label": "clean validation", "relation": "supports" },
+    { "from": "current-cvh-latency", "to": "current-opencv-latency", "label": "about 4.5% faster", "relation": "supports" }
+  ]
+}

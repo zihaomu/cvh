@@ -1,7 +1,7 @@
 # cvh v0.1 高频 NEON 热点加速计划
 
 更新时间：2026-08-06  
-状态：H0–H1、H3、H5 完成；H2 已穷尽本轮候选、performance floor 例外待用户决定；H4 本机闭环、外部 x86 runtime gate 待执行
+状态：H0–H1、H3、H5 完成；H2 旧数值合同候选已收口，fixed-point 后续由独立计划继续；H4 本机闭环、外部 x86 runtime gate 待执行
 
 ## 1. 目的与阶段定位
 
@@ -20,7 +20,7 @@ scalar 和 OpenCV Universal Intrinsics（UI）实现全部保留，direct NEON �
 
 - [CPU optimization and dispatch](cpu-optimization.md)；
 - [OpenCV UI / specialized ISA checklist](opencv-ui-kernel-migration-checklist.md)；
-- [v0.1 Imgproc performance-floor acceleration](cvh-v0.1-imgproc-performance-floor-acceleration-plan.md)。
+- [accepted Imgproc performance evidence](../benchmark/opencv_compare/results/README.md)。
 
 ## 2. 范围边界
 
@@ -387,6 +387,12 @@ H0 只改善观测，不修改目标 kernel 性能。
 
 ### H2：Resize bilinear U8C3
 
+后续调查确认 OpenCV 目标构建命中 KleidiCV HAL，且新的 flat-C3 8-bit
+fixed-point 诊断原型可以在 upstream 既有误差合同内接近持平。该新方向不改写
+本节的历史实验记录，后续实施和实时状态统一由
+[Resize U8C3 定点 NEON 加速计划](cvh-v0.1-resize-u8c3-fixed-point-neon-acceleration-plan.md)
+维护；旧 H2 不再申请 performance-floor 例外。
+
 #### H2 实时记录（2026-08-06）
 
 - 已新增 `detail/resize_neon.hpp` 与 `ResizeDispatchInternalTest`；selector 仅接入
@@ -423,6 +429,12 @@ H0 只改善观测，不修改目标 kernel 性能。
   已规划的 12-output float、fixed-point、scalar tie 与 vector tie 四类候选均已
   验证并回退；H2 的实现工作收口，剩余事项仅为用户是否明确批准 Resize
   `0.75x` performance-floor 例外，本文不自动批准。
+- successor 计划现已按新的 upstream 数值合同接入 flat-C3 Q16/Q8 两级定点
+  product path；dirty-worktree 三轮 stable candidate 的 0.75x continuous/ROI
+  relative 中位数为 `0.9319/0.9264`，不再需要 performance-floor 例外。完整
+  correctness、dispatch、sanitizer、optimization-off 与 x86 cross compile
+  已通过；最终勾选本节 Resize floor 仍等待 successor R6 的 clean revision
+  dated report，历史失败 candidate 结论保持不改写。
 
 1. 每次调用只计算一次 x index、x weight 和 y mapping；禁止 per-pixel 分配。
 2. interior block 将 source index/weight 打包，NEON 完成横向、纵向 fixed-point

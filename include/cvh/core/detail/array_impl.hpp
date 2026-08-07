@@ -691,10 +691,48 @@ inline void rotate(const Mat& src, Mat& dst, int rotateCode)
         source.size.p[1],
         source.elemSize1(),
         source.channels());
+    const cpu::DispatchTag transpose_tag = cpu::last_dispatch_tag();
     flip(
         transposed,
         dst,
         rotateCode == ROTATE_90_CLOCKWISE ? 1 : 0);
+    const cpu::DispatchTag flip_tag = cpu::last_dispatch_tag();
+    const auto composite_tag = [](cpu::DispatchTag first,
+                                  cpu::DispatchTag second) {
+        if (first == cpu::DispatchTag::NEON ||
+            second == cpu::DispatchTag::NEON)
+        {
+            return cpu::DispatchTag::NEON;
+        }
+        if (first == cpu::DispatchTag::AVX2 ||
+            second == cpu::DispatchTag::AVX2)
+        {
+            return cpu::DispatchTag::AVX2;
+        }
+        if (first == cpu::DispatchTag::OpenCVUI ||
+            second == cpu::DispatchTag::OpenCVUI)
+        {
+            return cpu::DispatchTag::OpenCVUI;
+        }
+        return cpu::DispatchTag::Scalar;
+    };
+    cpu::set_last_dispatch_tag(composite_tag(transpose_tag, flip_tag));
+    if (rotateCode == ROTATE_90_CLOCKWISE)
+    {
+        cpu::set_last_kernel_route(
+            transpose_tag == cpu::DispatchTag::OpenCVUI
+                ? "rotate90_cw:transpose=opencv_ui;flip=opencv_ui;temporary=full"
+                : flip_tag == cpu::DispatchTag::OpenCVUI
+                      ? "rotate90_cw:transpose=scalar;flip=opencv_ui;temporary=full"
+                      : "rotate90_cw:transpose=scalar;flip=scalar;temporary=full");
+    }
+    else
+    {
+        cpu::set_last_kernel_route(
+            transpose_tag == cpu::DispatchTag::OpenCVUI
+                ? "rotate90_ccw:transpose=opencv_ui;flip=scalar;temporary=full"
+                : "rotate90_ccw:transpose=scalar;flip=scalar;temporary=full");
+    }
 }
 
 inline void repeat(const Mat& src, int ny, int nx, Mat& dst)

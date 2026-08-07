@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "title": "Turning point: vectorize, then stop moving data around",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "u8c3-source", "role": "context", "text": "BGR byte stream", "width": 280 },
+    { "id": "old-split-channels", "role": "objection", "text": "Split\nB / G / R", "width": 300 },
+    { "id": "old-float-roundtrip", "role": "objection", "text": "U8 → F32\ninterpolate\nF32 → U8", "width": 360 },
+    { "id": "old-merge-channels", "role": "objection", "text": "Interleave\nB / G / R", "width": 340 },
+    { "id": "new-byte-stream", "role": "claim", "text": "Continuous byte stream", "width": 340 },
+    { "id": "new-integer-mix", "role": "inference", "text": "Integer\ninterpolation", "width": 340 },
+    { "id": "new-vector-output", "role": "conclusion", "text": "Write 16 bytes per iteration", "width": 380 }
+  ],
+  "edges": [
+    { "from": "u8c3-source", "to": "old-split-channels", "label": "old path", "relation": "leads-to" },
+    { "from": "old-split-channels", "to": "old-float-roundtrip", "label": "many conversions", "relation": "leads-to" },
+    { "from": "old-float-roundtrip", "to": "old-merge-channels", "label": "pack again", "relation": "leads-to" },
+    { "from": "u8c3-source", "to": "new-byte-stream", "label": "change perspective", "relation": "leads-to" },
+    { "from": "new-byte-stream", "to": "new-integer-mix", "label": "do not split channels", "relation": "leads-to" },
+    { "from": "new-integer-mix", "to": "new-vector-output", "label": "write directly", "relation": "leads-to" }
+  ]
+}

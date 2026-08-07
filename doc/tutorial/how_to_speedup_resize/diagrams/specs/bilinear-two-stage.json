@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "title": "双线性插值：把二维问题拆成两次一维混合",
+  "direction": "RIGHT",
+  "nodes": [
+    {
+      "id": "destination-pixel",
+      "role": "context",
+      "text": "一个目标像素"
+    },
+    {
+      "id": "fractional-source",
+      "role": "inference",
+      "text": "映射到源位置 (12.25, 7.60)",
+      "width": 300
+    },
+    {
+      "id": "four-neighbors",
+      "role": "example",
+      "text": "周围四点：P00 P01 P10 P11",
+      "width": 320
+    },
+    {
+      "id": "row-interpolation",
+      "role": "inference",
+      "text": "上、下两行分别按 25% 混合",
+      "width": 320
+    },
+    {
+      "id": "column-interpolation",
+      "role": "conclusion",
+      "text": "再按 60% 混合两个结果",
+      "width": 280
+    }
+  ],
+  "edges": [
+    {
+      "from": "destination-pixel",
+      "to": "fractional-source",
+      "label": "反查原图",
+      "relation": "leads-to"
+    },
+    {
+      "from": "fractional-source",
+      "to": "four-neighbors",
+      "label": "不能只取一个点",
+      "relation": "leads-to"
+    },
+    {
+      "from": "four-neighbors",
+      "to": "row-interpolation",
+      "label": "先做水平方向",
+      "relation": "leads-to"
+    },
+    {
+      "from": "row-interpolation",
+      "to": "column-interpolation",
+      "label": "再做垂直方向",
+      "relation": "leads-to"
+    }
+  ]
+}

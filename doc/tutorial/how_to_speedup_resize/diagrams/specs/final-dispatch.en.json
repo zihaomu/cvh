@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "One API selects the best fitting implementation",
+  "direction": "DOWN",
+  "nodes": [
+    { "id": "public-call", "role": "context", "text": "cvh::resize(...)", "width": 280 },
+    { "id": "inspect-case", "role": "inference", "text": "Type + channels\nratio + size + CPU", "width": 440 },
+    { "id": "half-kernel", "role": "example", "text": "0.5x fast path\n2×2 average", "width": 360 },
+    { "id": "three-quarter-kernel", "role": "claim", "text": "0.75x: fixed byte-stream NEON", "width": 380 },
+    { "id": "generic-u8-kernel", "role": "example", "text": "Other U8: optimized path", "width": 340 },
+    { "id": "safe-fallback", "role": "conclusion", "text": "Small / F32 / non-ARM: fallback", "width": 380 }
+  ],
+  "edges": [
+    { "from": "public-call", "to": "inspect-case", "label": "user sees one API", "relation": "leads-to" },
+    { "from": "inspect-case", "to": "half-kernel", "label": "exact 0.5x", "relation": "leads-to" },
+    { "from": "inspect-case", "to": "three-quarter-kernel", "label": "target 0.75x", "relation": "leads-to" },
+    { "from": "inspect-case", "to": "generic-u8-kernel", "label": "other common U8", "relation": "leads-to" },
+    { "from": "inspect-case", "to": "safe-fallback", "label": "fast path does not apply", "relation": "leads-to" }
+  ]
+}

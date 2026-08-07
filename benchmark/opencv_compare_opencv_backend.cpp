@@ -321,6 +321,119 @@ double bench_opencv_binary(CoreBinaryOpId op,
         repeats);
 }
 
+double bench_opencv_core_mat_neon(CoreMatNeonOpId op,
+                                  int rows,
+                                  int cols,
+                                  int channels,
+                                  bool roi,
+                                  int warmup,
+                                  int iters,
+                                  int repeats,
+                                  std::uint32_t seed_a,
+                                  std::uint32_t seed_b)
+{
+    const bool u8_input =
+        op == CoreMatNeonOpId::Rotate90Clockwise ||
+        op == CoreMatNeonOpId::Rotate90CounterClockwise ||
+        op == CoreMatNeonOpId::InRangeScalar;
+    const int type = CV_MAKETYPE(u8_input ? CV_8U : CV_32F, channels);
+    const int owner_rows = rows + (roi ? 2 : 0);
+    const int owner_cols = cols + (roi ? 3 : 0);
+    cv::Mat source_owner(owner_rows, owner_cols, type);
+    cv::Mat peer_owner(owner_rows, owner_cols, type);
+    fill_by_depth(
+        source_owner, u8_input ? DepthId::U8 : DepthId::F32, seed_a);
+    fill_by_depth(
+        peer_owner, u8_input ? DepthId::U8 : DepthId::F32, seed_b);
+    cv::Mat source = roi
+        ? source_owner(cv::Rect(1, 1, cols, rows))
+        : source_owner;
+    cv::Mat peer = roi
+        ? peer_owner(cv::Rect(1, 1, cols, rows))
+        : peer_owner;
+    cv::Mat dst;
+    cv::Mat mean;
+    cv::Mat stddev;
+    double scalar_result = 0.0;
+
+    const auto run = [&]() {
+        switch (op)
+        {
+            case CoreMatNeonOpId::ReduceSumAxis0:
+                cv::reduce(source, dst, 0, cv::REDUCE_SUM, CV_32F);
+                return;
+            case CoreMatNeonOpId::ReduceSumAxis1:
+                cv::reduce(source, dst, 1, cv::REDUCE_SUM, CV_32F);
+                return;
+            case CoreMatNeonOpId::ReduceAvgAxis0:
+                cv::reduce(source, dst, 0, cv::REDUCE_AVG, CV_32F);
+                return;
+            case CoreMatNeonOpId::ReduceAvgAxis1:
+                cv::reduce(source, dst, 1, cv::REDUCE_AVG, CV_32F);
+                return;
+            case CoreMatNeonOpId::ReduceSum2Axis0:
+                cv::reduce(source, dst, 0, cv::REDUCE_SUM2, CV_32F);
+                return;
+            case CoreMatNeonOpId::ReduceSum2Axis1:
+                cv::reduce(source, dst, 1, cv::REDUCE_SUM2, CV_32F);
+                return;
+            case CoreMatNeonOpId::NormInf:
+                scalar_result = cv::norm(source, cv::NORM_INF);
+                return;
+            case CoreMatNeonOpId::NormL1:
+                scalar_result = cv::norm(source, cv::NORM_L1);
+                return;
+            case CoreMatNeonOpId::NormL2:
+                scalar_result = cv::norm(source, cv::NORM_L2);
+                return;
+            case CoreMatNeonOpId::NormInfDiff:
+                scalar_result = cv::norm(source, peer, cv::NORM_INF);
+                return;
+            case CoreMatNeonOpId::NormL1Diff:
+                scalar_result = cv::norm(source, peer, cv::NORM_L1);
+                return;
+            case CoreMatNeonOpId::NormL2Diff:
+                scalar_result = cv::norm(source, peer, cv::NORM_L2);
+                return;
+            case CoreMatNeonOpId::NormalizeInf:
+                cv::normalize(source, dst, 1.0, 0.0, cv::NORM_INF, CV_32F);
+                return;
+            case CoreMatNeonOpId::NormalizeL1:
+                cv::normalize(source, dst, 1.0, 0.0, cv::NORM_L1, CV_32F);
+                return;
+            case CoreMatNeonOpId::NormalizeL2:
+                cv::normalize(source, dst, 1.0, 0.0, cv::NORM_L2, CV_32F);
+                return;
+            case CoreMatNeonOpId::MeanStdDev:
+                cv::meanStdDev(source, mean, stddev);
+                return;
+            case CoreMatNeonOpId::Rotate90Clockwise:
+                cv::rotate(source, dst, cv::ROTATE_90_CLOCKWISE);
+                return;
+            case CoreMatNeonOpId::Rotate90CounterClockwise:
+                cv::rotate(source, dst, cv::ROTATE_90_COUNTERCLOCKWISE);
+                return;
+            case CoreMatNeonOpId::InRangeScalar:
+                cv::inRange(
+                    source,
+                    cv::Scalar::all(64.0),
+                    cv::Scalar::all(192.0),
+                    dst);
+                return;
+        }
+    };
+    const auto probe = [&]() {
+        double value = scalar_result;
+        value += checksum(dst);
+        if (!mean.empty())
+        {
+            value += cv::sum(mean)[0] + cv::sum(stddev)[0];
+        }
+        return value;
+    };
+    return measure_ms(run, probe, warmup, iters, repeats);
+}
+
 double bench_opencv_transpose(int rows,
                               int cols,
                               DepthId depth,

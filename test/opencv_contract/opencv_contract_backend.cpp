@@ -1419,6 +1419,25 @@ bool validate_imgproc_resize_linear_u8(int src_rows,
     return matches_bytes(expected, actual_data, actual_bytes, 1);
 }
 
+bool validate_imgproc_resize_linear_u8_exact(int src_rows,
+                                             int src_cols,
+                                             int dst_rows,
+                                             int dst_cols,
+                                             int channels,
+                                             std::uint32_t seed,
+                                             const void* actual_data,
+                                             std::size_t actual_bytes)
+{
+    cv::Mat src(src_rows, src_cols, CV_MAKETYPE(CV_8U, channels));
+    fill_u8(src, seed);
+
+    cv::Mat expected;
+    cv::resize(
+        src, expected, cv::Size(dst_cols, dst_rows),
+        0.0, 0.0, cv::INTER_LINEAR);
+    return matches_bytes(expected, actual_data, actual_bytes, 0);
+}
+
 bool validate_imgproc_hot_cvtcolor_u8(ImgprocHotColorOpId op,
                                       int rows,
                                       int cols,

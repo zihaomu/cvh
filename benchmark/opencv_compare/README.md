@@ -190,8 +190,9 @@ Focused v0.1 Imgproc performance-floor matrix:
   --profile stable --impls ui --ops IMGPROC_FLOOR
 ```
 
-`IMGPROC_FLOOR` freezes the families owned by
-[`cvh-v0.1-imgproc-performance-floor-acceleration-plan.md`](../../doc/cvh-v0.1-imgproc-performance-floor-acceleration-plan.md).
+`IMGPROC_FLOOR` preserves the focused family set used for the completed v0.1
+Imgproc performance-floor work. Its accepted dated evidence is listed in the
+[result index](results/README.md).
 
 Focused v0.1 direct-NEON hot-kernel matrix:
 
@@ -204,6 +205,32 @@ Focused v0.1 direct-NEON hot-kernel matrix:
 `SPATIAL_GRADIENT`. Stable runs add the target resolutions and odd-width ROI
 needed by
 [`cvh-v0.1-neon-hot-kernel-acceleration-plan.md`](../../doc/cvh-v0.1-neon-hot-kernel-acceleration-plan.md).
+
+Focused v0.1 Core/Mat native-NEON matrix:
+
+```bash
+./benchmark/opencv_compare/run_compare.sh \
+  --profile stable --impls auto,ui,scalar --ops CORE_MAT_NEON
+```
+
+`CORE_MAT_NEON` covers F32 reduce/norm/normalize/meanStdDev, U8
+rotate90/inRange, U8/F32 add/subtract/multiply retention cases, and a
+convertScaleAbs diagnostic for continuous target resolutions plus a fixed
+479x641 odd ROI. Each implementation reports the observed public dispatch and
+kernel route owned by
+[`cvh-v0.1-core-mat-native-neon-acceleration-plan.md`](../../doc/cvh-v0.1-core-mat-native-neon-acceleration-plan.md).
+For higher-resolution stability checks of only the product-retained native
+paths, use `--ops CORE_MAT_NEON_RETAINED`. It keeps the same shapes, odd ROI,
+checksum, dispatch telemetry, and OpenCV backend, but limits each implementation
+to the 76 retained reduce/norm/normalize/meanStdDev F32C3/inRange cases. The
+143-row `CORE_MAT_NEON` matrix remains the canonical candidate and fallback
+diagnostic set.
+On macOS, the canonical compare process explicitly uses user-initiated QoS so
+command-line runs do not inherit a background host's scheduling class. CVH and
+OpenCV measurements remain in the same process and use the same QoS. A fixed
+3 second process-level CPU precondition runs before all cases and is excluded
+from every reported latency; this avoids measuring macOS frequency/QoS ramp-up
+in the first short cases.
 
 Focused P2-P0 operator comparison:
 
@@ -257,6 +284,11 @@ configuration used by the regular Mode B report.
   C1/C3/C4 cases.
 - P2-P0 contributes 7 Core and 19 Imgproc rows in every profile; the focused
   `PHASE2_P0` filter runs only those rows.
+- `CORE_MAT_NEON` contributes 39 rows per continuous shape plus 26 fixed
+  odd-ROI rows, or 143 rows per implementation, with Auto/UI/Scalar modes
+  suitable for direct retention comparisons.
+- `CORE_MAT_NEON_RETAINED` contributes 19 rows per continuous shape plus 19
+  fixed odd-ROI rows, or 76 rows per implementation.
 - Full adds odd-width and non-contiguous ROI cases plus representative
   I420/YUY2/NV12 layouts.
 - Raw CSV and metadata stay generated under

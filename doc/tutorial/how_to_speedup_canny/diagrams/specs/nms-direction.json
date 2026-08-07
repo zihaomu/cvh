@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "非极大值抑制只保留梯度脊的峰值",
+  "direction": "DOWN",
+  "nodes": [
+    { "id": "candidate-magnitude", "role": "context", "text": "候选梯度强度 A", "width": 300 },
+    { "id": "gradient-bin", "role": "inference", "text": "选择 0°、45°、\n90° 或 135°", "width": 320 },
+    { "id": "direction-neighbors", "role": "example", "text": "沿梯度方向\n读取 B 和 C", "width": 340 },
+    { "id": "local-maximum-test", "role": "objection", "text": "A 是局部峰值吗？", "width": 300 },
+    { "id": "keep-edge-candidate", "role": "conclusion", "text": "是：保留 A", "width": 260 },
+    { "id": "suppress-wide-ridge", "role": "conclusion", "text": "否：抑制 A", "width": 280 }
+  ],
+  "edges": [
+    { "from": "candidate-magnitude", "to": "gradient-bin", "label": "使用 Gx 和 Gy", "relation": "leads-to" },
+    { "from": "gradient-bin", "to": "direction-neighbors", "label": "选择两个样本", "relation": "leads-to" },
+    { "from": "direction-neighbors", "to": "local-maximum-test", "label": "比较 A、B、C", "relation": "leads-to" },
+    { "from": "local-maximum-test", "to": "keep-edge-candidate", "label": "A 胜出", "relation": "leads-to" },
+    { "from": "local-maximum-test", "to": "suppress-wide-ridge", "label": "邻居更强", "relation": "leads-to" }
+  ]
+}

@@ -2,6 +2,7 @@
 #define CVH_CORE_DETAIL_REDUCE_IMPL_HPP
 
 #include "reduce_ui.hpp"
+#include "reduction_neon.hpp"
 #include "../saturate.h"
 
 #include <algorithm>
@@ -485,6 +486,8 @@ inline void meanStdDev(const Mat& src,
                        const Mat& mask)
 {
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    cpu::set_last_kernel_route(
+        "mean_stddev:load=scalar;accumulate=welford_long_double");
     mean_value = Scalar();
     stddev_value = Scalar();
     if (src.empty())
@@ -493,10 +496,35 @@ inline void meanStdDev(const Mat& src,
     }
     reduce_detail::validate_channels_1_to_4(src, "meanStdDev");
     reduce_detail::validate_mask(src, mask, "meanStdDev");
+    detail::reduction_neon::StableStatistics neon_result;
+    if (mask.empty() &&
+        detail::reduction_neon::stable_statistics_f32(
+            src, neon_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::NEON);
+        cpu::set_last_kernel_route(
+            "mean_stddev:pass=two;load=neon_deinterleave;accumulate=f64;tail=scalar");
+        for (int ch = 0; ch < src.channels(); ++ch)
+        {
+            long double variance =
+                neon_result.m2[ch] /
+                static_cast<long double>(neon_result.count);
+            if (variance < 0.0L && variance > -1e-18L)
+            {
+                variance = 0.0L;
+            }
+            mean_value[ch] = static_cast<double>(neon_result.means[ch]);
+            stddev_value[ch] =
+                std::sqrt(static_cast<double>(variance));
+        }
+        return;
+    }
     detail::reduce_ui::StableStatistics ui_result;
     if (detail::reduce_ui::try_stable_statistics(src, mask, ui_result))
     {
         cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        cpu::set_last_kernel_route(
+            "mean_stddev:load=opencv_ui;merge=chan_long_double");
         if (ui_result.count == 0)
         {
             return;
@@ -552,6 +580,8 @@ inline void meanStdDev(const Mat& src,
 inline double norm(const Mat& src, int normType, const Mat& mask)
 {
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    cpu::set_last_kernel_route(
+        "norm:input=single;load=scalar;accumulate=long_double");
     if (src.empty())
     {
         return 0.0;
@@ -562,10 +592,35 @@ inline double norm(const Mat& src, int normType, const Mat& mask)
         CV_Error_(Error::StsBadArg, ("norm unsupported normType=%d", normType));
     }
 
+    detail::reduction_neon::NormResult neon_result;
+    if (mask.empty() &&
+        detail::reduction_neon::norm_f32(
+            src, nullptr, normType, neon_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::NEON);
+        cpu::set_last_kernel_route(
+            "norm:input=single;load=neon;accumulate=f32_block;merge=f64;tail=scalar");
+        if (neon_result.has_nan)
+        {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        if (normType == NORM_INF)
+        {
+            return neon_result.maximum;
+        }
+        if (normType == NORM_L1)
+        {
+            return static_cast<double>(neon_result.accumulator);
+        }
+        return std::sqrt(static_cast<double>(neon_result.accumulator));
+    }
+
     detail::reduce_ui::NormResult ui_result;
     if (detail::reduce_ui::try_norm(src, mask, normType, ui_result))
     {
         cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        cpu::set_last_kernel_route(
+            "norm:input=single;load=opencv_ui;merge=long_double;tail=scalar");
         if (ui_result.has_nan)
         {
             return std::numeric_limits<double>::quiet_NaN();
@@ -624,6 +679,8 @@ inline double norm(const Mat& src1,
                    const Mat& mask)
 {
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    cpu::set_last_kernel_route(
+        "norm:input=diff;load=scalar;accumulate=long_double");
     if (src1.empty() && src2.empty())
     {
         return 0.0;
@@ -638,11 +695,36 @@ inline double norm(const Mat& src1,
         CV_Error_(Error::StsBadArg, ("norm unsupported normType=%d", normType));
     }
 
+    detail::reduction_neon::NormResult neon_result;
+    if (mask.empty() &&
+        detail::reduction_neon::norm_f32(
+            src1, &src2, normType, neon_result))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::NEON);
+        cpu::set_last_kernel_route(
+            "norm:input=diff;load=neon;accumulate=f32_block;merge=f64;tail=scalar");
+        if (neon_result.has_nan)
+        {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        if (normType == NORM_INF)
+        {
+            return neon_result.maximum;
+        }
+        if (normType == NORM_L1)
+        {
+            return static_cast<double>(neon_result.accumulator);
+        }
+        return std::sqrt(static_cast<double>(neon_result.accumulator));
+    }
+
     detail::reduce_ui::NormResult ui_result;
     if (detail::reduce_ui::try_norm_diff(
             src1, src2, mask, normType, ui_result))
     {
         cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        cpu::set_last_kernel_route(
+            "norm:input=diff;load=opencv_ui;merge=long_double;tail=scalar");
         if (ui_result.has_nan)
         {
             return std::numeric_limits<double>::quiet_NaN();
@@ -926,6 +1008,8 @@ inline void minMaxLoc(const Mat& src,
 inline void reduce(const Mat& src, Mat& dst, int dim, int rtype, int dtype)
 {
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    cpu::set_last_kernel_route(
+        "reduce:load=scalar;accumulate=long_double;tail=scalar");
     if (src.empty() || src.dims != 2)
     {
         CV_Error(Error::StsBadArg, "reduce expects non-empty 2D src");
@@ -953,6 +1037,16 @@ inline void reduce(const Mat& src, Mat& dst, int dim, int rtype, int dtype)
         dst.create({rows, cols}, type);
     }
 
+    if (detail::reduction_neon::reduce_f32(src, dst, dim, rtype))
+    {
+        cpu::set_last_dispatch_tag(cpu::DispatchTag::NEON);
+        cpu::set_last_kernel_route(
+            dim == 0
+                ? "reduce:axis=0;load=neon;row_group=4;accumulate=f32_block;merge=f64;fallback=f64;tail=scalar"
+                : "reduce:axis=1;load=neon;accumulate=f64;tail=scalar");
+        return;
+    }
+
     auto write_ui_result =
         [&](int output_index, int channel, long double value) {
             uchar* dst_row =
@@ -975,6 +1069,8 @@ inline void reduce(const Mat& src, Mat& dst, int dim, int rtype, int dtype)
             src, dim, rtype, write_ui_result))
     {
         cpu::set_last_dispatch_tag(cpu::DispatchTag::OpenCVUI);
+        cpu::set_last_kernel_route(
+            "reduce:load=opencv_ui;merge=long_double;tail=scalar");
         return;
     }
 
@@ -1088,6 +1184,8 @@ inline void normalize(const Mat& src,
                       const Mat& mask)
 {
     cpu::set_last_dispatch_tag(cpu::DispatchTag::Scalar);
+    cpu::set_last_kernel_route(
+        "normalize:reduce=scalar;apply=scalar");
     if (src.empty())
     {
         dst.release();
@@ -1105,6 +1203,8 @@ inline void normalize(const Mat& src,
     double scale = 0.0;
     double shift = 0.0;
     bool used_ui = false;
+    bool used_neon = false;
+    bool used_neon_apply = false;
     if (normType == NORM_MINMAX)
     {
         reduce_detail::Extrema extrema;
@@ -1140,14 +1240,22 @@ inline void normalize(const Mat& src,
         const double source_norm = norm(src, normType, mask);
         used_ui =
             cpu::last_dispatch_tag() == cpu::DispatchTag::OpenCVUI;
+        used_neon =
+            cpu::last_dispatch_tag() == cpu::DispatchTag::NEON;
         scale = source_norm > 0.0 ? alpha / source_norm : 0.0;
     }
     else
     {
         CV_Error_(Error::StsBadArg, ("normalize unsupported normType=%d", normType));
     }
-    if (detail::reduce_ui::try_apply_normalize(
-            src, dst, mask, scale, shift))
+    if (used_neon && mask.empty() &&
+        detail::reduction_neon::apply_normalize_f32c1(
+            src, dst, scale, shift))
+    {
+        used_neon_apply = true;
+    }
+    else if (detail::reduce_ui::try_apply_normalize(
+                 src, dst, mask, scale, shift))
     {
         used_ui = true;
     }
@@ -1156,8 +1264,26 @@ inline void normalize(const Mat& src,
         reduce_detail::apply_normalize(src, dst, mask, scale, shift);
     }
     cpu::set_last_dispatch_tag(
-        used_ui ? cpu::DispatchTag::OpenCVUI
-                : cpu::DispatchTag::Scalar);
+        used_neon
+            ? cpu::DispatchTag::NEON
+            : used_ui ? cpu::DispatchTag::OpenCVUI
+                      : cpu::DispatchTag::Scalar);
+    if (used_neon)
+    {
+        cpu::set_last_kernel_route(
+            used_neon_apply
+                ? "normalize:reduce=neon_f32_block_f64_merge;apply=neon_f64;unroll=4;tail=scalar"
+                : used_ui
+                    ? "normalize:reduce=neon_f32_block_f64_merge;apply=opencv_ui;tail=scalar"
+                    : "normalize:reduce=neon_f32_block_f64_merge;apply=scalar");
+    }
+    else
+    {
+        cpu::set_last_kernel_route(
+            used_ui
+                ? "normalize:reduce_or_apply=opencv_ui;tail=scalar"
+                : "normalize:reduce=scalar;apply=scalar");
+    }
 }
 
 }  // namespace cvh

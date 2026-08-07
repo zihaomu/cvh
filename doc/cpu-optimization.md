@@ -118,16 +118,24 @@ or scalar implementation.
 | `gemm` | FP32 NN/NT, `m>=2`, `n>=8`, `k>=8`, work `>=32768`; AVX2 also requires `n>=16` | direct NEON packed-B kernel | direct AVX2/FMA when available, otherwise scalar |
 | `cvtColor` packed U8 | supported RGB/BGR/BGRA/RGBA shuffle, alpha/drop-alpha, BGRA/RGBA-to-gray, and gray expansion; width `>=16`, pixels `>=256` | direct NEON interior with scalar tail; existing BGR/RGB-to-gray UI route is deliberately retained | existing UI/scalar route |
 | `cvtColor` YUV U8 | YUV444 interleaved, YUV420 planar/semi-planar, and packed YUV422 supported codes; pixels `>=256`, plus format-specific even dimensions | direct NEON luma/chroma conversion with scalar tail | existing UI/scalar route |
-| `resize` | `INTER_LINEAR`, U8C3, destination width `>=8`, destination pixels `>=256` | direct NEON; 0.5x uses a specialized average kernel, other ratios use the NEON table-gather kernel | existing UI/scalar route |
+| `resize` | `INTER_LINEAR`, U8C3, destination width `>=8`, destination pixels `>=256` | direct NEON; 0.5x uses a specialized average kernel, exact floor-0.75x uses flat-C3 Q16/Q8 mapping with two-stage 8-bit fixed-point interpolation, and other ratios use the float NEON table-gather kernel | existing UI/scalar route; exact floor-0.75x uses the byte-exact fixed scalar reference |
 | `Sobel` / `Scharr` | 3x3 U8 C1/C3/C4 to S16/F32, first derivative in one axis, scale 1, delta 0, replicate/reflect101 border, workload `>=256` | shared direct NEON three-row interior; scalar border and overlapping NEON tail | existing UI/scalar route |
 | `spatialGradient` | U8C1, replicate/reflect101 border, pixels `>=256` | shared direct NEON three-row kernel emits dx/dy together | existing UI/scalar route |
+| `reduce` | 2D F32C1 to F32C1, axis 0/1, SUM/AVG/SUM2, at least 4 columns | axis 0 streams four source rows at a time into 256-row F32 blocks, then uses F64 merge and an F64 exceptional-value fallback; axis 1 uses direct F64 multi-accumulators | existing UI/scalar route |
+| `norm` / `normalize` | unmasked F32C1 INF/L1/L2, single/diff norm, at least 4 values per row; normalize keeps F32 output | four-stream NEON reduction with stable F64 merge/fallback; normalize also uses a four-stream F64-scale NEON apply pass | existing UI/scalar route |
+| `meanStdDev` | unmasked F32C3, at least 4 pixels per row | two-pass deinterleaved NEON load with centered F64 variance accumulation | existing UI/scalar route |
+| `inRange` | U8C1/C3/C4 with scalar lower/upper bounds, at least 16 pixels per row | inclusive NEON compare; C3/C4 use deinterleaved loads and channel-mask reduction; scalar tail | existing UI/scalar route |
 
 `NeonOnly` may force eligible AArch64 kernels for correctness tests.
 `OpenCVUIOnly` and `ScalarOnly` never enter a direct NEON kernel. Benchmark
 rows record the actual route as
 `algorithm_path -> dispatch_path -> isa_observed -> kernel_route`; the current
-full product report observed 30 direct-NEON rows (10 GEMM, 10 color, 2 resize,
-6 Sobel, 1 Scharr, and 1 spatial-gradient row).
+archived full product report observed 30 direct-NEON rows (10 GEMM, 10 color,
+2 resize, 6 Sobel, 1 Scharr, and 1 spatial-gradient row). The current
+`CORE_MAT_NEON` focused diagnostic adds 76 observed direct-NEON rows across
+reduce, norm, normalize, meanStdDev, and inRange; a new clean full
+product report remains the archival source of truth after these changes are
+committed.
 
 ## 8. OpenCV Comparison Policy
 
@@ -146,6 +154,8 @@ same public target and report the actual per-case dispatch tag.
 | Runtime CPU capability | `include/cvh/core/detail/cpu_features.hpp` |
 | Forced mode and dispatch tags | `include/cvh/core/detail/dispatch_control.h` |
 | OpenCV UI facade | `include/cvh/core/simd/opencv_ui.h` |
+| Core reduction/statistics NEON | `include/cvh/core/detail/reduction_neon.hpp` |
+| Core packed inRange NEON | `include/cvh/core/detail/inrange_neon.hpp` |
 | CMake propagation | `CMakeLists.txt` |
 
 ## 10. Validation

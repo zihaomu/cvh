@@ -392,6 +392,15 @@ bool validate_imgproc_resize_linear_u8(int src_rows,
                                        const void* actual_data,
                                        std::size_t actual_bytes);
 
+bool validate_imgproc_resize_linear_u8_exact(int src_rows,
+                                             int src_cols,
+                                             int dst_rows,
+                                             int dst_cols,
+                                             int channels,
+                                             std::uint32_t seed,
+                                             const void* actual_data,
+                                             std::size_t actual_bytes);
+
 bool validate_imgproc_hot_cvtcolor_u8(ImgprocHotColorOpId op,
                                       int rows,
                                       int cols,

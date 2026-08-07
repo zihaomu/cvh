@@ -2,6 +2,7 @@
 #define CVH_IMGPROC_DETAIL_RESIZE_IMPL_HPP
 
 #include "fastpath_common.hpp"
+#include "resize_fixed_u8c3.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -293,6 +294,17 @@ inline bool try_resize_fastpath_u8(const Mat& src, Mat& dst, Size dsize, double 
         return false;
     }
 #endif
+
+    if (interpolation == INTER_LINEAR && channels == 3 &&
+        resize_fixed_u8c3::is_exact_three_quarter_shape(
+            src_rows, src_cols, dst_rows, dst_cols))
+    {
+        cpu::set_last_kernel_route(
+            "resize_linear_u8c3:map=fixed_q16_q8;layout=flat_c3;interpolate=fixed8_scalar;store=scalar;tail=scalar");
+        resize_fixed_u8c3::resize_linear_scalar_reference(
+            src, dst, dst_rows, dst_cols);
+        return true;
+    }
 
     dst.create(std::vector<int>{dst_rows, dst_cols}, src.type());
 

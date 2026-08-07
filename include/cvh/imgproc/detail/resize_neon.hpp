@@ -2,6 +2,7 @@
 #define CVH_IMGPROC_DETAIL_RESIZE_NEON_HPP
 
 #include "fastpath_common.hpp"
+#include "resize_fixed_u8c3.hpp"
 #include "../../core/detail/cpu_features.hpp"
 
 #include <array>
@@ -262,6 +263,111 @@ inline void resize_linear_gather_u8c3(
     });
 }
 
+inline uint8x16_t lerp_fixed_u8x16(
+    uint8x16_t first,
+    uint8x16_t second,
+    uint16x8_t fraction_low,
+    uint16x8_t fraction_high)
+{
+    const uint8x8_t low = vraddhn_u16(
+        vshll_n_u8(vget_low_u8(first), 8),
+        vmulq_u16(
+            vsubl_u8(vget_low_u8(second), vget_low_u8(first)),
+            fraction_low));
+    const uint8x8_t high = vraddhn_u16(
+        vshll_high_n_u8(first, 8),
+        vmulq_u16(
+            vsubl_high_u8(second, first),
+            fraction_high));
+    return vcombine_u8(low, high);
+}
+
+inline void resize_linear_fixed_u8c3(
+    const Mat& src,
+    Mat& dst)
+{
+    const int src_rows = src.size[0];
+    const int src_cols = src.size[1];
+    const int dst_rows = dst.size[0];
+    const int dst_cols = dst.size[1];
+    const resize_fixed_u8c3::Maps maps =
+        resize_fixed_u8c3::build_maps(
+            src_rows, src_cols, dst_rows, dst_cols);
+    const std::size_t output_bytes =
+        static_cast<std::size_t>(dst_cols) * 3;
+
+    const bool do_parallel = should_parallelize_resize(dst_rows, dst_cols, 3);
+    parallel_for_index_if(do_parallel, dst_rows, [&](int y) {
+        const resize_fixed_u8c3::AxisCoordinate& vertical =
+            maps.y[static_cast<std::size_t>(y)];
+        const uchar* top = src.data +
+            static_cast<std::size_t>(vertical.first) * src.step(0);
+        const uchar* bottom = src.data +
+            static_cast<std::size_t>(vertical.second) * src.step(0);
+        uchar* output = dst.data + static_cast<std::size_t>(y) * dst.step(0);
+        const uint16x8_t y_fraction =
+            vdupq_n_u16(vertical.fraction);
+
+        std::size_t block_index = 0;
+        for (; block_index < maps.blocks.size(); ++block_index)
+        {
+            const resize_fixed_u8c3::FlatBlock& block =
+                maps.blocks[block_index];
+            uint8x16x2_t top_source;
+            uint8x16x2_t bottom_source;
+            top_source.val[0] =
+                vld1q_u8(top + block.source_byte_base);
+            top_source.val[1] =
+                vld1q_u8(top + block.source_byte_base + 16);
+            bottom_source.val[0] =
+                vld1q_u8(bottom + block.source_byte_base);
+            bottom_source.val[1] =
+                vld1q_u8(bottom + block.source_byte_base + 16);
+
+            const uint8x16_t left_index =
+                vld1q_u8(block.left_index.data());
+            const uint8x16_t right_index =
+                vaddq_u8(left_index, vdupq_n_u8(3));
+            const uint8x16_t top_left =
+                vqtbl2q_u8(top_source, left_index);
+            const uint8x16_t top_right =
+                vqtbl2q_u8(top_source, right_index);
+            const uint8x16_t bottom_left =
+                vqtbl2q_u8(bottom_source, left_index);
+            const uint8x16_t bottom_right =
+                vqtbl2q_u8(bottom_source, right_index);
+
+            const uint8x16_t left = lerp_fixed_u8x16(
+                top_left, bottom_left, y_fraction, y_fraction);
+            const uint8x16_t right = lerp_fixed_u8x16(
+                top_right, bottom_right, y_fraction, y_fraction);
+            const uint16x8_t x_fraction_low =
+                vld1q_u16(block.x_fraction.data());
+            const uint16x8_t x_fraction_high =
+                vld1q_u16(block.x_fraction.data() + 8);
+            const uint8x16_t result = lerp_fixed_u8x16(
+                left,
+                right,
+                x_fraction_low,
+                x_fraction_high);
+            vst1q_u8(output + block_index * 16, result);
+        }
+
+        for (std::size_t output_element = maps.vector_output_bytes();
+             output_element < output_bytes;
+             ++output_element)
+        {
+            output[output_element] =
+                resize_fixed_u8c3::interpolate_output_byte(
+                    top,
+                    bottom,
+                    maps,
+                    output_element,
+                    vertical.fraction);
+        }
+    });
+}
+
 #endif  // CVH_DETAIL_HAVE_NEON_KERNEL
 
 inline bool try_resize_linear_u8c3(
@@ -295,6 +401,13 @@ inline bool try_resize_linear_u8c3(
         cpu::set_last_kernel_route(
             "resize_linear_u8c3:map=ratio_half;load=neon;interpolate=neon;store=neon;tail=scalar");
         resize_linear_half_u8c3(src, dst);
+    }
+    else if (resize_fixed_u8c3::is_exact_three_quarter_shape(
+                 src.size[0], src.size[1], dst_rows, dst_cols))
+    {
+        cpu::set_last_kernel_route(
+            "resize_linear_u8c3:map=fixed_q16_q8;layout=flat_c3;load=neon_contiguous;gather=tbl2;interpolate=fixed8_vertical_horizontal;store=neon_contiguous;tail=fixed_scalar");
+        resize_linear_fixed_u8c3(src, dst);
     }
     else
     {

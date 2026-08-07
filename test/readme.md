@@ -1,60 +1,85 @@
-# 测试目录
+# Test Organization
 
-测试按长期产品职责组织，不按开发阶段、版本号或历史任务命名。
+Tests are organized by long-lived product responsibility rather than by
+development phase, version number, or historical task.
 
-## 分层
+## Layers
 
-- `core/`：Mat、基础算子、类型、运行时、内部派发和 upstream 兼容子集。
-- `imgproc/`：颜色、滤波、几何、强度、形态学等图像处理合同。
-- `imgcodecs/`：图像读写功能和异常路径。
-- `highgui/`：可选 header-only 窗口 API、输入约束和生命周期。
-- `smoke/`：头文件独立编译、ODR、target 配置和最小 pipeline 检查。
-- `opencv_contract/`：可选的 OpenCV 隔离差分测试。
-- `upstream/`：OpenCV 原始 case 快照和状态 manifest，不直接参与编译。
-- `support/`：core/imgproc 共用的测试状态 guard。
-- `utils/`：跨模块测试工具。
+- `core/`: Mat semantics, basic operators, types, runtime behavior, internal
+  dispatch, and the selected upstream compatibility subset.
+- `imgproc/`: color, filtering, geometry, intensity, morphology, and other
+  image-processing contracts.
+- `imgcodecs/`: image read/write behavior and failure paths.
+- `highgui/`: the optional header-only window API, input constraints, and
+  lifecycle behavior.
+- `smoke/`: independent header compilation, ODR, target configuration, and
+  minimal pipelines.
+- `opencv_contract/`: optional isolated differential tests against OpenCV.
+- `upstream/`: extracted OpenCV test snapshots and status manifests; snapshots
+  are not compiled directly.
+- `support/`: shared Core/Imgproc test-state guards.
+- `utils/`: cross-module helpers, currently including the shared NPY Mat
+  loader in `mat_load.*`.
 
-public contract 只验证公开 API 的输出、边界和异常；需要强制 scalar/UI 路径或
-观察 dispatch 的用例放在模块的 `internal/`。上游移植用例放在 `upstream/`，
-并保留原 suite/case 关联。
+Public-contract tests verify public API results, boundaries, and exceptions.
+Tests that force scalar/UI paths or inspect dispatch belong in the owning
+module's `internal/` directory. Ported upstream cases belong in `upstream/`
+and retain their original suite/case association.
 
-## 构建与运行
+## Build And Run
 
 ```bash
 cmake -S . -B build-tests \
   -DCVH_BUILD_TESTS=ON \
   -DCMAKE_BUILD_TYPE=Release
-cmake --build build-tests --target cvh_test_core cvh_test_imgproc -j
+cmake --build build-tests --target cvh_test_core cvh_test_imgproc --parallel 2
 ctest --test-dir build-tests --output-on-failure
 ```
 
-规范模块级 GTest target 为 `cvh_test_core`、`cvh_test_imgproc`、
-`cvh_test_imgcodecs` 和 `cvh_test_highgui`。`cvh_test_gemm_isa` 使用 `cvh::headers`
-独立验证 GEMM 专用 ISA，避免把架构条件 skip 混入默认 Core 基线。
-`test/core/sources.cmake` 与 `test/imgproc/sources.cmake` 显式列出 source；
-配置阶段会审计遗漏、重复和不存在的 `*_test.cpp`。
+The canonical module-level GTest targets are `cvh_test_core`,
+`cvh_test_imgproc`, `cvh_test_imgcodecs`, and `cvh_test_highgui`.
+`cvh_test_gemm_isa` uses `cvh::headers` to validate specialized GEMM ISA paths
+without mixing architecture-conditional skips into the default Core baseline.
+`test/core/sources.cmake` and `test/imgproc/sources.cmake` list sources
+explicitly; configure-time checks reject missing, duplicate, or unregistered
+`*_test.cpp` files.
 
-完整发布门禁只运行启用 OpenCV Universal Intrinsics 的 header-only 配置：
+The complete release gate uses the optimized header-only configuration:
 
 ```bash
 ./scripts/ci_headers_all.sh
 ```
 
-该命令固定 `CVH_ENABLE_OPTIMIZATION=ON`。Core/Imgproc 的 scalar、
-OpenCV UI、NEON 和 AVX2 路径均为 header-only。
-门禁构建默认 `all` 目标并运行完整 CTest；Core/Imgproc 的 XML、CTest
-inventory 和 executed/failed/skipped 数量由
-`test/ci/header_gate_expectations.json` 校验。
+This command fixes `CVH_ENABLE_OPTIMIZATION=ON`. Core and Imgproc scalar,
+OpenCV UI, NEON, and AVX2 paths remain header-only. The gate builds the default
+`all` target and runs the complete CTest inventory. Core/Imgproc XML results,
+CTest inventory, and executed/failed/skipped counts are validated against
+`test/ci/header_gate_expectations.json`.
 
-scalar-only 配置仅保留为本地诊断能力，不属于托管 CI 门禁。
+The scalar-only configuration remains available for local diagnostics and is
+not a hosted CI gate.
 
-## 维护约束
+## Status Ownership
 
-1. 文件名表达稳定 API 或算法职责，不使用 `phase1`、版本号和任务编号。
-2. 一个测试必须有可观察断言；仅打印、空调用和永久 skip 不属于有效测试。
-3. 混合多个 API 的异常 case 应拆开，使失败能直接定位到 owner。
-4. 公共测试不得依赖生产 `detail` helper 作为 oracle。
-5. fixture 必须有固定生成器、hash、oracle 和 consumer。
-6. upstream 的产品边界外 case 记为 `OUT_OF_SCOPE`，不注册成 `GTEST_SKIP`。
+- `test/ci/header_gate_expectations.json` owns expected Core and Imgproc test
+  counts and architecture-specific skip expectations.
+- `test/upstream/opencv/core/channel_manifest.json` and
+  `test/upstream/opencv/imgproc/case_manifest.json` own upstream case status,
+  provenance, and local consumers.
+- Current failures remain executable failures reported by CTest/GTest. The
+  repository does not maintain a handwritten failure-count ledger.
+- Product-boundary cases use `OUT_OF_SCOPE` with an explicit reassessment
+  condition; they are not registered as permanent skips.
 
-当前失败和产品边界记录见 `failing-tests.md`。
+## Maintenance Rules
+
+1. File names describe stable API or algorithm responsibility, not phases,
+   versions, or task numbers.
+2. Every test has an observable assertion; print-only calls, empty calls, and
+   permanent skips are not valid tests.
+3. Failure cases spanning multiple APIs are split so the owning component is
+   immediately visible.
+4. Public tests do not use production `detail` helpers as their oracle.
+5. Every fixture has a deterministic generator, hash, oracle, and consumer.
+6. Test status, consumer paths, and the owning machine-readable manifest are
+   updated together.

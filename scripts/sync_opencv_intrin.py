@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 DEFAULT_OPENCV_ROOT = Path("/Users/zmu/work/my_project/ocvh/opencv")
+UPSTREAM_REPOSITORY = "https://github.com/opencv/opencv.git"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 VENDOR_ROOT = REPO_ROOT / "include" / "cvh" / "3rdparty" / "opencv_intrin"
 UPSTREAM_MD = VENDOR_ROOT / "UPSTREAM.md"
@@ -75,7 +76,7 @@ def expected_upstream_markdown(opencv_root: Path, describe: str, head: str) -> s
 
 ## Source
 
-- Repository: `{opencv_root}`
+- Repository: `{UPSTREAM_REPOSITORY}`
 - Version describe: `{describe}`
 - Commit: `{head}`
 - OpenCV version header: `{version}`
@@ -160,7 +161,7 @@ def main() -> int:
         raise SystemExit(f"OpenCV source tree not found: {opencv_root}")
 
     head = git_value(opencv_root, "rev-parse", "HEAD")
-    describe = git_value(opencv_root, "describe", "--tags", "--always", "--dirty")
+    describe = git_value(opencv_root, "describe", "--tags", "--always")
     expected_upstream = expected_upstream_markdown(opencv_root, describe, head)
 
     changed = []

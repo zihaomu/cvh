@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "NMS keeps only the ridge peak",
+  "direction": "DOWN",
+  "nodes": [
+    { "id": "candidate-magnitude", "role": "context", "text": "Candidate magnitude A", "width": 300 },
+    { "id": "gradient-bin", "role": "inference", "text": "Choose 0°, 45°,\n90°, or 135°", "width": 320 },
+    { "id": "direction-neighbors", "role": "example", "text": "Read B and C\nalong that direction", "width": 340 },
+    { "id": "local-maximum-test", "role": "objection", "text": "Is A a peak?", "width": 300 },
+    { "id": "keep-edge-candidate", "role": "conclusion", "text": "Yes: keep A", "width": 260 },
+    { "id": "suppress-wide-ridge", "role": "conclusion", "text": "No: suppress A", "width": 280 }
+  ],
+  "edges": [
+    { "from": "candidate-magnitude", "to": "gradient-bin", "label": "use Gx and Gy", "relation": "leads-to" },
+    { "from": "gradient-bin", "to": "direction-neighbors", "label": "select two samples", "relation": "leads-to" },
+    { "from": "direction-neighbors", "to": "local-maximum-test", "label": "compare A, B, C", "relation": "leads-to" },
+    { "from": "local-maximum-test", "to": "keep-edge-candidate", "label": "A wins", "relation": "leads-to" },
+    { "from": "local-maximum-test", "to": "suppress-wide-ridge", "label": "a neighbor wins", "relation": "leads-to" }
+  ]
+}

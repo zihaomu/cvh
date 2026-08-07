@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "Hysteresis uses connectivity to reject noise",
+  "direction": "RIGHT",
+  "nodes": [
+    { "id": "threshold-state-map", "role": "context", "text": "State map\n0 / weak / strong", "width": 300 },
+    { "id": "strong-edge-seed", "role": "claim", "text": "Start at a\nstrong pixel", "width": 280 },
+    { "id": "connected-weak-chain", "role": "inference", "text": "Walk through\nweak neighbors", "width": 340 },
+    { "id": "retained-edge-chain", "role": "conclusion", "text": "Keep the whole\nconnected chain", "width": 300 },
+    { "id": "isolated-weak-pixel", "role": "objection", "text": "Isolated\nweak pixel", "width": 320 },
+    { "id": "discarded-noise", "role": "conclusion", "text": "Discard as noise", "width": 280 }
+  ],
+  "edges": [
+    { "from": "threshold-state-map", "to": "strong-edge-seed", "label": "state = strong", "relation": "leads-to" },
+    { "from": "strong-edge-seed", "to": "connected-weak-chain", "label": "DFS / stack", "relation": "leads-to" },
+    { "from": "connected-weak-chain", "to": "retained-edge-chain", "label": "promote to edge", "relation": "leads-to" },
+    { "from": "threshold-state-map", "to": "isolated-weak-pixel", "label": "state = weak", "relation": "leads-to" },
+    { "from": "isolated-weak-pixel", "to": "discarded-noise", "label": "never reached", "relation": "leads-to" }
+  ]
+}

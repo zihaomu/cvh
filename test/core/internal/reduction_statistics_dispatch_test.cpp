@@ -83,7 +83,10 @@ TEST(ReductionStatisticsDispatchInternalTest,
             meanStdDev(src, auto_mean_value, auto_stddev);
             EXPECT_EQ(
                 cpu::last_dispatch_tag(),
-                expected_statistics_auto_tag(depth, ui_enabled));
+                depth == CV_32F && channels == 3 &&
+                        cpu::neon_runtime_available()
+                    ? cpu::DispatchTag::NEON
+                    : expected_statistics_auto_tag(depth, ui_enabled));
 
             const bool floating =
                 depth == CV_16F || depth == CV_32F || depth == CV_64F;
@@ -242,6 +245,55 @@ TEST(ReductionStatisticsDispatchInternalTest, statistics_ui_integer_sum_is_exact
         DispatchModeGuard guard(cpu::DispatchMode::Auto);
         EXPECT_DOUBLE_EQ(sum(unsigned_values)[0], scalar_unsigned[0]);
         EXPECT_DOUBLE_EQ(sum(signed_values)[0], scalar_signed[0]);
+    }
+}
+
+TEST(ReductionStatisticsDispatchInternalTest,
+     mean_stddev_f32_c3_direct_neon_is_stable_and_c1_falls_back)
+{
+    for (const int channels : {1, 3})
+    {
+        Mat owner({7, 73}, CV_MAKETYPE(CV_32F, channels));
+        for (int row = 0; row < owner.size.p[0]; ++row)
+        {
+            for (int column = 0; column < owner.size.p[1]; ++column)
+            {
+                for (int channel = 0; channel < channels; ++channel)
+                {
+                    owner.at<float>(row, column, channel) =
+                        1.0e7f + static_cast<float>(
+                            ((row * 17 + column * 5 + channel * 3) % 9) - 4);
+                }
+            }
+        }
+        Mat src = owner.colRange(1, 72);
+        ASSERT_FALSE(src.isContinuous());
+        Scalar expected_mean;
+        Scalar expected_stddev;
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::ScalarOnly);
+            meanStdDev(src, expected_mean, expected_stddev);
+        }
+        Scalar actual_mean;
+        Scalar actual_stddev;
+        {
+            DispatchModeGuard guard(cpu::DispatchMode::NeonOnly);
+            cpu::reset_last_dispatch_tag();
+            meanStdDev(src, actual_mean, actual_stddev);
+            EXPECT_EQ(
+                cpu::last_dispatch_tag(),
+                channels == 3 && cpu::neon_runtime_available()
+                    ? cpu::DispatchTag::NEON
+                    : cpu::DispatchTag::Scalar);
+        }
+        expect_scalar_close(
+            actual_mean, expected_mean, channels, 1e-9, 1e-12);
+        expect_scalar_close(
+            actual_stddev, expected_stddev, channels, 1e-9, 1e-9);
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            EXPECT_GT(actual_stddev[channel], 0.0);
+        }
     }
 }
 
