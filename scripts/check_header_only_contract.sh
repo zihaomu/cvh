@@ -59,6 +59,7 @@ require_public_header_surface() {
     "${include_dir}/cvh.h" \
     "${include_dir}/core/mat.h" \
     "${include_dir}/imgproc/imgproc.h" \
+    "${include_dir}/pipeline/pipeline.h" \
     "${include_dir}/imgcodecs/imgcodecs.h" \
     "${include_dir}/highgui/highgui.h" \
     "${include_dir}/highgui/highgui.hpp"; do
@@ -108,17 +109,20 @@ cmake --build "${BUILD_DIR}" --parallel "${PARALLELISM}" --target \
   cvh_core_headers_compile_smoke \
   cvh_imgproc_header_odr_smoke \
   cvh_imgproc_headers_compile_smoke \
+  cvh_pipeline_header_odr_smoke \
+  cvh_pipeline_headers_compile_smoke \
   cvh_imgcodecs_headers_compile_smoke \
   cvh_highgui_headers_compile_smoke \
   cvh_highgui_header_odr_smoke \
   cvh_aggregate_headers_compile_smoke \
   cvh_include_only_smoke \
   cvh_pipeline_smoke \
+  cvh_pipeline_zero_allocation_smoke \
   cvh_resize_dispatch_smoke \
   >/dev/null
 
 ctest --test-dir "${BUILD_DIR}" --output-on-failure \
-  -R 'cvh_header_compile_smoke|cvh_core_header_odr_smoke|cvh_core_headers_compile_smoke|cvh_imgproc_header_odr_smoke|cvh_imgproc_headers_compile_smoke|cvh_imgcodecs_headers_compile_smoke|cvh_highgui_headers_compile_smoke|cvh_highgui_header_odr_smoke|cvh_aggregate_headers_compile_smoke|cvh_include_only_smoke|cvh_pipeline_smoke|cvh_resize_dispatch_smoke'
+  -R 'cvh_header_compile_smoke|cvh_core_header_odr_smoke|cvh_core_headers_compile_smoke|cvh_imgproc_header_odr_smoke|cvh_imgproc_headers_compile_smoke|cvh_pipeline_header_odr_smoke|cvh_pipeline_headers_compile_smoke|cvh_imgcodecs_headers_compile_smoke|cvh_highgui_headers_compile_smoke|cvh_highgui_header_odr_smoke|cvh_aggregate_headers_compile_smoke|cvh_include_only_smoke|cvh_pipeline_smoke|cvh_pipeline_zero_allocation_smoke|cvh_resize_dispatch_smoke'
 
 cmake --install "${BUILD_DIR}" --prefix "${INSTALL_DIR}" >/dev/null
 require_public_exports "${INSTALL_DIR}/lib/cmake/cvh"
@@ -172,6 +176,7 @@ EOF
 cat > "${HEADERS_CONSUMER_DIR}/main.cpp" <<'EOF'
 #include <cvh/cvh.h>
 #include <cvh/core/simd/opencv_ui.h>
+#include <cvh/pipeline/pipeline.h>
 
 #include <cstring>
 
@@ -196,6 +201,9 @@ int main()
     cvh::Mat dst;
     cvh::resize(src, dst, cvh::Size(1, 1), 0.0, 0.0, cvh::INTER_LINEAR);
 
+    cvh::Mat pipeline_dst;
+    cvh::pipe(src, pipeline_dst).resize(1, 1).run();
+
     cvh::Mat a({2, 2}, CV_32F);
     cvh::Mat b({2, 2}, CV_32F);
     a = 2.0f;
@@ -212,7 +220,10 @@ int main()
         reinterpret_cast<const float*>(expression.data)[0] == 5.0f;
     const bool resize_ok =
         dst.dims == 2 && dst.type() == CV_8UC1 && dst.size[0] == 1 && dst.size[1] == 1;
-    return core_ok && resize_ok ? 0 : 2;
+    const bool pipeline_ok =
+        pipeline_dst.dims == 2 && pipeline_dst.type() == CV_8UC1 &&
+        pipeline_dst.size[0] == 1 && pipeline_dst.size[1] == 1;
+    return core_ok && resize_ok && pipeline_ok ? 0 : 2;
 }
 EOF
 

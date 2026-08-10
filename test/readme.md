@@ -9,6 +9,8 @@ development phase, version number, or historical task.
   dispatch, and the selected upstream compatibility subset.
 - `imgproc/`: color, filtering, geometry, intensity, morphology, and other
   image-processing contracts.
+- `pipeline/`: ordered preprocessing plans, descriptor inference, prepared
+  execution, workspace behavior, and hard fusion requirements.
 - `imgcodecs/`: image read/write behavior and failure paths.
 - `highgui/`: the optional header-only window API, input constraints, and
   lifecycle behavior.
@@ -37,12 +39,13 @@ ctest --test-dir build-tests --output-on-failure
 ```
 
 The canonical module-level GTest targets are `cvh_test_core`,
-`cvh_test_imgproc`, `cvh_test_imgcodecs`, and `cvh_test_highgui`.
+`cvh_test_imgproc`, `cvh_test_pipeline`, `cvh_test_imgcodecs`, and
+`cvh_test_highgui`.
 `cvh_test_gemm_isa` uses `cvh::headers` to validate specialized GEMM ISA paths
 without mixing architecture-conditional skips into the default Core baseline.
-`test/core/sources.cmake` and `test/imgproc/sources.cmake` list sources
-explicitly; configure-time checks reject missing, duplicate, or unregistered
-`*_test.cpp` files.
+`test/core/sources.cmake`, `test/imgproc/sources.cmake`, and
+`test/pipeline/sources.cmake` list sources explicitly; configure-time checks
+reject missing, duplicate, or unregistered `*_test.cpp` files.
 
 The complete release gate uses the optimized header-only configuration:
 

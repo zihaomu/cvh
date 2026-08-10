@@ -7,13 +7,15 @@ as operator unit tests.
 
 ### Public-header compilation
 
-- Core, Imgproc, Imgcodecs, and HighGUI top-level headers compile independently.
+- Core, Imgproc, Pipeline, Imgcodecs, and HighGUI public headers compile
+  independently.
 - Aggregate `cvh/cvh.h` and compatibility `cvh.h` compile independently.
 - Configure-time manifests fail when a public header lacks a compile source.
 
 ### ODR and target contracts
 
-- Core, Imgproc, and HighGUI are linked from multiple translation units.
+- Core, Imgproc, Pipeline, and HighGUI are linked from multiple translation
+  units.
 - Inline dispatch telemetry and HighGUI state do not create duplicate symbols.
 - Installed `cvh::headers` and `cvh::highgui` consumers build outside the source
   tree.
@@ -23,6 +25,7 @@ as operator unit tests.
 - direct include and basic Mat behavior;
 - Imgcodecs to Imgproc read/process/write flow;
 - default dispatch and output sanity;
+- prepared Pipeline execution performs zero heap allocations;
 - optimization-disabled scalar behavior;
 - OpenCV UI and architecture-specific compile/runtime capability where
   applicable.

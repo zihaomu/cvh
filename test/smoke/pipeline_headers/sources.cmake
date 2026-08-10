@@ -1,0 +1,22 @@
+set(CVH_PIPELINE_PUBLIC_HEADERS
+    include/cvh/pipeline/builder.h
+    include/cvh/pipeline/info.h
+    include/cvh/pipeline/operations.h
+    include/cvh/pipeline/pipeline.h
+    include/cvh/pipeline/plan.h
+    include/cvh/pipeline/types.h
+    include/cvh/pipeline/views.h
+    include/cvh/pipeline/workspace.h
+)
+
+set(CVH_PIPELINE_HEADER_COMPILE_SMOKE_SOURCES
+    test/smoke/pipeline_headers/main.cpp
+    test/smoke/pipeline_headers/builder_compile.cpp
+    test/smoke/pipeline_headers/info_compile.cpp
+    test/smoke/pipeline_headers/operations_compile.cpp
+    test/smoke/pipeline_headers/pipeline_compile.cpp
+    test/smoke/pipeline_headers/plan_compile.cpp
+    test/smoke/pipeline_headers/types_compile.cpp
+    test/smoke/pipeline_headers/views_compile.cpp
+    test/smoke/pipeline_headers/workspace_compile.cpp
+)

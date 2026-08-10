@@ -158,6 +158,7 @@ The support table above is tied to the header-only test path:
 | `cvh::headers` macro/default behavior | `cvh_header_compile_smoke`, `cvh_include_only_smoke` |
 | Imgproc multi-TU ODR | `cvh_imgproc_header_odr_smoke` |
 | Core/Imgproc/Imgcodecs per-header compilation | `cvh_*_headers_compile_smoke` |
+| Proposed Pipeline headers, multi-TU ODR, zero-allocation prepared run, and ordered-chain semantics | `cvh_pipeline_*_smoke`, `cvh_test_pipeline` |
 | Aggregate and forwarding headers | `cvh_aggregate_headers_compile_smoke` |
 | Optional HighGUI header, ODR, lifecycle, and installed consumer | `cvh_highgui_*_smoke`, `cvh_test_highgui` |
 | `core` supported baseline | `cvh_test_core` |
@@ -172,7 +173,7 @@ These are target areas, but they are not yet supported promises in the pure head
 | Area | Candidate APIs / work | Current intent |
 |---|---|---|
 | Core SIMD | `add/subtract/multiply/divide/transpose/GEMM` | Add UI or platform-specific paths only after the public header baseline is measured against upstream. |
-| AI preprocessing | HWC-to-CHW / CHW-to-HWC, tensor packing | Add as focused preprocessing utilities once `Mat` and imgproc behavior stay stable. |
+| Pipeline / AI preprocessing | `<cvh/pipeline/pipeline.h>`, ordered `color/resize/normalize/layout`, prepared plans and tensor packing | P0 scalar semantic skeleton is implemented and remains Proposed; fused execution, borrowed-view execution, NV12 and Recipes are later gates tracked in `doc/pipeline-module-design.md`. |
 | SIMD expansion | general `resize`, broader `cvtColor`, YUV fast paths | Use direct OpenCV Universal Intrinsics style first; add platform-specific paths only when benchmark data justifies them. |
 | OpenCV compatibility | more flags, depths, borders, and edge cases | Expand only with explicit behavior contracts and regression tests. |
 

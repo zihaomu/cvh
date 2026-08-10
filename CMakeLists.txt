@@ -155,10 +155,12 @@ if(CVH_BUILD_TESTS)
     include(test/cmake/CvhTest.cmake)
     include(test/core/sources.cmake)
     include(test/imgproc/sources.cmake)
+    include(test/pipeline/sources.cmake)
     include(test/smoke/core_headers/sources.cmake)
     include(test/smoke/imgproc_headers/sources.cmake)
     include(test/smoke/imgcodecs_headers/sources.cmake)
     include(test/smoke/highgui_headers/sources.cmake)
+    include(test/smoke/pipeline_headers/sources.cmake)
     include(test/smoke/public_headers/sources.cmake)
 
     cvh_assert_all_test_sources_registered(
@@ -170,6 +172,10 @@ if(CVH_BUILD_TESTS)
     cvh_assert_all_test_sources_registered(
         "${CMAKE_CURRENT_SOURCE_DIR}/test/imgproc"
         SOURCES ${CVH_IMGPROC_TEST_SOURCES}
+    )
+    cvh_assert_all_test_sources_registered(
+        "${CMAKE_CURRENT_SOURCE_DIR}/test/pipeline"
+        SOURCES ${CVH_PIPELINE_TEST_SOURCES}
     )
     cvh_assert_public_header_compile_smoke(
         "${CMAKE_CURRENT_SOURCE_DIR}/include/cvh/core"
@@ -194,6 +200,12 @@ if(CVH_BUILD_TESTS)
         SOURCE_DIR test/smoke/highgui_headers
         HEADERS ${CVH_HIGHGUI_PUBLIC_HEADERS}
         SOURCES ${CVH_HIGHGUI_HEADER_COMPILE_SMOKE_SOURCES}
+    )
+    cvh_assert_public_header_compile_smoke(
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/cvh/pipeline"
+        SOURCE_DIR test/smoke/pipeline_headers
+        HEADERS ${CVH_PIPELINE_PUBLIC_HEADERS}
+        SOURCES ${CVH_PIPELINE_HEADER_COMPILE_SMOKE_SOURCES}
     )
 
     add_executable(cvh_header_compile_smoke test/smoke/cvh_header_compile_smoke.cpp)
@@ -222,6 +234,19 @@ if(CVH_BUILD_TESTS)
     )
     target_link_libraries(cvh_imgproc_headers_compile_smoke PRIVATE cvh::headers)
     target_compile_features(cvh_imgproc_headers_compile_smoke PRIVATE cxx_std_17)
+
+    add_executable(cvh_pipeline_header_odr_smoke
+        test/smoke/cvh_pipeline_header_odr_main.cpp
+        test/smoke/cvh_pipeline_header_odr_peer.cpp
+    )
+    target_link_libraries(cvh_pipeline_header_odr_smoke PRIVATE cvh::headers)
+    target_compile_features(cvh_pipeline_header_odr_smoke PRIVATE cxx_std_17)
+
+    add_executable(cvh_pipeline_headers_compile_smoke
+        ${CVH_PIPELINE_HEADER_COMPILE_SMOKE_SOURCES}
+    )
+    target_link_libraries(cvh_pipeline_headers_compile_smoke PRIVATE cvh::headers)
+    target_compile_features(cvh_pipeline_headers_compile_smoke PRIVATE cxx_std_17)
 
     add_executable(cvh_imgcodecs_headers_compile_smoke
         ${CVH_IMGCODECS_HEADER_COMPILE_SMOKE_SOURCES}
@@ -263,6 +288,12 @@ if(CVH_BUILD_TESTS)
 
     add_executable(cvh_pipeline_smoke test/smoke/cvh_pipeline_smoke.cpp)
     target_link_libraries(cvh_pipeline_smoke PRIVATE cvh::headers)
+
+    add_executable(cvh_pipeline_zero_allocation_smoke
+        test/smoke/cvh_pipeline_zero_allocation_smoke.cpp
+    )
+    target_link_libraries(cvh_pipeline_zero_allocation_smoke PRIVATE cvh::headers)
+    target_compile_features(cvh_pipeline_zero_allocation_smoke PRIVATE cxx_std_17)
 
     add_executable(cvh_resize_dispatch_smoke test/smoke/cvh_resize_dispatch_smoke.cpp)
     target_link_libraries(cvh_resize_dispatch_smoke PRIVATE cvh::headers)
@@ -357,6 +388,15 @@ if(CVH_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/test
     )
 
+    add_executable(cvh_test_pipeline ${CVH_PIPELINE_TEST_SOURCES})
+    target_link_libraries(cvh_test_pipeline PRIVATE cvh::headers gtest_main)
+    target_compile_features(cvh_test_pipeline PRIVATE cxx_std_17)
+    target_include_directories(cvh_test_pipeline PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/test
+    )
+
     add_executable(cvh_test_core
         ${CVH_CORE_TEST_SOURCES}
         ${CVH_CORE_TEST_SUPPORT_SOURCES}
@@ -416,12 +456,18 @@ if(CVH_BUILD_TESTS)
         add_test(NAME cvh_core_headers_compile_smoke COMMAND cvh_core_headers_compile_smoke)
         add_test(NAME cvh_imgproc_header_odr_smoke COMMAND cvh_imgproc_header_odr_smoke)
         add_test(NAME cvh_imgproc_headers_compile_smoke COMMAND cvh_imgproc_headers_compile_smoke)
+        add_test(NAME cvh_pipeline_header_odr_smoke COMMAND cvh_pipeline_header_odr_smoke)
+        add_test(NAME cvh_pipeline_headers_compile_smoke COMMAND cvh_pipeline_headers_compile_smoke)
         add_test(NAME cvh_imgcodecs_headers_compile_smoke COMMAND cvh_imgcodecs_headers_compile_smoke)
         add_test(NAME cvh_highgui_headers_compile_smoke COMMAND cvh_highgui_headers_compile_smoke)
         add_test(NAME cvh_highgui_header_odr_smoke COMMAND cvh_highgui_header_odr_smoke)
         add_test(NAME cvh_aggregate_headers_compile_smoke COMMAND cvh_aggregate_headers_compile_smoke)
         add_test(NAME cvh_include_only_smoke COMMAND cvh_include_only_smoke)
         add_test(NAME cvh_pipeline_smoke COMMAND cvh_pipeline_smoke)
+        add_test(
+            NAME cvh_pipeline_zero_allocation_smoke
+            COMMAND cvh_pipeline_zero_allocation_smoke
+        )
         add_test(NAME cvh_resize_dispatch_smoke COMMAND cvh_resize_dispatch_smoke)
         if(CVH_ENABLE_OPTIMIZATION)
             add_test(NAME cvh_opencv_intrin_smoke COMMAND cvh_opencv_intrin_smoke)
@@ -451,6 +497,7 @@ if(CVH_BUILD_TESTS)
         add_test(NAME cvh_test_imgcodecs COMMAND cvh_test_imgcodecs)
         add_test(NAME cvh_test_highgui COMMAND cvh_test_highgui)
         add_test(NAME cvh_test_imgproc COMMAND cvh_test_imgproc)
+        add_test(NAME cvh_test_pipeline COMMAND cvh_test_pipeline)
         add_test(NAME cvh_test_core COMMAND cvh_test_core)
         add_test(NAME cvh_test_gemm_isa COMMAND cvh_test_gemm_isa)
         set_tests_properties(
@@ -472,6 +519,16 @@ if(CVH_BUILD_TESTS)
         set_tests_properties(
             cvh_imgproc_headers_compile_smoke
             PROPERTIES LABELS "imgproc;smoke"
+        )
+        set_tests_properties(
+            cvh_test_pipeline
+            PROPERTIES LABELS "pipeline;unit"
+        )
+        set_tests_properties(
+            cvh_pipeline_header_odr_smoke
+            cvh_pipeline_headers_compile_smoke
+            cvh_pipeline_zero_allocation_smoke
+            PROPERTIES LABELS "pipeline;smoke"
         )
         set_tests_properties(
             cvh_imgcodecs_headers_compile_smoke

@@ -1,10 +1,77 @@
 # cvh Pipeline 模块最终设计提案
 
-状态：Proposed，尚未构成当前公开 API 或支持承诺。
+状态：Proposed；P0 API 已可试用，尚未构成 Supported 支持承诺。
 
 本文冻结 Pipeline 的产品边界、首选 API、执行语义、优化合同和分阶段落地方案。
 示例用于指导实现；只有对应 header、测试、安装消费和性能门禁全部完成后，相关
 能力才进入 Supported 状态。
+
+## 0. 实施状态
+
+更新时间：2026-08-07
+
+总状态：**P0 已完成，P1 未开始**。当前公开状态仍为 Proposed；尚未进入
+Supported。
+
+| 批次 | 范围 | 状态 | 完成证据 |
+| --- | --- | --- | --- |
+| P0.0 | 冻结首批 API 子集、建立实时台账、复核工程接入点 | 已完成 | 2026-08-07：确认独立 public-header/ODR/unit 接入点；冻结下述 P0 子集 |
+| P0.1 | descriptor、borrowed view、status/info、workspace 基础类型 | 已完成 | 2026-08-07：8 个 public header 独立编译与 ODR smoke 通过 |
+| P0.2 | fluent builder、ordered IR、类型/shape 推导、`prepare/explain` | 已完成 | 2026-08-07：ordered stage、顺序错误定位、输出约束和硬要求单测通过 |
+| P0.3 | scalar reference、staged workspace、一次性/prepared `run` | 已完成 | 2026-08-07：数值/ROI/prepared-one-shot/并发测试通过；allocator hook 实测 prepared `tryRun()` 为 0 次堆分配 |
+| P0.4 | public header、单元/随机链、ODR、install consumer 门禁 | 已完成 | 2026-08-07：64 条确定性随机合法链、public-header、ODR、install consumer、ASan+UBSan、优化开/关和完整 25 项 CTest 通过 |
+| P1 | 模型输入融合、ARM NEON、`modelInput` Recipe | 未开始 | — |
+
+首批实现只接受单输入、单输出的 `cvh::Mat`，支持能够形成完整 reference 闭环的
+操作子集。外部 Image/Tensor borrowed view、NV12、多输出和融合内核将在基础执行
+合同验证后按批次开放；文档中的最终 API 示例不因此降级，未实现项必须保持
+Proposed 标记，不能用空实现伪装支持。
+
+P0 冻结子集：
+
+- 可执行输入：二维 `CV_8U/CV_32F` Gray、BGR、RGB `cvh::Mat`，三通道 Mat 默认
+  按 BGR 解释；
+- 可执行输出：二维 packed Image，或连续 NCHW/NHWC Tensor `cvh::Mat`；
+- ordered operations：`color/resize/normalize/layout`；
+- 运行方式：一次性 `run()` 与 descriptor `prepare()` + 外部
+  `PipelineWorkspace`；
+- 执行策略：可信 scalar staged reference，每个未融合 stage 保持独立执行组；
+- 强制融合策略按真实计划检查，P0 不满足时必须失败；
+- `ImageView/TensorView/NV12` 先冻结描述和 helper，执行 overload 在完成容量、stride
+  和多 plane 门禁前保持不可调用。
+
+实施规则：每个批次开始、完成、回退或阻塞时先更新本表；完成状态必须附带实际
+构建/测试命令，不能仅以代码存在作为完成证据。
+
+最近验证命令（2026-08-07）：
+
+~~~bash
+cmake -S . -B build-core-mat-neon-tests
+cmake --build build-core-mat-neon-tests \
+  --target cvh_test_pipeline cvh_pipeline_zero_allocation_smoke \
+           cvh_pipeline_headers_compile_smoke \
+           cvh_pipeline_header_odr_smoke --parallel 2
+ctest --test-dir build-core-mat-neon-tests --output-on-failure \
+  -R '^cvh_(pipeline_headers_compile_smoke|pipeline_header_odr_smoke|pipeline_zero_allocation_smoke|test_pipeline)$'
+./scripts/check_header_only_contract.sh
+ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+ctest --test-dir build-phase2-sanitize --output-on-failure \
+  -R '^cvh_(pipeline_headers_compile_smoke|pipeline_header_odr_smoke|pipeline_zero_allocation_smoke|test_pipeline)$'
+cmake --build build-b7-optimization-off \
+  --target cvh_test_pipeline cvh_pipeline_zero_allocation_smoke \
+           cvh_pipeline_headers_compile_smoke \
+           cvh_pipeline_header_odr_smoke --parallel 2
+ctest --test-dir build-b7-optimization-off --output-on-failure \
+  -R '^cvh_(pipeline_headers_compile_smoke|pipeline_header_odr_smoke|pipeline_zero_allocation_smoke|test_pipeline)$'
+cmake --build build-core-mat-neon-tests --parallel 2
+ctest --test-dir build-core-mat-neon-tests --output-on-failure
+~~~
+
+Sanitizer 记录：首次使用 `ASAN_OPTIONS=detect_leaks=1` 的运行在 macOS 上被 ASan
+运行时以“不支持 leak detection”拒绝，测试主体未执行，因此不计为产品失败或通过；
+随后使用该平台支持的 `detect_leaks=0` 重新验证，4 项 Pipeline ASan+UBSan 测试
+全部通过。
 
 ## 1. 对外话术
 
