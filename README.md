@@ -143,6 +143,7 @@ Legend:
 | `imgproc` | `remap`, `convertMaps`, `warpPerspective`, `getRectSubPix` | Supported | U8/F32 C1/C3/C4 nearest/bilinear geometric sampling, three map layouts, F32/F64 perspective matrices, and sub-pixel patches. | Public scalar baseline with Mode A/B benchmark rows; SIMD is pending. |
 | `imgproc` | `Canny` | Supported + fast path | Image overload for `CV_8UC1`; derivative overload for `CV_16SC1`; `apertureSize=3/5`; L1/L2 gradient. | Shared header magnitude/NMS/hysteresis path. |
 | `imgproc` | `erode`, `dilate`, `morphologyEx` | Supported + fast path | `CV_8U`; `MORPH_ERODE`, `DILATE`, `OPEN`, `CLOSE`, `GRADIENT`, `TOPHAT`, `BLACKHAT`, `HITMISS`; `HITMISS` limited to `CV_8UC1`. | Shared 3x3 rectangular min/max header path; generic kernels fall back. |
+| `pipeline` | `pipe`, `PipelinePlan`, borrowed views, `recipes::modelInput` | Supported + fast path | Ordered packed Gray/BGR/RGB U8/F32 scalar chains, plus the documented packed/NV12/NV21 model-input v1 matrix to continuous batch-1 F32/U8/S8 NCHW/NHWC tensors. | Staged scalar fallback, one-group scalar direct store for canonical Recipes, and narrow measured ARM NEON Nearest predicates; see `doc/pipeline-module-design.md`. |
 | `imgcodecs` | `imread` | Supported | stb-backed `CV_8U` image load with `IMREAD_UNCHANGED`, `IMREAD_GRAYSCALE`, `IMREAD_COLOR`; OpenCV-style BGR/BGRA output for color reads. | Same behavior as baseline. |
 | `imgcodecs` | `imwrite` | Supported | `CV_8U` 2D `C1` / `C3` / `C4`; writes `png`, `jpg/jpeg`, `bmp`. | Same behavior as baseline. |
 | `highgui` | `namedWindow`, `imshow`, `waitKey`, `destroyWindow`, `destroyAllWindows` | Supported | Optional header-only AppKit/Win32/X11 window and event-loop subset; `imshow` accepts 2D U8 C1/C3/C4. | Uses the separate `cvh::highgui` target. |
@@ -152,13 +153,12 @@ Legend:
 The support table above is tied to the header-only test path:
 
 | Contract area | Test / gate |
-|---|---|
 | Public header/module boundary and forbidden source dependencies | `scripts/check_public_headers.sh` |
 | Installed public targets and external package consumers | `scripts/check_header_only_contract.sh` |
 | `cvh::headers` macro/default behavior | `cvh_header_compile_smoke`, `cvh_include_only_smoke` |
 | Imgproc multi-TU ODR | `cvh_imgproc_header_odr_smoke` |
 | Core/Imgproc/Imgcodecs per-header compilation | `cvh_*_headers_compile_smoke` |
-| Proposed Pipeline headers, multi-TU ODR, zero-allocation prepared run, and ordered-chain semantics | `cvh_pipeline_*_smoke`, `cvh_test_pipeline` |
+| Supported Pipeline headers, multi-TU ODR, zero-allocation prepared run, ordered-chain semantics, fusion and Recipe contracts | `cvh_pipeline_*_smoke`, `cvh_test_pipeline` |
 | Aggregate and forwarding headers | `cvh_aggregate_headers_compile_smoke` |
 | Optional HighGUI header, ODR, lifecycle, and installed consumer | `cvh_highgui_*_smoke`, `cvh_test_highgui` |
 | `core` supported baseline | `cvh_test_core` |
@@ -173,7 +173,6 @@ These are target areas, but they are not yet supported promises in the pure head
 | Area | Candidate APIs / work | Current intent |
 |---|---|---|
 | Core SIMD | `add/subtract/multiply/divide/transpose/GEMM` | Add UI or platform-specific paths only after the public header baseline is measured against upstream. |
-| Pipeline / AI preprocessing | `<cvh/pipeline/pipeline.h>`, ordered `color/resize/normalize/layout`, prepared plans and tensor packing | P0 scalar semantic skeleton is implemented and remains Proposed; fused execution, borrowed-view execution, NV12 and Recipes are later gates tracked in `doc/pipeline-module-design.md`. |
 | SIMD expansion | general `resize`, broader `cvtColor`, YUV fast paths | Use direct OpenCV Universal Intrinsics style first; add platform-specific paths only when benchmark data justifies them. |
 | OpenCV compatibility | more flags, depths, borders, and edge cases | Expand only with explicit behavior contracts and regression tests. |
 

@@ -177,6 +177,7 @@ cat > "${HEADERS_CONSUMER_DIR}/main.cpp" <<'EOF'
 #include <cvh/cvh.h>
 #include <cvh/core/simd/opencv_ui.h>
 #include <cvh/pipeline/pipeline.h>
+#include <cvh/recipes/model_input.h>
 
 #include <cstring>
 
@@ -204,6 +205,21 @@ int main()
     cvh::Mat pipeline_dst;
     cvh::pipe(src, pipeline_dst).resize(1, 1).run();
 
+    cvh::ModelInputRecipe recipe;
+    recipe.input = cvh::imageDesc(2, 2, cvh::PixelFormat::BGR8);
+    recipe.output =
+        cvh::tensorDesc<float>({1, 3, 1, 1}, cvh::Layout::NCHW);
+    const cvh::PipelinePlan recipe_plan =
+        cvh::recipes::modelInput(recipe).prepare();
+
+    cvh::ModelInputRecipe quantized_recipe = recipe;
+    quantized_recipe.output =
+        cvh::tensorDesc<signed char>({1, 3, 1, 1}, cvh::Layout::NCHW);
+    quantized_recipe.quantize_scale = 0.025f;
+    quantized_recipe.quantize_zero_point = -3;
+    const cvh::PipelinePlan quantized_recipe_plan =
+        cvh::recipes::modelInput(quantized_recipe).prepare();
+
     cvh::Mat a({2, 2}, CV_32F);
     cvh::Mat b({2, 2}, CV_32F);
     a = 2.0f;
@@ -223,7 +239,12 @@ int main()
     const bool pipeline_ok =
         pipeline_dst.dims == 2 && pipeline_dst.type() == CV_8UC1 &&
         pipeline_dst.size[0] == 1 && pipeline_dst.size[1] == 1;
-    return core_ok && resize_ok && pipeline_ok ? 0 : 2;
+    const bool recipe_ok =
+        recipe_plan.info().recipe_contract_version == 1 &&
+        recipe_plan.info().execution_group_count == 1 &&
+        quantized_recipe_plan.info().recipe_contract_version == 1 &&
+        quantized_recipe_plan.info().execution_group_count == 1;
+    return core_ok && resize_ok && pipeline_ok && recipe_ok ? 0 : 2;
 }
 EOF
 

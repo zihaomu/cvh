@@ -92,6 +92,53 @@ struct ColorSpec
     ChromaLocation chroma_location = ChromaLocation::Center;
 };
 
+struct PipelinePoint
+{
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+struct PipelineTransform
+{
+    bool valid = false;
+    int source_width = 0;
+    int source_height = 0;
+    int target_width = 0;
+    int target_height = 0;
+    int resized_width = 0;
+    int resized_height = 0;
+    float scale = 1.0f;
+    float scale_x = 1.0f;
+    float scale_y = 1.0f;
+    int pad_left = 0;
+    int pad_top = 0;
+    int pad_right = 0;
+    int pad_bottom = 0;
+
+    PipelinePoint sourceToTarget(PipelinePoint point) const
+    {
+        return PipelinePoint{
+            point.x * scale_x + static_cast<float>(pad_left),
+            point.y * scale_y + static_cast<float>(pad_top)};
+    }
+
+    PipelinePoint targetToSource(PipelinePoint point) const
+    {
+        return PipelinePoint{
+            (point.x - static_cast<float>(pad_left)) / scale_x,
+            (point.y - static_cast<float>(pad_top)) / scale_y};
+    }
+
+    bool isPadding(PipelinePoint point) const
+    {
+        return !valid ||
+               point.x < static_cast<float>(pad_left) ||
+               point.y < static_cast<float>(pad_top) ||
+               point.x >= static_cast<float>(pad_left + resized_width) ||
+               point.y >= static_cast<float>(pad_top + resized_height);
+    }
+};
+
 struct ImageDescriptor
 {
     int width = 0;

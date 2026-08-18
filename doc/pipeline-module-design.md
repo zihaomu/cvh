@@ -1,6 +1,7 @@
-# cvh Pipeline 模块最终设计提案
+# cvh Pipeline 模块设计与支持合同
 
-状态：Proposed；P0 API 已可试用，尚未构成 Supported 支持承诺。
+状态：Supported；承诺范围限于本文 P0 ordered Pipeline 和 P1 v1 支持矩阵，后续路线
+仍为 Proposed。
 
 本文冻结 Pipeline 的产品边界、首选 API、执行语义、优化合同和分阶段落地方案。
 示例用于指导实现；只有对应 header、测试、安装消费和性能门禁全部完成后，相关
@@ -8,10 +9,10 @@
 
 ## 0. 实施状态
 
-更新时间：2026-08-07
+更新时间：2026-08-10
 
-总状态：**P0 已完成，P1 未开始**。当前公开状态仍为 Proposed；尚未进入
-Supported。
+总状态：**P0 和 P1 已完成，P1 v1 已通过 Supported 审计**。P1 的逐批状态和证据由
+[pipeline-p1-implementation-plan.md](pipeline-p1-implementation-plan.md) 维护。
 
 | 批次 | 范围 | 状态 | 完成证据 |
 | --- | --- | --- | --- |
@@ -20,14 +21,15 @@ Supported。
 | P0.2 | fluent builder、ordered IR、类型/shape 推导、`prepare/explain` | 已完成 | 2026-08-07：ordered stage、顺序错误定位、输出约束和硬要求单测通过 |
 | P0.3 | scalar reference、staged workspace、一次性/prepared `run` | 已完成 | 2026-08-07：数值/ROI/prepared-one-shot/并发测试通过；allocator hook 实测 prepared `tryRun()` 为 0 次堆分配 |
 | P0.4 | public header、单元/随机链、ODR、install consumer 门禁 | 已完成 | 2026-08-07：64 条确定性随机合法链、public-header、ODR、install consumer、ASan+UBSan、优化开/关和完整 25 项 CTest 通过 |
-| P1 | 模型输入融合、ARM NEON、`modelInput` Recipe | 未开始 | — |
+| P1 | 模型输入融合、ARM NEON、`modelInput` Recipe | 已完成 | 2026-08-10：packed/YUV scalar direct-store、letterbox、per-tensor U8/S8、Recipe、borrowed/零分配、窄 NEON 和完整发布门禁通过；最终 stable audit 覆盖 NV12/NV21 与所有代表 predicate |
 
-首批实现只接受单输入、单输出的 `cvh::Mat`，支持能够形成完整 reference 闭环的
-操作子集。外部 Image/Tensor borrowed view、NV12、多输出和融合内核将在基础执行
-合同验证后按批次开放；文档中的最终 API 示例不因此降级，未实现项必须保持
-Proposed 标记，不能用空实现伪装支持。
+当前实现接受单输入、单输出的 `cvh::Mat`，prepared 路径也接受 packed 或双 plane
+NV12/NV21 `ConstImageView` 到连续 `TensorView`；packed/YUV F32 scalar fusion、
+letterbox、per-tensor U8/S8 quantize、Recipe v1 和窄 ARM NEON predicates 已形成
+reference 闭环并进入本文件 16.1 节限定的 Supported 支持面。per-channel quantize、
+动态 shape、非连续 tensor、adapter 和后处理等未关闭能力继续明确保持 Proposed。
 
-P0 冻结子集：
+作为历史验收基线，P0 冻结子集为：
 
 - 可执行输入：二维 `CV_8U/CV_32F` Gray、BGR、RGB `cvh::Mat`，三通道 Mat 默认
   按 BGR 解释；
@@ -284,13 +286,14 @@ cvh::ModelInputRecipe spec;
 spec.input = input_desc;
 spec.output = output_desc;
 spec.color = cvh::Color::RGB;
-spec.resize = cvh::ResizeMode::Letterbox;
-spec.pad_value = 114;
+spec.interpolation = cvh::Interpolation::Linear;
 spec.mean = mean;
 spec.stddev = stddev;
+spec.normalize_count = 3;
 
 const auto plan = cvh::recipes::modelInput(spec)
     .requireNoFullFrameIntermediate()
+    .requireSingleExecutionGroup()
     .prepare();
 ~~~
 
@@ -301,6 +304,27 @@ Recipe 不是另一套执行引擎。它生成同一种有序 IR，但只接受�
 最大 workspace、完整中间态数量、可用 backend，以及有测量证据的性能门槛。输入
 不满足 predicate 时应在 `prepare()` 明确失败；需要通用 fallback 的用户改用普通
 Pipeline，不能让 Recipe 在未告知用户时失去保证。
+
+F32 Recipe v1 的稳定 id 是 `cvh.model_input.packed_f32` 和
+`cvh.model_input.yuv420_f32`；量化输出将后缀替换为 `packed_u8`、`packed_s8`、
+`yuv420_u8` 或 `yuv420_s8`。letterbox 变体使用对应的 `_letterbox` id，contract
+version 均为 1。
+`PipelineInfo::recipe_id`、`recipe_contract_version` 和 `recipe_fingerprint` 可查询。
+fingerprint 覆盖 input/output descriptor、完整 YUV `ColorSpec`、目标颜色、几何模式、
+插值、letterbox pad、normalize 参数，以及 U8/S8 输出的 quantize scale/zero point，
+只用于部署审计，不替代语义或 capability 判断。
+
+Recipe v1 的 id 表与实际代码一致：
+
+| 输入 | 几何 | F32 | U8 | S8 |
+| --- | --- | --- | --- | --- |
+| packed BGR8/RGB8 | resize | `cvh.model_input.packed_f32` | `cvh.model_input.packed_u8` | `cvh.model_input.packed_s8` |
+| packed BGR8/RGB8 | letterbox | `cvh.model_input.packed_f32_letterbox` | `cvh.model_input.packed_u8_letterbox` | `cvh.model_input.packed_s8_letterbox` |
+| NV12/NV21 | resize | `cvh.model_input.yuv420_f32` | `cvh.model_input.yuv420_u8` | `cvh.model_input.yuv420_s8` |
+| NV12/NV21 | letterbox | `cvh.model_input.yuv420_f32_letterbox` | `cvh.model_input.yuv420_u8_letterbox` | `cvh.model_input.yuv420_s8_letterbox` |
+
+这些 id 共享 contract version 1，但 fingerprint 仍区分 NV12/NV21、完整 ColorSpec、
+shape、layout、插值、pad、normalize 和 quantize 参数。
 
 ## 6. 操作语义
 
@@ -330,7 +354,24 @@ y = (x - mean[c]) / stddev[c]
 但 `normalize` 是模型输入 Recipe 的标准拼写。参数是 scalar 还是逐通道数组、通道
 对应顺序、输入缩放范围和舍入规则都必须进入数值合同。
 
-### 6.2 类型状态限制“随机组合”
+### 6.2 `quantize` 数值合同
+
+P1 v1 只支持 per-tensor F32 Image 到 U8/S8 Image 的量化：
+
+~~~text
+q = saturate(round(real / scale) + zero_point)
+~~~
+
+`scale` 必须为正且有限，`zero_point` 必须在目标 dtype 范围内。有限值使用
+half-away-from-zero 舍入；NaN 映射到 `zero_point`，正负无穷分别饱和到目标类型的
+最大值和最小值，有限大数也必须在转成整数前安全饱和。布局转换发生在量化之后，
+因此 canonical 链为
+`color? -> resize/letterbox -> normalize -> quantize -> layout/store`。
+
+per-channel 量化没有复用该合同，保持 Proposed；需要时必须增加显式参数、独立
+predicate 和 Recipe 版本，不能让实现按通道数猜测。
+
+### 6.3 类型状态限制“随机组合”
 
 每个操作声明允许的输入状态和产生的输出状态。首批建议：
 
@@ -361,7 +402,7 @@ pipeline stage 1 "resize": expected Image, got Tensor<F32,NCHW>
 未来若增加 tensor resize，它应作为明确的新能力进入支持矩阵，而不是让当前实现
 猜测用户意图。
 
-### 6.3 输出 descriptor 是最终约束
+### 6.4 输出 descriptor 是最终约束
 
 Builder 推导每一步的 dtype、shape、layout 和颜色状态。最终状态必须与输出
 descriptor 一致；不允许因为输出 buffer 恰好够大而默默改变布局或类型。
@@ -638,9 +679,10 @@ auto plan = cvh::pipe(camera_desc, model_input_desc)
     .prepare();
 ~~~
 
-几何步骤生成 `PipelineTransform` 元数据，至少包含 scale、pad、crop 和原图尺寸，
-用于把检测框、关键点或 mask 坐标映射回相机坐标。它是 plan 的确定性静态数据，
-或某次动态尺寸执行的 `PipelineRunInfo` 数据，不能要求用户重复推导。
+`plan.transform()` 返回确定性的 `PipelineTransform`：原/目标尺寸、nominal scale、
+实际 `scale_x/scale_y`、resized 尺寸和四边 padding。`sourceToTarget()`、
+`targetToSource()` 使用连续图像边界坐标，`isPadding()` 判断目标点是否落在 content
+外；用户不需要重复推导检测框或关键点的 letterbox 变换。
 
 ### 12.2 模型输出后处理
 
@@ -786,35 +828,32 @@ validation。若 Recipe 有意采用模型生态中的另一套明确语义，�
 优化器的安全定义不是“数学上看起来相同”，而是“在冻结的 dtype、舍入、溢出和
 tolerance 合同下通过差分验证”。
 
-## 15. 建议的代码布局
+## 15. 当前代码布局
 
 ~~~text
 include/cvh/pipeline/
   pipeline.h              # public umbrella
   builder.h               # fluent builder
   plan.h                  # immutable prepared plan
-  views.h                 # image/tensor/region borrowed views and helpers
+  types.h                 # descriptor、ColorSpec 和 letterbox transform
+  views.h                 # packed/YUV image 与连续 tensor borrowed views
   workspace.h             # workspace owner/view
   operations.h            # operation descriptors
   info.h                   # PipelineInfo / PipelineRunInfo
   detail/
     ir.hpp
-    type_inference.hpp
     planner.hpp
     fusion_rules.hpp
-    scalar_executor.hpp
-    neon_executor.hpp
+    quantize.hpp
+    scalar_stage_executor.hpp
+    scalar_model_input_fused.hpp
+    scalar_quantized_model_input_fused.hpp
+    scalar_yuv_model_input_fused.hpp
+    scalar_yuv_quantized_model_input_fused.hpp
+    neon_model_input_fused.hpp
 
 include/cvh/recipes/
   model_input.h
-  tracking_frame.h
-  segmentation_mask.h
-
-integration/
-  opencv/
-  ros2/
-  v4l2/
-  vendor/
 ~~~
 
 Pipeline 继续是 header-only，不新增二进制 runtime 依赖。专用 ISA 路径必须保留
@@ -822,32 +861,43 @@ Pipeline 继续是 header-only，不新增二进制 runtime 依赖。专用 ISA 
 
 ## 16. MVP 和阶段计划
 
-### 16.1 MVP 支持面
+### 16.1 P1 v1 Supported 支持面
 
-第一阶段只聚焦一个真正高价值闭环：
+P1 关闭后公开承诺一个窄而完整的模型输入闭环：
 
 ~~~text
 CPU-accessible camera/image buffer
-  -> color
-  -> crop/resize/letterbox
-  -> normalize/quantize
+  -> optional color
+  -> resize/letterbox
+  -> normalize
+  -> optional per-tensor quantize
   -> layout/store
   -> model tensor
 ~~~
 
-建议支持：
+| 维度 | Supported v1 合同 |
+| --- | --- |
+| packed 输入 | U8 BGR8/RGB8；`cvh::Mat` 或单 plane borrowed view；允许 row padding、ROI 和 unaligned data |
+| YUV 输入 | 偶数宽高 U8 NV12/NV21 双 plane borrowed view；BT.601/709/2020、Limited/Full、Center/Left 均由显式 ColorSpec 决定 |
+| 几何 | 固定正尺寸 Nearest/Linear resize，或本文件冻结 rounding/padding/transform 的单次 letterbox |
+| 数值 | 1 或 3 通道 finite mean/stddev，stddev 非零；可选 per-tensor U8/S8 quantize |
+| 输出 | batch=1、3 通道、连续 F32/U8/S8 NCHW/NHWC `cvh::Mat` 或 borrowed tensor view |
+| Recipe 顺序 | `color? -> resize/letterbox -> normalize -> quantize? -> layout/store` |
+| 内存属性 | Recipe 为 1 execution group、0 完整中间图、0-byte workspace；prepared run 0 heap allocation |
+| backend | 全支持矩阵有 scalar direct-store；仅下述窄 predicate 可进入 ARM NEON，其他组合可靠回退 scalar |
 
-- 输入：Gray8、RGB8、BGR8、NV12/NV21，含自定义 row/plane stride；
-- 几何：crop、linear/nearest resize、letterbox；
-- 数值：convert、normalize、INT8/UINT8 quantize；
-- 输出：F32/INT8/UINT8，NCHW/NHWC；
-- backend：可信 scalar reference 和 ARM NEON；
-- 拓扑：单输入、单输出；
-- 模式：一次性 API、prepared plan、`modelInput` Recipe；
-- 可观察性：`info()`、`explain()`、`PipelineRunInfo`；
-- 约束：no-full-frame-intermediate 和 single-execution-group 检查。
+ARM NEON 的 Supported predicate 只覆盖 packed U8 输入、F32 NCHW 输出、Nearest、输入
+宽度为 resize/letterbox content 宽度的 2 倍、content 宽度至少 8 且至少 256 pixels。
+candidate、actual route 和 observed ISA 必须同时可查询，不能因为运行在 ARM 上就宣称
+使用了 NEON。
 
-MVP 不包含任意 DAG、设备内存 import、JIT、模型推理、多输出和模型特定 decoder。
+普通 ordered Pipeline 仍支持已冻结的 packed Gray/BGR/RGB U8/F32 scalar staged
+组合；合法但不满足上述 model-input fusion predicate 的链保持顺序语义并使用 staged
+fallback。双 plane YUV 只在上述 canonical fused 链/Recipe 中承诺，不提供虚构的
+multi-plane `cvh::Mat` staged 表达。
+
+per-channel quantize、batch>1、非连续 tensor 输出、动态 shape、任意 DAG、设备内存
+import、JIT、模型推理、多输出和模型特定 decoder 继续是 Proposed 或后续阶段内容。
 
 ### 16.2 落地顺序
 
@@ -862,6 +912,9 @@ MVP 不包含任意 DAG、设备内存 import、JIT、模型推理、多输出�
 
 #### P1：模型输入融合
 
+逐批实施、predicate、数值合同和验收证据见
+[Pipeline P1 实施计划](pipeline-p1-implementation-plan.md)。
+
 - color + resize/letterbox + normalize/quantize + layout/store；
 - scalar fused path 与 ARM NEON；
 - `modelInput` Recipe；
@@ -870,8 +923,8 @@ MVP 不包含任意 DAG、设备内存 import、JIT、模型推理、多输出�
 #### P2：适配与部署
 
 - OpenCV、V4L2、ROS 2 和至少一个推理运行时示例；
-- letterbox/rectify transform metadata；
-- 安装消费、ODR、sanitizer、非 ARM 编译和边缘设备基准。
+- 零拷贝生命周期、adapter 错误和设备能力边界；
+- rectify/remap 等需要相机标定参数的几何能力。
 
 #### P3：机器人后处理
 

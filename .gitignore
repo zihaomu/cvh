@@ -66,6 +66,16 @@ big_models
 /opencv_compare/results/
 /benchmark/results/*
 !/benchmark/results/.gitkeep
+!/benchmark/results/internal/
+/benchmark/results/internal/*
+!/benchmark/results/internal/pipeline/
+/benchmark/results/internal/pipeline/*
+!/benchmark/results/internal/pipeline/README.md
+!/benchmark/results/internal/pipeline/stable/
+/benchmark/results/internal/pipeline/stable/*
+!/benchmark/results/internal/pipeline/stable/[0-9]*.csv
+!/benchmark/results/internal/pipeline/stable/[0-9]*.meta.json
+!/benchmark/results/internal/pipeline/stable/[0-9]*.md
 /benchmark/opencv_compare/opencv-bench-slim/
 /benchmark/opencv_compare/results/*
 !/benchmark/opencv_compare/results/.gitkeep

@@ -34,6 +34,21 @@ struct ImageView
     ImageDescriptor descriptor{};
     std::array<PlaneView, 3> planes{};
     int plane_count = 0;
+
+    operator ConstImageView() const
+    {
+        ConstImageView result;
+        result.descriptor = descriptor;
+        result.plane_count = plane_count;
+        for (std::size_t index = 0; index < planes.size(); ++index)
+        {
+            result.planes[index] = ConstPlaneView{
+                planes[index].data,
+                planes[index].row_stride,
+                planes[index].size_bytes};
+        }
+        return result;
+    }
 };
 
 struct ConstTensorView
@@ -76,6 +91,32 @@ inline ImageView rgb(uchar* data,
     return view;
 }
 
+inline ConstImageView bgr(const uchar* data,
+                          std::size_t size_bytes,
+                          int width,
+                          int height,
+                          std::size_t row_stride)
+{
+    ConstImageView view;
+    view.descriptor = imageDesc(width, height, PixelFormat::BGR8);
+    view.planes[0] = ConstPlaneView{data, row_stride, size_bytes};
+    view.plane_count = 1;
+    return view;
+}
+
+inline ImageView bgr(uchar* data,
+                     std::size_t size_bytes,
+                     int width,
+                     int height,
+                     std::size_t row_stride)
+{
+    ImageView view;
+    view.descriptor = imageDesc(width, height, PixelFormat::BGR8);
+    view.planes[0] = PlaneView{data, row_stride, size_bytes};
+    view.plane_count = 1;
+    return view;
+}
+
 inline ConstImageView nv12(const uchar* y_data,
                            std::size_t y_stride,
                            std::size_t y_size_bytes,
@@ -91,6 +132,64 @@ inline ConstImageView nv12(const uchar* y_data,
         imageDesc(width, height, PixelFormat::NV12, color_spec);
     view.planes[0] = ConstPlaneView{y_data, y_stride, y_size_bytes};
     view.planes[1] = ConstPlaneView{uv_data, uv_stride, uv_size_bytes};
+    view.plane_count = 2;
+    return view;
+}
+
+inline ImageView nv12(uchar* y_data,
+                      std::size_t y_stride,
+                      std::size_t y_size_bytes,
+                      uchar* uv_data,
+                      std::size_t uv_stride,
+                      std::size_t uv_size_bytes,
+                      int width,
+                      int height,
+                      ColorSpec color_spec)
+{
+    ImageView view;
+    view.descriptor =
+        imageDesc(width, height, PixelFormat::NV12, color_spec);
+    view.planes[0] = PlaneView{y_data, y_stride, y_size_bytes};
+    view.planes[1] = PlaneView{uv_data, uv_stride, uv_size_bytes};
+    view.plane_count = 2;
+    return view;
+}
+
+inline ConstImageView nv21(const uchar* y_data,
+                           std::size_t y_stride,
+                           std::size_t y_size_bytes,
+                           const uchar* vu_data,
+                           std::size_t vu_stride,
+                           std::size_t vu_size_bytes,
+                           int width,
+                           int height,
+                           ColorSpec color_spec)
+{
+    ConstImageView view;
+    view.descriptor =
+        imageDesc(width, height, PixelFormat::NV21, color_spec);
+    view.planes[0] = ConstPlaneView{y_data, y_stride, y_size_bytes};
+    view.planes[1] =
+        ConstPlaneView{vu_data, vu_stride, vu_size_bytes};
+    view.plane_count = 2;
+    return view;
+}
+
+inline ImageView nv21(uchar* y_data,
+                      std::size_t y_stride,
+                      std::size_t y_size_bytes,
+                      uchar* vu_data,
+                      std::size_t vu_stride,
+                      std::size_t vu_size_bytes,
+                      int width,
+                      int height,
+                      ColorSpec color_spec)
+{
+    ImageView view;
+    view.descriptor =
+        imageDesc(width, height, PixelFormat::NV21, color_spec);
+    view.planes[0] = PlaneView{y_data, y_stride, y_size_bytes};
+    view.planes[1] = PlaneView{vu_data, vu_stride, vu_size_bytes};
     view.plane_count = 2;
     return view;
 }

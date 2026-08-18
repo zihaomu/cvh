@@ -5,7 +5,7 @@
 - `core`：以 `Mat` 和基础数组算子为中心。
 - `imgproc`：以图像预处理/后处理常用算子为中心。
 
-框架同时支持两种 benchmark 模式：
+框架同时支持两种 benchmark 模式，Pipeline 作为独立 suite 复用同一输出合同：
 
 - **内部回归模式**：旧版本 header-only 和当前版本 header-only 对比，用来指导提速过程。
 - **OpenCV 对比模式**：当前 header-only 实现和官方 OpenCV 主仓库实现对比，用来展示差距和选择优化优先级。
@@ -46,6 +46,7 @@ benchmark/results/internal/<suite>/<profile>/meta.json
 |---|---|---|
 | `cvh_benchmark_core_mat_header` | `Mat` 生命周期、布局、复制、转换、基础计算、random 和点变换。 | Mode A `core_mat` 聚合 target。 |
 | `cvh_benchmark_imgproc_header` | 已接入聚合矩阵的 imgproc 公共 API，含区域/轮廓、形状、直方图和模板匹配。 | Mode A `imgproc` 聚合 target。 |
+| `cvh_benchmark_pipeline_header` | prepared staged 与 packed/YUV F32/U8/S8、resize/letterbox fused 模型输入链；记录 execution group、完整中间图、workspace 和实际 route。 | Mode A `pipeline` canonical target。 |
 
 当前专项诊断 benchmark：
 
@@ -66,7 +67,8 @@ cmake --build build-bench -j --target \
   cvh_benchmark_core_mat_header \
   cvh_benchmark_imgproc_header \
   cvh_benchmark_cvtcolor_bgr2gray_header \
-  cvh_benchmark_resize_bilinear_header
+  cvh_benchmark_resize_bilinear_header \
+  cvh_benchmark_pipeline_header
 
 mkdir -p benchmark/results/internal/imgproc/quick
 
@@ -87,7 +89,16 @@ mkdir -p benchmark/results/internal/imgproc/quick
 ./build-bench/cvh_benchmark_imgproc_header \
   --profile quick --warmup 1 --iters 3 --repeats 3 \
   --output benchmark/results/internal/imgproc/quick/imgproc_header_current.csv
+
+./build-bench/cvh_benchmark_pipeline_header \
+  --profile stable --warmup 3 --iters 3 --repeats 7 \
+  --output benchmark/results/internal/pipeline/stable/current.csv
 ```
+
+Pipeline target 在同一二进制、同一输入和单线程下比较 `staged_p0` 与 `fused_p1`。
+它先逐 byte 验证输出，再采样 prepared `run()`；CSV 不从平台推断执行路径，而是记录
+`PipelineRunInfo` 的 actual/observed route，并同时记录 execution groups、完整中间图和
+workspace。指定 `--output` 时会同步生成 `<output>.meta.json`。
 
 Core 逐元素算子还支持在同一二进制内强制 scalar，用于排除编译器和机器差异：
 

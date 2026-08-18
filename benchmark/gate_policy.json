@@ -34,8 +34,14 @@
           "cvh_benchmark_core_mat_header",
           "cvh_benchmark_imgproc_header",
           "cvh_benchmark_cvtcolor_bgr2gray_header",
-          "cvh_benchmark_resize_bilinear_header"
+          "cvh_benchmark_resize_bilinear_header",
+          "cvh_benchmark_pipeline_header"
         ]
+      },
+      "pipeline": {
+        "module": "pipeline",
+        "target": "cvh_benchmark_pipeline_header",
+        "status": "active"
       }
     }
   },

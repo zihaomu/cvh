@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 
 namespace cvh {
@@ -78,6 +79,9 @@ struct PipelineInfo
     std::size_t workspace_alignment = 1;
     PipelineExecutionClass execution_class = PipelineExecutionClass::Direct;
     PipelineRoute candidate_route = PipelineRoute::Scalar;
+    const char* recipe_id = nullptr;
+    std::uint32_t recipe_contract_version = 0;
+    std::uint64_t recipe_fingerprint = 0;
 };
 
 struct PipelineRunInfo

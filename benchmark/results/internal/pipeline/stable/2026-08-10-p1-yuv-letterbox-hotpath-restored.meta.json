@@ -1,0 +1,23 @@
+{
+  "mode": "internal",
+  "suite": "pipeline",
+  "profile": "stable",
+  "implementation": "staged_p0,fused_scalar,fused_auto",
+  "output_csv": "benchmark/results/internal/pipeline/stable/2026-08-10-p1-yuv-letterbox-hotpath-restored.csv",
+  "cvh_commit": "3857147+working-tree-p1.6-hotpath-restored",
+  "opencv_commit": "",
+  "opencv_source": "",
+  "opencv_build_dir": "",
+  "cmake_build_type": "release",
+  "runtime": "single_thread",
+  "cpu_model": "Apple M5",
+  "warmup": 3,
+  "iters": 3,
+  "repeats": 7,
+  "threads": 1,
+  "compiler_id": "clang",
+  "compiler_version": "21.0.0 (clang-2100.0.123.102)",
+  "target_arch": "aarch64",
+  "target_os": "macos",
+  "build_config": "release"
+}

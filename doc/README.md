@@ -15,10 +15,29 @@ binary dependency of the normal cvh package.
 - [gemm-optimization.md](gemm-optimization.md): current GEMM API, numeric
   contract, ISA/UI/scalar selection, packed weights, and real thread model.
 - [mat-contract-v1.md](mat-contract-v1.md): stable `cvh::Mat` behavior contract.
-- [pipeline-module-design.md](pipeline-module-design.md): proposed
-  fluent-first `cvh::pipe(...)` API, ordered semantics, safe fusion,
-  prepare/run and workspace contracts, model-input Recipes, and robot
+- [pipeline-module-design.md](pipeline-module-design.md): Supported P1 v1
+  `cvh::pipe(...)` contract, ordered semantics, safe fusion, prepare/run and
+  workspace contracts, model-input Recipes, and later robot
   preprocessing/postprocessing boundaries.
+- [pipeline-p1-implementation-plan.md](pipeline-p1-implementation-plan.md):
+  live P1 batches for execution-group planning, borrowed views, packed/YUV
+  model-input fusion, ARM NEON, Recipe contracts, and performance gates.
+- [Pipeline P1 Supported audit](../benchmark/results/internal/pipeline/stable/2026-08-10-p1-supported-audit.md):
+  final representative packed, letterbox, U8/S8, NV12/NV21, scalar and
+  observed-NEON Release evidence for the P1 support decision.
+- [Pipeline P1 scalar fused baseline](../benchmark/results/internal/pipeline/stable/2026-08-10-p1-scalar-fused-baseline.md):
+  dated staged-versus-fused Release measurements and memory-plan evidence.
+- [Pipeline P1 NEON candidate](../benchmark/results/internal/pipeline/stable/2026-08-10-p1-neon-candidate.md):
+  forced-scalar versus observed-NEON evidence for the first narrow predicate.
+- [Pipeline P1.6 YUV/letterbox hot-path-restored candidate](../benchmark/results/internal/pipeline/stable/2026-08-10-p1-yuv-letterbox-hotpath-restored.md):
+  NV12 scalar timing, letterbox observed-NEON evidence, and the restored
+  packed resize hot path.
+- [Pipeline P1.6 first YUV/letterbox candidate — rejected](../benchmark/results/internal/pipeline/stable/2026-08-10-p1-yuv-letterbox-candidate.md):
+  preserved evidence for the scalar resize regression that was removed.
+- [Pipeline P1.7 U8/S8 quantize scalar evidence](../benchmark/results/internal/pipeline/stable/2026-08-10-p1-quantize-large-s8-evidence.md):
+  accepted per-tensor U8/S8 direct-store performance and checksum evidence.
+- [Pipeline P1.7 first quantize candidate — rejected](../benchmark/results/internal/pipeline/stable/2026-08-10-p1-quantize-scalar.md):
+  preserved evidence for the S8 scalar regression removed from the first loop.
 - [opencv-core-imgproc-api-coverage.md](opencv-core-imgproc-api-coverage.md):
   pinned upstream operation-family inventory and current callable cvh subset.
 - [opencv-core-imgproc-three-phase-support-plan.md](opencv-core-imgproc-three-phase-support-plan.md):
@@ -54,7 +73,8 @@ binary dependency of the normal cvh package.
 | Product/module/target boundary | `design.md` |
 | CPU configuration and dispatch | `cpu-optimization.md` |
 | GEMM implementation facts | `gemm-optimization.md` |
-| Proposed Pipeline API and execution contract | `pipeline-module-design.md` |
+| Supported Pipeline API, v1 matrix, and execution contract | `pipeline-module-design.md` |
+| Pipeline P1 implementation status and evidence | `pipeline-p1-implementation-plan.md` |
 | Supported operation families | API coverage |
 | Tutorial organization and authoring contract | `tutorial/README.md` |
 | Phase 2-P0 acceleration work | Phase 2-P0 operator acceleration plan |

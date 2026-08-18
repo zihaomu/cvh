@@ -27,7 +27,8 @@ cmake --build "${BUILD_DIR}" -j --target \
   cvh_benchmark_core_mat_header \
   cvh_benchmark_imgproc_header \
   cvh_benchmark_cvtcolor_bgr2gray_header \
-  cvh_benchmark_resize_bilinear_header
+  cvh_benchmark_resize_bilinear_header \
+  cvh_benchmark_pipeline_header
 
 mkdir -p "${RESULT_DIR}"
 
@@ -46,5 +47,9 @@ mkdir -p "${RESULT_DIR}"
 "${BUILD_DIR}/cvh_benchmark_resize_bilinear_header" \
   --profile quick --warmup 0 --iters 1 --repeats 1 \
   --output "${RESULT_DIR}/resize_current.csv" >/dev/null
+
+"${BUILD_DIR}/cvh_benchmark_pipeline_header" \
+  --profile quick --warmup 0 --iters 1 --repeats 1 \
+  --output "${RESULT_DIR}/pipeline_current.csv" >/dev/null
 
 echo "ci_benchmark_headers_quick_done: result_dir=${RESULT_DIR}"
