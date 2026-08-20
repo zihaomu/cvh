@@ -1,0 +1,13 @@
+case_id,cache_mode,session_count,stable_sessions,session_speedups_vs_opencv,median_speedup_vs_opencv,geomean_speedup_vs_opencv,ci95_low,ci95_high,min_speedup,max_speedup,candidate_route,actual_route,observed_isa,predicate_gate,reason
+PF1,hot,3,2,0.296951;0.294554;0.296414,0.296414,0.295971,0.294554,0.296951,0.294554,0.296951,scalar,scalar,scalar,fail,CV gate; median < 1.20x; CI lower < 1.10x; other cache mode < 0.90x
+PF1,streaming,3,2,0.296204;0.294041;0.291390,0.294041,0.293872,0.291390,0.296204,0.291390,0.296204,scalar,scalar,scalar,fail,CV gate; median < 1.20x; CI lower < 1.10x; other cache mode < 0.90x
+PF2,hot,3,0,0.312740;0.306123;0.313870,0.312740,0.310892,0.306123,0.313870,0.306123,0.313870,scalar,scalar,scalar,fail,CV gate; median < 1.20x; CI lower < 1.10x; other cache mode < 0.90x
+PF2,streaming,3,1,0.303672;0.305079;0.315751,0.305079,0.308121,0.303672,0.315751,0.303672,0.315751,scalar,scalar,scalar,fail,CV gate; median < 1.20x; CI lower < 1.10x; other cache mode < 0.90x
+PF3,hot,3,2,0.309364;0.309538;0.314470,0.309538,0.311115,0.309364,0.314470,0.309364,0.314470,scalar,scalar,scalar,fail,CV gate; median < 1.20x; CI lower < 1.10x; other cache mode < 0.90x
+PF3,streaming,3,0,0.314071;0.323169;0.325518,0.323169,0.320881,0.314071,0.325518,0.314071,0.325518,scalar,scalar,scalar,fail,CV gate; median < 1.20x; CI lower < 1.10x; other cache mode < 0.90x
+PF4,hot,3,1,0.371814;0.373237;0.371522,0.371814,0.372190,0.371522,0.373237,0.371522,0.373237,scalar,scalar,scalar,fail,CV gate; median < 1.20x; CI lower < 1.10x; other cache mode < 0.90x
+PF4,streaming,3,2,0.360286;0.366739;0.377411,0.366739,0.368078,0.360286,0.377411,0.360286,0.377411,scalar,scalar,scalar,fail,CV gate; median < 1.20x; CI lower < 1.10x; other cache mode < 0.90x
+PF5,hot,3,3,2.677814;2.715306;2.685371,2.685371,2.692782,2.677814,2.715306,2.677814,2.715306,neon,neon,neon,pass,pass
+PF5,streaming,3,1,2.622685;2.581831;2.627799,2.622685,2.610690,2.581831,2.627799,2.581831,2.627799,neon,neon,neon,fail,CV gate
+PF6,hot,3,1,0.967821;0.970888;0.961596,0.967821,0.966761,0.961596,0.970888,0.961596,0.970888,neon,neon,neon,fail,CV gate; median < 1.20x; CI lower < 1.10x; other cache mode < 0.90x
+PF6,streaming,3,1,0.880348;0.884368;0.889119,0.884368,0.884604,0.880348,0.889119,0.880348,0.889119,neon,neon,neon,fail,CV gate; median < 1.20x; CI lower < 1.10x

@@ -1,0 +1,7 @@
+case_id,min_profile,input_width,input_height,input_format,output_width,output_height,output_type,layout,geometry,interpolation,target_color,pad_value,mean0,mean1,mean2,std0,std1,std2,primary
+PF1,quick,1280,720,BGR8,640,640,F32,NCHW,resize,linear,RGB,114,123.675,116.28,103.53,58.395,57.12,57.375,true
+PF2,stable,1920,1080,BGR8,640,640,F32,NCHW,resize,linear,RGB,114,123.675,116.28,103.53,58.395,57.12,57.375,true
+PF3,stable,640,480,RGB8,224,224,F32,NCHW,resize,linear,RGB,114,123.675,116.28,103.53,58.395,57.12,57.375,true
+PF4,quick,1280,720,BGR8,640,640,F32,NHWC,resize,linear,RGB,114,123.675,116.28,103.53,58.395,57.12,57.375,true
+PF5,quick,1280,720,BGR8,640,640,F32,NCHW,resize,nearest,RGB,114,123.675,116.28,103.53,58.395,57.12,57.375,true
+PF6,stable,1280,720,BGR8,640,640,F32,NCHW,letterbox,nearest,RGB,114,123.675,116.28,103.53,58.395,57.12,57.375,true

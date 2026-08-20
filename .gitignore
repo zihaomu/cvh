@@ -76,6 +76,15 @@ big_models
 !/benchmark/results/internal/pipeline/stable/[0-9]*.csv
 !/benchmark/results/internal/pipeline/stable/[0-9]*.meta.json
 !/benchmark/results/internal/pipeline/stable/[0-9]*.md
+!/benchmark/results/opencv/
+/benchmark/results/opencv/*
+!/benchmark/results/opencv/pipeline/
+/benchmark/results/opencv/pipeline/*
+!/benchmark/results/opencv/pipeline/stable/
+/benchmark/results/opencv/pipeline/stable/*
+!/benchmark/results/opencv/pipeline/stable/[0-9]*.csv
+!/benchmark/results/opencv/pipeline/stable/[0-9]*.meta.json
+!/benchmark/results/opencv/pipeline/stable/[0-9]*.md
 /benchmark/opencv_compare/opencv-bench-slim/
 /benchmark/opencv_compare/results/*
 !/benchmark/opencv_compare/results/.gitkeep
@@ -85,3 +94,4 @@ big_models
 !/benchmark/opencv_compare/results/*-opencv-upstream-performance.md
 !/benchmark/opencv_compare/results/*-opencv-upstream-performance.en.md
 /benchmark/*.csv
+!/benchmark/pipeline_model_input_cases.csv

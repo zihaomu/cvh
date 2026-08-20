@@ -153,6 +153,43 @@ if(CVH_BUILD_BENCHMARKS)
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/include
         )
+
+        add_library(cvh_benchmark_pipeline_compare_backend_obj OBJECT
+            benchmark/pipeline_compare_opencv_backend.cpp
+        )
+        target_compile_features(cvh_benchmark_pipeline_compare_backend_obj PRIVATE cxx_std_17)
+        target_include_directories(cvh_benchmark_pipeline_compare_backend_obj PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/benchmark
+            ${OpenCV_INCLUDE_DIRS}
+        )
+
+        add_executable(cvh_benchmark_pipeline_compare
+            benchmark/pipeline_compare_header_benchmark.cpp
+            $<TARGET_OBJECTS:cvh_benchmark_pipeline_compare_backend_obj>
+        )
+        target_link_libraries(cvh_benchmark_pipeline_compare PRIVATE cvh::headers ${OpenCV_LIBS})
+        target_compile_features(cvh_benchmark_pipeline_compare PRIVATE cxx_std_17)
+        target_compile_definitions(cvh_benchmark_pipeline_compare PRIVATE
+            CVH_PIPELINE_PROOF_MANIFEST="${CMAKE_CURRENT_SOURCE_DIR}/benchmark/pipeline_model_input_cases.csv"
+        )
+        target_include_directories(cvh_benchmark_pipeline_compare PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/benchmark
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+        )
+        if(BUILD_TESTING)
+            add_test(
+                NAME cvh_benchmark_pipeline_compare_quick_correctness
+                COMMAND cvh_benchmark_pipeline_compare
+                    --profile quick
+                    --cache-mode both
+                    --warmup 0
+                    --iters 1
+                    --repeats 1
+                    --ring-mib 1
+                    --session 1
+            )
+        endif()
     endif()
 endif()
 

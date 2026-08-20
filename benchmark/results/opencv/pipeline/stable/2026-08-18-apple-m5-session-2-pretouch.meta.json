@@ -1,0 +1,23 @@
+{
+  "mode": "opencv_compare",
+  "suite": "pipeline",
+  "profile": "stable:both",
+  "implementation": "cvh_staged,cvh_fused_scalar,cvh_fused_auto,opencv_explicit",
+  "output_csv": "benchmark/results/opencv/pipeline/stable/2026-08-18-apple-m5-session-2-pretouch.csv",
+  "cvh_commit": "448f545a35522584336a29a7538b2a87ffdd0e57-dirty",
+  "opencv_commit": "d48bf69f65444a13f8a34b8982b083c1b78fa0e8",
+  "opencv_source": "/Users/zmu/work/my_project/ocvh/opencv",
+  "opencv_build_dir": "/Users/zmu/work/my_project/ocvh/opencv/build-slim",
+  "cmake_build_type": "release",
+  "runtime": "single_thread",
+  "cpu_model": "Apple M5 (10 cores, MacBook Air Mac17,3)",
+  "warmup": 20,
+  "iters": 50,
+  "repeats": 15,
+  "threads": 1,
+  "compiler_id": "clang",
+  "compiler_version": "21.0.0 (clang-2100.0.123.102)",
+  "target_arch": "aarch64",
+  "target_os": "macos",
+  "build_config": "release"
+}

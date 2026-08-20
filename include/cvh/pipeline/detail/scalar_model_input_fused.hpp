@@ -51,6 +51,18 @@ inline PipelineStatus executeScalarModelInputFused(
     const PipelineNormalizeOperation& parameters =
         normalize.operation.normalize;
     float* target_data = reinterpret_cast<float*>(target.data);
+    float normalized_lut[3][256];
+    for (int channel = 0; channel < 3; ++channel)
+    {
+        const int parameter = parameters.count == 1 ? 0 : channel;
+        for (int value = 0; value < 256; ++value)
+        {
+            normalized_lut[channel][value] =
+                (static_cast<float>(value) -
+                 parameters.mean[static_cast<std::size_t>(parameter)]) /
+                parameters.stddev[static_cast<std::size_t>(parameter)];
+        }
+    }
 
     if (!letterbox)
     {
@@ -104,14 +116,8 @@ inline PipelineStatus executeScalarModelInputFused(
                         resized_value = saturate_cast<uchar>(
                             top + (bottom - top) * weight_y);
                     }
-                    const int parameter =
-                        parameters.count == 1 ? 0 : channel;
                     const float normalized =
-                        (static_cast<float>(resized_value) -
-                         parameters.mean[
-                             static_cast<std::size_t>(parameter)]) /
-                        parameters.stddev[
-                            static_cast<std::size_t>(parameter)];
+                        normalized_lut[channel][resized_value];
                     const std::size_t output_index =
                         layout.operation.layout.target == Layout::NCHW
                         ? (static_cast<std::size_t>(channel) * rows + y) *
@@ -210,14 +216,8 @@ inline PipelineStatus executeScalarModelInputFused(
                     }
                 }
 
-                const int parameter =
-                    parameters.count == 1 ? 0 : channel;
                 const float normalized =
-                    (static_cast<float>(resized_value) -
-                     parameters.mean[
-                         static_cast<std::size_t>(parameter)]) /
-                    parameters.stddev[
-                        static_cast<std::size_t>(parameter)];
+                    normalized_lut[channel][resized_value];
                 const std::size_t output_index =
                     layout.operation.layout.target == Layout::NCHW
                     ? (static_cast<std::size_t>(channel) * rows + y) *

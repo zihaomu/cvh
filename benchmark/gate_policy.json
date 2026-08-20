@@ -17,6 +17,8 @@
         "default_gate": "log_only",
         "preferred_opencv_source": "../opencv",
         "cvh_target": "cvh_benchmark_opencv_compare",
+        "pipeline_target": "cvh_benchmark_pipeline_compare",
+        "pipeline_implementation": "cvh_fused_auto",
         "cvh_implementation": "cvh_auto"
       }
     },
@@ -41,6 +43,8 @@
       "pipeline": {
         "module": "pipeline",
         "target": "cvh_benchmark_pipeline_header",
+        "opencv_compare_target": "cvh_benchmark_pipeline_compare",
+        "case_manifest": "benchmark/pipeline_model_input_cases.csv",
         "status": "active"
       }
     }

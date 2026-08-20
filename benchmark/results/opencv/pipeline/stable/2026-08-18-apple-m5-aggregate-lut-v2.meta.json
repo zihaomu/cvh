@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "suite": "pipeline",
+  "profile": "stable:both",
+  "label": "normalize-u8-lut-v1 candidate",
+  "report_generator": "scripts/report_pipeline_proof.py",
+  "bootstrap_samples": 10000,
+  "bootstrap_seed": 20260818,
+  "cv_limit": 0.03,
+  "sessions": [
+    "2026-08-18-apple-m5-lut-session-1.csv",
+    "2026-08-18-apple-m5-lut-session-2.csv",
+    "2026-08-18-apple-m5-lut-session-3.csv"
+  ],
+  "device": "Apple M5 10-core MacBook Air Mac17,3, 16 GiB",
+  "os": "macOS 26.4.1 build 25E253",
+  "cvh_build": "Release; optimization ON; benchmarks ON; OpenCV compare ON",
+  "opencv_build": "Release; BUILD_LIST=core,imgproc; CPU_BASELINE=DETECT; CPU_DISPATCH=NEON_FP16,NEON_BF16,NEON_DOTPROD; IPP/OpenCL/TBB OFF",
+  "cpu_affinity": "not fixed",
+  "governor": "not available on macOS",
+  "thermal_state": "not captured",
+  "result": "L2 improved; L1 pass; L3 PF1-PF6 family fail"
+}

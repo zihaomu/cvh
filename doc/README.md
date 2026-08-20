@@ -22,6 +22,10 @@ binary dependency of the normal cvh package.
 - [pipeline-p1-implementation-plan.md](pipeline-p1-implementation-plan.md):
   live P1 batches for execution-group planning, borrowed views, packed/YUV
   model-input fusion, ARM NEON, Recipe contracts, and performance gates.
+- [pipeline-performance-proof-plan.md](pipeline-performance-proof-plan.md):
+  frozen hypotheses, fair staged/OpenCV baselines, hot/streaming case matrix,
+  statistical gates, and target-device evidence required before claiming a
+  Pipeline performance advantage.
 - [Pipeline P1 Supported audit](../benchmark/results/internal/pipeline/stable/2026-08-10-p1-supported-audit.md):
   final representative packed, letterbox, U8/S8, NV12/NV21, scalar and
   observed-NEON Release evidence for the P1 support decision.

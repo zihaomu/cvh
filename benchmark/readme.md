@@ -193,6 +193,49 @@ benchmark/results/opencv/<suite>/<profile>/meta.json
   通过 `--ops PHASE2_P0` 独立运行，不必重跑全部历史矩阵。
 - 该目录已经裁剪为纯 header-only compare：只用 `cvh_ui` 对比 OpenCV。
 
+Pipeline 使用独立的完整链 compare target，不受上述单算子 `OpenCVUIOnly` 实现名约束：
+
+```bash
+cmake -S . -B build-pipeline-proof-opencv \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCVH_BUILD_TESTS=OFF \
+  -DCVH_BUILD_BENCHMARKS=ON \
+  -DCVH_ENABLE_OPENCV_COMPARE=ON \
+  -DOpenCV_DIR=/path/to/opencv/build
+
+cmake --build build-pipeline-proof-opencv \
+  --target cvh_benchmark_pipeline_compare --parallel 2
+
+./build-pipeline-proof-opencv/cvh_benchmark_pipeline_compare \
+  --profile stable --cache-mode both \
+  --warmup 20 --iters 50 --repeats 15 --threads 1 --ring-mib 64 --session 1 \
+  --output benchmark/results/opencv/pipeline/stable/<date>-session-1.csv
+```
+
+`cvh_benchmark_pipeline_compare` 由 machine-readable
+`pipeline_model_input_cases.csv` 驱动，比较 `cvh_staged`、
+`cvh_fused_scalar`、`cvh_fused_auto` 和预分配的 `opencv_explicit` 完整模型输入链。
+计时前会先用独立 scalar oracle 验证输出；OpenCV backend 只存在于该可选 target 的独立
+translation unit，不进入 `cvh::headers`、安装包或默认 configure。它记录 hot/streaming、
+实际 dispatch/ISA、完整中间图、显式临时内存和冻结误差。正式性能结论和采样门槛以
+`doc/pipeline-performance-proof-plan.md` 为准。
+
+三个 session 完成后，用同一维护脚本聚合，不手工选择样本：
+
+```bash
+python3 -B scripts/report_pipeline_proof.py \
+  --label "candidate label" \
+  --output-csv benchmark/results/opencv/pipeline/stable/<date>-aggregate.csv \
+  --output-md benchmark/results/opencv/pipeline/stable/<date>-report.md \
+  benchmark/results/opencv/pipeline/stable/<date>-session-1.csv \
+  benchmark/results/opencv/pipeline/stable/<date>-session-2.csv \
+  benchmark/results/opencv/pipeline/stable/<date>-session-3.csv
+```
+
+reporter 要求至少三个不同 session id，遇到任何 correctness failure 会停止；输出包含
+逐 predicate 几何平均、deterministic bootstrap 95% CI、3% CV 稳定性门禁、PF1–PF6
+家族门禁和 L1 结构证据，并拒绝覆盖已有报告。
+
 ## Suites
 
 ### `core_mat`
@@ -250,6 +293,13 @@ cvh_benchmark_core_mat_header
 ```text
 cvh_benchmark_imgproc_header
 ```
+
+### `pipeline`
+
+Pipeline 的内部回归 target 是 `cvh_benchmark_pipeline_header`；与 OpenCV 完整预处理链
+对比时使用 `cvh_benchmark_pipeline_compare`。后者默认不构建，且只在
+`CVH_ENABLE_OPENCV_COMPARE=ON` 时引入 OpenCV。PF1–PF6 的参数由
+`pipeline_model_input_cases.csv` 冻结，不能在看到结果后修改主矩阵。
 
 ## Common CSV Schema
 
